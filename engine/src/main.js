@@ -6,7 +6,7 @@ import { DEFAULT_SC_DIR, EngineProcess } from './runtime/engine-process.js';
 import { PresetStore } from './session/preset-store.js';
 import { SessionStore } from './session/session-store.js';
 
-const DEFAULT_PORT = 3100;
+export const DEFAULT_PORT = 3100;
 const HOST = '127.0.0.1';
 
 function parseArgs(argv) {
@@ -23,7 +23,7 @@ function parseArgs(argv) {
   return options;
 }
 
-function defaultDataDir(env) {
+export function defaultDataDir(env) {
   if (env.MIXETTE_ENGINE_DATA_DIR) return env.MIXETTE_ENGINE_DATA_DIR;
   const base = env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local');
   return path.join(base, 'Mixette', 'sc-engine');
