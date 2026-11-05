@@ -1,0 +1,12 @@
+{
+  "name": "mixette-sc-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  }
+}
