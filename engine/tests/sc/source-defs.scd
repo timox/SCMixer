@@ -8,12 +8,15 @@
  * pas le signal.
  * Les sorties Master et Cue sont mises à volume 0 avant l'ajout des sources.
  * Verdict : "MX-TEST-OK" ou "MX-TEST-FAIL <raison>", puis 0.exit.
+ *
+ * ~mxFixture (traitement par défaut et étages de sortie par défaut, en noms de contrôles) est produit
+ * à partir du contrat par tests/sc-integration.test.js : ce fichier n'a aucune valeur par défaut propre.
  */
 (
 var root = thisProcess.nowExecutingPath.dirname.dirname.dirname;
 var server = Server(\mxtest, NetAddr("127.0.0.1", 57140));
 var done = false;
-var finish, fail, check, query, parse, sourceTree, expectChain, defaultProc, compBand;
+var finish, fail, check, query, parse, sourceTree, expectChain, defaultProc, outStage, with, getControl;
 
 finish = { |line|
   if(done.not) {
@@ -26,18 +29,17 @@ finish = { |line|
 fail = { |reason| finish.("MX-TEST-FAIL " ++ reason) };
 check = { |condition, reason| if(condition.not) { Error(reason).throw } };
 
-compBand = { (thresholdDb: -20, ratio: 4, attackMs: 10, releaseMs: 100, makeupDb: 0, bypass: 1) };
-defaultProc = {
-  (
-    mix: (volume: 1, cue: 0, mute: 0, balance: 0.5),
-    input: (gain: 1),
-    inputCompressor: compBand.(),
-    eq: (low: 0.5, mid: 0.5, high: 0.5),
-    hp: (enabled: 0, model: \BHiPass, freq: 0, q: 1, mul: 1, add: 0),
-    lp: (enabled: 0, model: \BLowPass, freq: 1, q: 1, gain: 2, mul: 1, add: 0),
-    pitch: (semitones: 0),
-    bandCompressor: (low: compBand.(), mid: compBand.(), high: compBand.())
-  )
+defaultProc = { ~mxFixture[\proc] };
+with = { |event, pairs| var copy = event.copy; pairs.pairsDo { |key, value| copy[key] = value }; copy };
+outStage = { |stage, pairs| with.(~mxFixture[\outputs][stage], pairs ? []) };
+// Valeur d'un contrôle lue sur le serveur (/s_get), avec délai : prouve que le nom du contrat arrive à scsynth.
+getControl = { |node, name|
+  var value, cond = Condition.new;
+  node.get(name, { |v| value = v; cond.test = true; cond.signal });
+  SystemClock.sched(3, { cond.test = true; cond.signal; nil });
+  cond.wait;
+  check.(value.notNil, "pas de réponse /s_get pour " ++ name);
+  value
 };
 
 // Arbre /g_queryTree (flag 0) : id, nombre d'enfants (-1 pour un Synth), nom de SynthDef.
@@ -95,14 +97,14 @@ server.options.ugenPluginsPath = [Platform.resourceDir +/+ "plugins", root +/+ "
 
 server.waitForBoot({
   try {
-    var neutral = [\in, \eqdirect, \hp, \lp, \pitch, \dyn, \mix];
-    var errors, tasks, groupsBefore, groupsAfter, defaultTree, sourcesTree, outputTree, outputDefs, ids1, ids3, removedGroup, raised, delays;
+    var neutral = [\in, \eqdirect, \hpBHiPass, \lpBLowPass, \pitch, \dyn, \mix];
+    var errors, tasks, groupsBefore, groupsAfter, defaultTree, sourcesTree, outputTree, outputDefs, ids1, ids3, removedGroup, raised, delays, node, oldPitch;
     ("MX-TEST-SCSYNTH-PID " ++ server.pid).postln;
 
     ~mxInit.(server, 256);
     check.(~mxModels == (Compander: true, CompanderD: true, FaustRMS: true), "modèles de compresseur " ++ ~mxModels);
-    ~mxSetOutputStage.(\master, \mix, (volume: 0));
-    ~mxSetOutputStage.(\cue, \mix, (volume: 0));
+    ~mxSetOutputStage.(\master, \mix, outStage.(\mix, [\mixVolume, 0]));
+    ~mxSetOutputStage.(\cue, \mix, outStage.(\mix, [\mixVolume, 0]));
 
     // Bus : le premier bus privé alloué est celui des options (contrat : 260 avec 256 entrées et 4 sorties).
     check.(~mxMasterBus.index == server.options.firstPrivateBus, "premier bus privé " ++ ~mxMasterBus.index);
@@ -120,6 +122,10 @@ server.waitForBoot({
     check.((~mxFadeMargin.((options: (hardwareBufferSize: 2048), sampleRate: 48000)) - (8 * 2048 / 48000)).abs < 1e-9,
       "marge de fondu à 2048 images : " ++ ~mxFadeMargin.((options: (hardwareBufferSize: 2048), sampleRate: 48000)));
     check.(~mxFadeMargin.((options: (hardwareBufferSize: 256), sampleRate: 48000)) == ~mxFadeMarginFloorSeconds, "plancher à 256 images");
+    // Fondu de retrait : au moins une période matérielle, jamais sous ~mxFadeSeconds.
+    check.(~mxRemoveRamp.(server) == ~mxFadeSeconds, "fondu de retrait au plancher : " ++ ~mxRemoveRamp.(server));
+    check.((~mxRemoveRamp.((options: (hardwareBufferSize: 4096), sampleRate: 48000)) - (2 * 4096 / 48000)).abs < 1e-9, "fondu de retrait à 4096 images");
+    check.(~mxRemoveRamp.((options: (hardwareBufferSize: 256), sampleRate: 48000)) >= (256 / 48000), "fondu de retrait inférieur à une période");
 
     // Groupes : sources avant sorties.
     defaultTree = query.(server.defaultGroup.nodeID);
@@ -150,48 +156,98 @@ server.waitForBoot({
       == ["src-1", "src-2", "src-3"].collect { |id| ~mxSources[id][\group].nodeID }, "groupes de sources inattendus");
 
     // Changements de modèle : la position de l'étage reste la même.
-    ~mxSetSourceStage.("src-1", \eq, (low: 0.7, mid: 0.5, high: 0.5));
+    ~mxSetSourceStage.("src-1", \eq, with.(defaultProc.()[\eq], [\low, 0.7]));
     server.sync;
-    expectChain.("src-1", 1, [\in, \eq, \hp, \lp, \pitch, \dyn, \mix]);
-    ~mxSetSourceStage.("src-1", \eq, (low: 0.5, mid: 0.5, high: 0.5));
-    ~mxSetSourceStage.("src-1", \hp, (enabled: 1, model: \BHiPass4, freq: 0.2, q: 1, mul: 1, add: 0));
-    ~mxSetSourceStage.("src-1", \lp, (enabled: 1, model: \MoogFF, freq: 0.8, q: 1, gain: 2, mul: 1, add: 0));
+    expectChain.("src-1", 1, [\in, \eq, \hpBHiPass, \lpBLowPass, \pitch, \dyn, \mix]);
+    // Les contrôles du contrat arrivent au serveur sous leur nom (/s_get), conversions faites dans la SynthDef.
+    ~mxSetSourceStage.("src-1", \eq, with.(defaultProc.()[\eq], [\low, 0.7, \lowFreq, 150, \midRq, 0.4]));
     server.sync;
-    expectChain.("src-1", 1, [\in, \eqdirect, \hp4, \lpmoog, \pitch, \dyn, \mix]);
+    node = ~mxSources["src-1"][\nodes];
+    check.((getControl.(node[\eq], \lowFreq) - 150).abs < 1e-6, "lowFreq de l'EQ");
+    check.((getControl.(node[\eq], \midRq) - 0.4).abs < 1e-6, "midRq de l'EQ");
+    ~mxSetSourceStage.("src-1", \eq, defaultProc.()[\eq]);
+    ~mxSetSourceStage.("src-1", \hp, with.(defaultProc.()[\hp], [\enabled, 1, \model, \BHiPass4, \freq, 0.2]));
+    ~mxSetSourceStage.("src-1", \lp, with.(defaultProc.()[\lp], [\enabled, 1, \model, \MoogFF, \freq, 0.8]));
+    server.sync;
+    expectChain.("src-1", 1, [\in, \eqdirect, \hpBHiPass4, \lpMoogFF, \pitch, \dyn, \mix]);
     ~mxResetMoog.("src-1");
-    ~mxSetSourceStage.("src-1", \hp, (enabled: 1, model: \RHPF, freq: 0.2, q: 1, mul: 1, add: 0));
-    ~mxSetSourceStage.("src-1", \lp, (enabled: 0, model: \BLowPass4, freq: 1, q: 1, gain: 2, mul: 1, add: 0));
+    ~mxSetSourceStage.("src-1", \hp, with.(defaultProc.()[\hp], [\enabled, 1, \model, \RHPF, \freq, 0.2, \floorHz, 55]));
+    ~mxSetSourceStage.("src-1", \lp, with.(defaultProc.()[\lp], [\enabled, 0, \model, \BLowPass4]));
     server.sync;
-    expectChain.("src-1", 1, [\in, \eqdirect, \hp, \lp4, \pitch, \dyn, \mix]);
+    expectChain.("src-1", 1, [\in, \eqdirect, \hpRHPF, \lpBLowPass4, \pitch, \dyn, \mix]);
+    node = ~mxSources["src-1"][\nodes];
+    check.((getControl.(node[\hp], \floorHz) - 55).abs < 1e-6, "floorHz de RHPF");
+    // Un champ non applicable au modèle chargé (gain hors MoogFF) est ignoré ; un contrôle inconnu lève.
+    ~mxSetSourceStage.("src-1", \lp, with.(defaultProc.()[\lp], [\model, \BLowPass4, \gain, 3]));
+    raised = false;
+    try { ~mxSetSourceStage.("src-1", \pitch, with.(defaultProc.()[\pitch], [\nope, 1])) } { |error| raised = error.errorString.find("Contrôle inconnu").notNil };
+    check.(raised, "contrôle inconnu accepté");
     raised = false;
     try { ~mxResetMoog.("src-1") } { raised = true };
     check.(raised, "~mxResetMoog accepté hors MoogFF");
 
-    ~mxSetSourceStage.("src-3", \mix, (volume: 0.8, cue: 0.5, mute: 1, balance: 0.25));
-    ~mxSetSourceStage.("src-3", \input, (gain: 0.5));
-    ~mxSetSourceStage.("src-3", \inputCompressor, (thresholdDb: -30, ratio: 8, attackMs: 5, releaseMs: 200, makeupDb: 3, bypass: 0));
-    ~mxSetSourceStage.("src-3", \pitch, (semitones: 3));
-    ~mxSetSourceStage.("src-3", \bandCompressor, (band: \mid, thresholdDb: -30, ratio: 8, attackMs: 5, releaseMs: 200, makeupDb: 3, bypass: 0));
+    ~mxSetSourceStage.("src-3", \mix, with.(defaultProc.()[\mix], [\volume, 0.8, \cue, 0.5, \mute, 1, \balance, 0.25, \splayLevel, 0.9, \spread, 0.6]));
+    ~mxSetSourceStage.("src-3", \input, with.(defaultProc.()[\input], [\inputGain, 0.5]));
+    ~mxSetSourceStage.("src-3", \inputCompressor, with.(defaultProc.()[\inputCompressor],
+      [\inputCompressorThresholdDb, -30, \inputCompressorSlopeBelow, 1.5, \inputCompressorSlopeAbove, 0.125,
+        \inputCompressorAttackMs, 5, \inputCompressorReleaseMs, 200, \inputCompressorMul, 2, \inputCompressorBypass, 0]));
+    ~mxSetSourceStage.("src-3", \bandCompressor, with.(defaultProc.()[\bandCompressor][\mid],
+      [\band, \mid, \midThresholdDb, -30, \midSlopeAbove, 0.125, \midBypass, 0]));
+    ~mxSetSourceStage.("src-3", \bandCompressor, with.(defaultProc.()[\bandCompressor][\crossover], [\band, \crossover, \crossoverLowMidFreq, 300]));
     server.sync;
+    node = ~mxSources["src-3"][\nodes];
+    check.((getControl.(node[\input], \inputCompressorSlopeBelow) - 1.5).abs < 1e-6, "inputCompressorSlopeBelow");
+    check.((getControl.(node[\dyn], \midThresholdDb) + 30).abs < 1e-6, "midThresholdDb");
+    check.((getControl.(node[\dyn], \crossoverLowMidFreq) - 300).abs < 1e-6, "crossoverLowMidFreq");
+    check.((getControl.(node[\mix], \splayLevel) - 0.9).abs < 1e-6, "splayLevel");
+    raised = false;
+    try { ~mxSetSourceStage.("src-3", \bandCompressor, with.(defaultProc.()[\bandCompressor][\mid], [\band, \top])) } { raised = true };
+    check.(raised, "bande inconnue acceptée");
+    // windowSize de PitchShift est fixé à la création du UGen : le changer recrée le Synth à sa place.
+    oldPitch = ~mxNodeIds.("src-3")[4];
+    ~mxSetSourceStage.("src-3", \pitch, with.(defaultProc.()[\pitch], [\semitones, 3, \blend, 1]));
+    server.sync;
+    check.(~mxNodeIds.("src-3")[4] == oldPitch, "pitch recréé sans changement de windowSize");
+    ~mxSetSourceStage.("src-3", \pitch, with.(defaultProc.()[\pitch], [\semitones, 3, \blend, 1, \windowSize, 0.1]));
+    server.sync;
+    check.(~mxNodeIds.("src-3")[4] != oldPitch, "pitch non recréé après changement de windowSize");
     expectChain.("src-3", 5, neutral);
+    check.((getControl.(~mxSources["src-3"][\nodes][\pitch], \windowSize) - 0.1).abs < 1e-6, "windowSize");
 
     // Compresseur de sortie : bascule de modèle avec fondu.
-    ~mxSetOutputStage.(\master, \compressor, (model: \CompanderD, thresholdDb: -20, slopeBelow: 1, slopeAbove: 0.25,
-      attackMs: 10, releaseMs: 100, mul: 1, add: 0, bypass: 0));
-    ~mxSetOutputStage.(\cue, \compressor, (model: \FaustRMS, thresholdDb: -20, slopeBelow: 1, slopeAbove: 0.25,
-      attackMs: 10, releaseMs: 100, mul: 1, add: 0, bypass: 0));
+    ~mxSetOutputStage.(\master, \compressor, outStage.(\compressor, [\model, \CompanderD, \compressorBypass, 0]));
+    ~mxSetOutputStage.(\cue, \compressor, outStage.(\compressor, [\model, \FaustRMS, \compressorBypass, 0]));
     1.wait;
     outputDefs = query.(~mxOutputGroup.nodeID)[\children].collect { |c| c[\def] }.asArray.sort;
     check.(outputDefs == ["mx_output_companderD", "mx_output_faustRMS", "mx_output_writer", "mx_output_writer"],
       "bascule de compresseur inattendue " ++ outputDefs);
     // Une attaque de 100 ms après la création du Synth reste valide pour CompanderD.
-    ~mxSetOutputStage.(\master, \compressor, (model: \CompanderD, thresholdDb: -20, slopeBelow: 1, slopeAbove: 0.25,
-      attackMs: 100, releaseMs: 100, mul: 1, add: 0, bypass: 0));
-    ~mxSetOutputStage.(\cue, \eq, (low: 0.6, mid: 0.5, high: 0.4));
-    ~mxSetOutputStage.(\cue, \infraHpf, (enabled: 1, hz: 30));
-    ~mxSetOutputStage.(\cue, \sideHpf, (enabled: 1, hz: 120));
-    ~mxSetOutputStage.(\cue, \clipper, (enabled: 1, ceilingDb: -1));
-    ~mxSetOutputStage.(\cue, \limiter, (enabled: 1, ceilingDb: -2));
+    ~mxSetOutputStage.(\master, \compressor, outStage.(\compressor, [\model, \CompanderD, \compressorAttackMs, 100, \compressorBypass, 0]));
+    ~mxSetOutputStage.(\cue, \eq, outStage.(\eq, [\eqLow, 0.6, \eqHigh, 0.4, \eqLowFreq, 150, \eqMidRq, 0.5]));
+    ~mxSetOutputStage.(\cue, \infraHpf, outStage.(\infraHpf, [\infraHpfEnabled, 1, \infraHpfHz, 30]));
+    ~mxSetOutputStage.(\cue, \sideHpf, outStage.(\sideHpf, [\sideHpfEnabled, 1, \sideHpfHz, 120]));
+    ~mxSetOutputStage.(\cue, \clipper, outStage.(\clipper, [\clipperEnabled, 1, \clipperLo, -0.8, \clipperHi, 0.9]));
+    ~mxSetOutputStage.(\cue, \limiter, outStage.(\limiter, [\limiterEnabled, 1, \limiterCeilingDb, -2]));
+    server.sync;
+    node = ~mxOutputs[\cue][\synth];
+    check.((getControl.(node, \eqLowFreq) - 150).abs < 1e-6, "eqLowFreq de sortie");
+    check.((getControl.(node, \clipperLo) + 0.8).abs < 1e-6, "clipperLo");
+    check.((getControl.(node, \limiterCeilingDb) + 2).abs < 1e-6, "limiterCeilingDb");
+    check.(getControl.(node, \infraHpfHz) == 30, "infraHpfHz");
+    // compressor.fadeSeconds pilote l'écrivain (VarLag du fondu), pas le processeur.
+    ~mxSetOutputStage.(\cue, \compressor, outStage.(\compressor, [\model, \FaustRMS, \compressorBypass, 0, \compressorFadeSeconds, 0.2]));
+    server.sync;
+    check.((getControl.(~mxOutputs[\cue][\writer], \compressorFadeSeconds) - 0.2).abs < 1e-6, "compressorFadeSeconds de l'écrivain");
+    // dur du Limiter est fixé à la création du UGen : le changer bascule vers un nouveau processeur avec fondu.
+    ~mxSetOutputStage.(\cue, \limiter, outStage.(\limiter, [\limiterEnabled, 1, \limiterCeilingDb, -2, \limiterDurMs, 20]));
+    check.(~mxOutputs[\cue][\phase] == \warming, "changement de dur sans bascule : " ++ ~mxOutputs[\cue][\phase]);
+    raised = false;
+    try { ~mxSetOutputStage.(\cue, \limiter, outStage.(\limiter, [\limiterDurMs, 30])) } { |error| raised = error.errorString.find("en cours").notNil };
+    check.(raised, "bascule concurrente acceptée");
+    1.2.wait;
+    check.(~mxOutputs[\cue][\phase] == \stable, "bascule non terminée : " ++ ~mxOutputs[\cue][\phase]);
+    check.(getControl.(~mxOutputs[\cue][\synth], \limiterDurMs) == 20, "limiterDurMs du nouveau processeur");
+    check.(getControl.(~mxOutputs[\cue][\synth], \eqLowFreq) == 150, "les réglages précédents suivent la bascule");
 
     // Review Focus 5 : changer la largeur de src-2 laisse src-1 et src-3 intacts.
     ids1 = ~mxNodeIds.("src-1");
@@ -206,16 +262,21 @@ server.waitForBoot({
     check.(sourceTree.("src-3")[\children].collect { |c| c[\id] }.asArray == ids3, "src-3 : nœuds absents du serveur");
     expectChain.("src-2", 1, neutral);
 
-    // Retrait : le groupe disparaît du serveur.
+    // Retrait : fondu à zéro d'abord (le groupe existe encore), puis libération différée.
     removedGroup = ~mxSources["src-3"][\group].nodeID;
+    node = ~mxSources["src-3"][\nodes][\mix];
     ~mxRemoveSource.("src-3");
     server.sync;
-    sourcesTree = query.(~mxSourcesGroup.nodeID);
-    check.(sourcesTree[\children].collect { |c| c[\id] }.includes(removedGroup).not, "groupe de src-3 toujours présent");
-    check.(sourcesTree[\children].size == 2, "nombre de groupes de sources inattendu");
+    check.(query.(~mxSourcesGroup.nodeID)[\children].collect { |c| c[\id] }.includes(removedGroup), "groupe de src-3 libéré sans fondu");
+    check.(getControl.(node, \fadeGate) == 0, "fadeGate non ramené à zéro");
+    check.((getControl.(node, \fadeSeconds) - ~mxRemoveRamp.(server)).abs < 1e-6, "durée du fondu de retrait");
     raised = false;
     try { ~mxNodeIds.("src-3") } { raised = true };
     check.(raised, "~mxNodeIds accepte une source retirée");
+    (~mxRemoveRamp.(server) + ~mxFadeMargin.(server) + 0.4).wait;
+    sourcesTree = query.(~mxSourcesGroup.nodeID);
+    check.(sourcesTree[\children].collect { |c| c[\id] }.includes(removedGroup).not, "groupe de src-3 toujours présent");
+    check.(sourcesTree[\children].size == 2, "nombre de groupes de sources inattendu");
 
     // Réservation d'id : deux ajouts concurrents du même id, largeur 7 pas encore construite.
     groupsBefore = query.(~mxSourcesGroup.nodeID)[\children].size;
@@ -231,7 +292,7 @@ server.waitForBoot({
     try { ~mxRemoveSource.("src-race") } { |error| raised = error.errorString.find("en cours de création").notNil };
     check.(raised, "~mxRemoveSource accepté sur une source en cours de création");
     raised = false;
-    try { ~mxSetSourceStage.("src-race", \pitch, (semitones: 1)) } { |error| raised = error.errorString.find("en cours de création").notNil };
+    try { ~mxSetSourceStage.("src-race", \pitch, with.(defaultProc.()[\pitch], [\semitones, 1])) } { |error| raised = error.errorString.find("en cours de création").notNil };
     check.(raised, "~mxSetSourceStage accepté sur une source en cours de création");
     while { ~mxSources["src-race"].notNil and: { ~mxSources["src-race"][\pending] == true } } { 0.05.wait };
     server.sync;

@@ -1,6 +1,6 @@
 import {
-  Session, SourceCreate, SourcePatch, SourceProcessing, CompBand, Output,
-  SOURCE_STAGES, OUTPUT_STAGES, BANDS, MAX_CHANNELS,
+  Session, SourceCreate, SourcePatch, SourceProcessing, CompBand, Crossover, Output,
+  SOURCE_STAGES, OUTPUT_STAGES, BAND_GROUPS, MAX_CHANNELS,
   defaultSourceProcessing, defaultOutput,
 } from '../contract/schemas.js';
 import { ApiError, codes } from '../contract/errors.js';
@@ -20,7 +20,7 @@ const clone = (v) => structuredClone(v);
 
 export function emptySession() {
   return {
-    version: 2,
+    version: 3,
     nextSourceSeq: 1,
     sources: [],
     outputs: { master: defaultOutput(), cue: defaultOutput() },
@@ -99,8 +99,8 @@ export function setSourceStage(session, id, stage, value) {
 
 export function setSourceBand(session, id, band, value) {
   const i = indexOfSource(session, id);
-  if (!BANDS.includes(band)) throw fail('VALIDATION', `Bande inconnue : ${band}.`);
-  const data = parse(CompBand, value, `Bande ${band}`);
+  if (!BAND_GROUPS.includes(band)) throw fail('VALIDATION', `Bande inconnue : ${band}.`);
+  const data = parse(band === 'crossover' ? Crossover : CompBand, value, `Bande ${band}`);
   const source = clone(session.sources[i]);
   source.processing.bandCompressor[band] = data;
   return withSource(session, i, source);
@@ -138,7 +138,7 @@ export function replaceSessionContent(session, content) {
   if (ids.size !== sources.length) throw fail('VALIDATION', 'Identifiants de source en double.');
   validateChannels(sources);
   return {
-    version: 2,
+    version: 3,
     nextSourceSeq: Math.max(session.nextSourceSeq, seq),
     sources: clone(sources),
     outputs: clone(outputs),

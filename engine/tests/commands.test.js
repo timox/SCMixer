@@ -40,16 +40,28 @@ test('nombres non finis et valeurs inconnues lèvent', () => {
   assert.throws(() => toScEvent({ a: null }));
 });
 
-test('setSourceBandCode ajoute band', () => {
-  const band = { thresholdDb: -20, ratio: 4, attackMs: 10, releaseMs: 100, makeupDb: 0, bypass: true };
+test('setSourceBandCode ajoute band et préfixe les contrôles par le groupe (une SynthDef, quatre groupes)', () => {
+  const band = defaultSourceProcessing().bandCompressor.low;
   assert.equal(
     setSourceBandCode('src-1', 'low', band),
-    '~mxSetSourceStage.("src-1", \\bandCompressor, (band: \\low, thresholdDb: -20, ratio: 4, attackMs: 10, releaseMs: 100, makeupDb: 0, bypass: 1))',
+    '~mxSetSourceStage.("src-1", \\bandCompressor, (band: \\low, lowThresholdDb: -20, lowSlopeBelow: 1, lowSlopeAbove: 0.25, lowAttackMs: 10, lowReleaseMs: 100, lowMul: 1, lowAdd: 0, lowBypass: 1, lowControlLag: 0))',
   );
+  assert.match(setSourceBandCode('src-1', 'crossover', { lowMidFreq: 250, lowLp1Mul: 1 }), /band: \\crossover, crossoverLowMidFreq: 250, crossoverLowLp1Mul: 1\)\)$/);
+});
+
+test('étages à une seule SynthDef : champ seul ; étages de la SynthDef d\'entrée et de sortie : préfixés', () => {
+  const p = defaultSourceProcessing();
+  assert.match(setSourceStageCode('src-1', 'inputCompressor', p.inputCompressor), /\\inputCompressor, \(inputCompressorThresholdDb: -20, inputCompressorSlopeBelow: 1, /);
+  assert.match(setSourceStageCode('src-1', 'input', p.input), /\\input, \(inputGain: 1, inputMul: 1, inputAdd: 0, inputControlLag: 0\)/);
+  assert.match(setSourceStageCode('src-1', 'pitch', p.pitch), /\\pitch, \(semitones: 0, blend: -1, level: 1, windowSize: 0\.2, /);
+  assert.match(setOutputStageCode('master', 'eq', defaultOutput().eq), /\\eq, \(eqLow: 0\.5, eqMid: 0\.5, eqHigh: 0\.5, eqRangeDb: 12, eqLowFreq: 200, /);
+  assert.match(setOutputStageCode('cue', 'limiter', defaultOutput().limiter), /\\limiter, \(limiterEnabled: 0, limiterCeilingDb: -1, limiterDurMs: 10, limiterControlLag: 0\)/);
+  assert.match(setOutputStageCode('cue', 'compressor', defaultOutput().compressor), /\\compressor, \(model: \\Compander, compressorThresholdDb: -20, compressorSlopeBelow: 1, compressorSlopeAbove: 0\.25, /);
+  assert.match(setOutputStageCode('cue', 'compressor', defaultOutput().compressor), /compressorFadeSeconds: 0\.05\)\)$/);
 });
 
 test('sorties, remove et reset moog', () => {
-  assert.equal(setOutputStageCode('cue', 'mix', { volume: 0.5 }), '~mxSetOutputStage.(\\cue, \\mix, (volume: 0.5))');
+  assert.equal(setOutputStageCode('cue', 'mix', { volume: 0.5, controlLag: 0 }), '~mxSetOutputStage.(\\cue, \\mix, (mixVolume: 0.5, mixControlLag: 0))');
   assert.equal(removeSourceCode('src-2'), '~mxRemoveSource.("src-2")');
   assert.equal(resetMoogCode('src-2'), '~mxResetMoog.("src-2")');
 });
@@ -57,14 +69,16 @@ test('sorties, remove et reset moog', () => {
 test('addSourceCode imbrique le traitement complet sans le nom', () => {
   const code = addSourceCode(source('src-1', 'Secret'), 4);
   assert.match(code, /^~mxAddSource\.\("src-1", 4, 1, 2, \(mix: \(/);
-  assert.match(code, /bandCompressor: \(low: \(thresholdDb: -20/);
+  assert.match(code, /bandCompressor: \(low: \(lowThresholdDb: -20/);
+  assert.match(code, /crossover: \(crossoverLowMidFreq: 250, crossoverMidHighFreq: 4000, /);
+  assert.doesNotMatch(code, /ratio|makeupDb|ceilingDb/);
   assert.ok(!code.includes('Secret'));
   assert.throws(() => addSourceCode(source('src-1', 'x'), 1.5));
 });
 
 test('applySessionCode : sources puis 14 sorties, sans noms', () => {
   const session = {
-    version: 2, nextSourceSeq: 3,
+    version: 3, nextSourceSeq: 3,
     sources: [source('src-1', 'Alpha'), source('src-2', 'Beta')],
     outputs: { master: defaultOutput(), cue: defaultOutput() },
   };

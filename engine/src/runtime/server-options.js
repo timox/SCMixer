@@ -1,5 +1,5 @@
 import { ApiError } from '../contract/errors.js';
-import { ATTACK_MS_MAX, MAX_CHANNELS } from '../contract/schemas.js';
+import { ATTACK_MS_MAX, LIMITER_DUR_MAX_MS, MAX_CHANNELS, PITCH_WINDOW_MAX_SECONDS } from '../contract/schemas.js';
 
 /**
  * Dimensionnement de scsynth, calculé à partir des besoins mesurés du moteur (jamais de valeur
@@ -48,10 +48,14 @@ export const MEMORY_MARGIN = 1.5; // fragmentation de l'allocateur temps réel e
 const MEMORY_STEP_KB = 8192; // arrondi de memSize au multiple de 8 Mo (défaut ServerOptions : 8192 Ko)
 
 // Mémoire temps réel mesurée (octets) à 48 kHz sur scsynth 3.14.1 par saturation de memSize.
-const SYNTH_BYTES_PER_CHANNEL = 16 * 1024; // structures des 7 Synths d'une source de largeur 256 : 3,95 Mo / 256 = 15,4 Ko
-const SYNTH_BYTES_PER_SOURCE = 32 * 1024; // 8 Synths de petite largeur : moins de 4 Ko chacun
-/** windowSize de PitchShift (s). Valeur de ~mxPitchWindowSeconds dans source-defs.scd (test d'égalité) ; exposé en 8b-2. */
-export const PITCH_WINDOW_SECONDS = 0.2;
+// Les mesures ci-dessous précèdent l'exposition complète des paramètres (task 8b-2), qui ajoute des UGens (lissages,
+// mul/add, contrôles) à chaque SynthDef. Les valeurs sont mises à l'échelle du nombre de UGens construits par sclang
+// (tests/sc/wirebufs.scd, def.children.size) : chaîne de largeur 256 (pire modèles) 14 374 -> 16 613 UGens (x1,16) ;
+// chaîne de largeur 1 : 191 -> 362 UGens (x1,9).
+const SYNTH_BYTES_PER_CHANNEL = 19 * 1024; // 7 Synths d'une source de largeur 256 : mesuré 15,4 Ko par canal avant 8b-2, x1,16 arrondi à 19 Ko
+const SYNTH_BYTES_PER_SOURCE = 64 * 1024; // 8 Synths de petite largeur : moins de 4 Ko chacun avant 8b-2, x1,9 arrondi à 8 Ko chacun
+/** windowSize maximal de PitchShift (s) : borne du contrat (schemas.js), égale à ~mxPitchWindowMaxSeconds de source-defs.scd (test d'égalité). */
+export { PITCH_WINDOW_MAX_SECONDS };
 const PITCH_OVERHEAD = 1.15; // ajustement mesuré : 48 kHz 136..139 Ko, 96 kHz 273..282 Ko, 192 kHz 546..585 Ko par canal
 /** maxdelaytime de CompanderD (s) : maximum de la plage d'attaque du contrat. Valeur de ~mxCompanderDMaxDelay dans graph.scd (test d'égalité). */
 export const DELAYN_MAX_SECONDS = ATTACK_MS_MAX / 1000;
@@ -59,6 +63,7 @@ export const DELAYN_MAX_SECONDS = ATTACK_MS_MAX / 1000;
 export const SYNTHDEF_TIMEOUT_SECONDS = 5;
 const DELAYN_OVERHEAD = 1.28; // mesuré : 82 Ko pour 2 x 32 Ko de tampon
 const LIMITER_BYTES_PER_48K = 24 * 1024; // mesuré : 19,3 Ko pour deux canaux, dur = 0,01 s
+const LIMITER_MEASURED_DUR_MS = 10; // le tampon est proportionnel à dur (Limiter.schelp : tampon de retard de dur secondes)
 const OUTPUT_SYNTH_BYTES = 64 * 1024; // structure d'un Synth de sortie
 const FIXED_BYTES = 1024 * 1024;
 
@@ -77,13 +82,14 @@ export function wireBufsNeeded(width) {
 
 function pitchBytesPerChannel(sampleRate) {
   // PitchShift alloue un tampon de nextPowerOfTwo(2 x windowSize x sampleRate) flottants (mesuré).
-  const floats = pow2ceil(Math.ceil(2 * PITCH_WINDOW_SECONDS * sampleRate));
+  const floats = pow2ceil(Math.ceil(2 * PITCH_WINDOW_MAX_SECONDS * sampleRate));
   return Math.ceil(floats * 4 * PITCH_OVERHEAD);
 }
 
 function outputBytes(sampleRate) {
   const delay = Math.ceil(2 * pow2ceil(Math.ceil(DELAYN_MAX_SECONDS * sampleRate)) * 4 * DELAYN_OVERHEAD);
-  const limiter = LIMITER_BYTES_PER_48K * Math.ceil(sampleRate / 48000);
+  // dur du contrat jusqu'à LIMITER_DUR_MAX_MS : dimensionné pour le maximum (le tampon est fixé à la création du Synth).
+  const limiter = LIMITER_BYTES_PER_48K * Math.ceil(sampleRate / 48000) * Math.ceil(LIMITER_DUR_MAX_MS / LIMITER_MEASURED_DUR_MS);
   // 2 sorties, chacune avec deux processeurs vivants pendant un fondu.
   return 4 * (delay + limiter + OUTPUT_SYNTH_BYTES);
 }

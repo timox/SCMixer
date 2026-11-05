@@ -2,52 +2,102 @@
  * SynthDefs de source par largeur de canaux.
  *
  * Chargé par graph.scd. ~mxEnsureWidth.(w) construit et ajoute sur ~mxServer
- * les onze SynthDefs d'une largeur w, puis attend leur chargement
+ * les treize SynthDefs d'une largeur w, puis attend leur chargement
  * (server.sync) : l'appel doit donc venir d'une Routine. Une largeur déjà
  * construite n'est pas reconstruite (retour false ; true après construction).
  *
  * Chaque étage lit et réécrit (ReplaceOut) le bus privé de w canaux de la
  * source ; seul \mx_mix_<w> écrit vers les bus stéréo Master et Cue.
- * Correspondances avec le contrat :
- *   EQ 0..1 -> (v * 2 - 1) * 12 dB ; fréquence 0..1 -> 20 * 1000.pow(v) Hz
- *   (RHPF au moins 40 Hz) ; q -> rq = 1 / q ; ratio -> slopeAbove = 1 / ratio ;
- *   makeupDb -> makeupDb.dbamp ; balance 0..1 -> pan = balance * 2 - 1.
+ * Familles : in, eq, eqdirect (EQ neutre, sans UGen), hp<Modèle> (BHiPass, RHPF,
+ * BHiPass4), lp<Modèle> (BLowPass, RLPF, BLowPass4, MoogFF), pitch, dyn, mix.
+ *
+ * Noms des contrôles (règle unique, voir l'en-tête de graph.scd) : le nom du
+ * contrôle est le nom du champ du contrat ; une SynthDef qui porte plusieurs
+ * groupes du contrat préfixe le champ par le groupe (<groupe><Champ>) : \in
+ * (input, inputCompressor) et \dyn (low, mid, high, crossover). Les
+ * conversions se font dans les SynthDefs :
+ *   EQ 0..1 -> (v * 2 - 1) * rangeDb dB ; fréquence 0..1 -> linexp minHz..maxHz
+ *   (RHPF au moins floorHz) ; q -> rq = 1 / q ; thresholdDb -> thresh = dbamp ;
+ *   attackMs, releaseMs -> clampTime, relaxTime = ms / 1000 ;
+ *   semitones -> pitchRatio = midiratio ; balance 0..1 -> pos = balance * 2 - 1.
+ * Chaque étage porte son controlLag (Lag.kr de ses contrôles continus ; 0 =
+ * application immédiate). windowSize de PitchShift est un argument fixé à la
+ * création (PitchShift.schelp : « cannot be modulated ») : il n'est pas lissé
+ * et son changement recrée le Synth (graph.scd).
+ * Contrôles hors contrat : câblage (bus, out, cueOut, firstChannel, meterId) et
+ * retrait de source (fadeGate, fadeSeconds de \mx_mix_<w>, voir graph.scd).
  */
 
-// windowSize de PitchShift (s) : source de vérité côté sclang ; PITCH_WINDOW_SECONDS (server-options.js)
-// en dérive le dimensionnement de memSize, l'égalité est vérifiée par tests/server-options.test.js.
-~mxPitchWindowSeconds = 0.2;
+// windowSize maximal de PitchShift (s) : source de vérité côté sclang ; PITCH_WINDOW_MAX_SECONDS
+// (schemas.js, repris par server-options.js pour memSize) en dérive la plage du contrat, l'égalité est
+// vérifiée par tests/single-source.test.js. La valeur effective du contrôle est bornée à ce maximum.
+~mxPitchWindowMaxSeconds = 0.2;
 
 ~mxDefName = { |kind, width| ("mx_" ++ kind ++ "_" ++ width).asSymbol };
+
+// Nom d'un contrôle : champ seul, ou <groupe><Champ> pour une SynthDef à plusieurs groupes.
+~mxName = { |group, field|
+  var f = field.asString;
+  if(group.isNil) { f.asSymbol } { (group.asString ++ f[0].toUpper ++ f.drop(1)).asSymbol }
+};
+~mxCtl = { |group, field, default| ~mxName.(group, field).kr(default) };
+// Contrôle continu lissé par le controlLag de son groupe (Lag.kr ; lagTime 0 = valeur directe).
+~mxLg = { |group, field, default| ~mxCtl.(group, field, default).lag(~mxCtl.(group, \controlLag, 0)) };
 
 // Compression liée : un seul signal de contrôle (maximum des valeurs absolues) pour tous les canaux.
 ~mxLinkedControl = { |sig, width| if(width > 1) { sig.abs.reduce(\max) } { sig } };
 
+// Chaîne EQ trois bandes (plateau grave, cloche, plateau aigu) commune aux sources et aux sorties.
+~mxEqChain = { |sig, group, lowFreq|
+  var lg = { |field, default| ~mxLg.(group, field, default) };
+  var range = lg.(\rangeDb, 12);
+  var lowDb = (lg.(\low, 0.5) * 2 - 1) * range;
+  var midDb = (lg.(\mid, 0.5) * 2 - 1) * range;
+  var highDb = (lg.(\high, 0.5) * 2 - 1) * range;
+  sig = BLowShelf.ar(sig, lg.(\lowFreq, lowFreq), lg.(\lowRs, 0.5), lowDb, lg.(\lowMul, 1), lg.(\lowAdd, 0));
+  sig = BPeakEQ.ar(sig, lg.(\midFreq, 1000), lg.(\midRq, 0.7), midDb, lg.(\midMul, 1), lg.(\midAdd, 0));
+  BHiShelf.ar(sig, lg.(\highFreq, 8000), lg.(\highRs, 0.5), highDb, lg.(\highMul, 1), lg.(\highAdd, 0))
+};
+
+// Compresseur (Compander) d'un groupe CompBand : retourne [signal après contournement, bypass].
+~mxBandCompress = { |input, control, group|
+  var lg = { |field, default| ~mxLg.(group, field, default) };
+  var compressed = Compander.ar(input, control, lg.(\thresholdDb, -20).dbamp, lg.(\slopeBelow, 1),
+    lg.(\slopeAbove, 0.25), lg.(\attackMs, 10) / 1000, lg.(\releaseMs, 100) / 1000,
+    lg.(\mul, 1), lg.(\add, 0));
+  var bypass = ~mxCtl.(group, \bypass, 1);
+  [Select.ar(bypass, [compressed, input]), bypass]
+};
+
+// Étage passe-haut ou passe-bas : fréquence 0..1 -> linexp(minHz, maxHz), mélange sec/filtré par enabled.
+// `filter.(dry, cutoff, lg)` construit le UGen du modèle ; lg.(champ, défaut) donne un contrôle lissé.
+~mxPassDef = { |kind, w, freqDefault, filter|
+  SynthDef(~mxDefName.(kind, w), {
+    var bus = \bus.kr(0);
+    var lg = { |field, default| ~mxLg.(nil, field, default) };
+    var dry = In.ar(bus, w);
+    var cutoff = lg.(\freq, freqDefault).linexp(0, 1, lg.(\minHz, 20), lg.(\maxHz, 20000));
+    var filtered = filter.(dry, cutoff, lg);
+    // L'interpolation linéaire garde l'unité sur un matériau corrélé pendant la bascule.
+    ReplaceOut.ar(bus, dry + ((filtered - dry) * lg.(\enabled, 0)))
+  })
+};
+
 ~mxBuildSourceDefs = { |w|
   var name = { |kind| ~mxDefName.(kind, w) };
   var linked = ~mxLinkedControl;
+  var pass = ~mxPassDef;
   [
-    SynthDef(name.(\in), { |bus, firstChannel=1, meterId=0, gain=1,
-      compThresholdDb=(-20), compRatio=4, compAttackMs=10, compReleaseMs=100,
-      compMakeupDb=0, compBypass=1, controlLag=0.05|
-      var sig = SoundIn.ar((firstChannel - 1) + (0..w-1));
-      var compressed = Compander.ar(sig, linked.(sig, w), compThresholdDb.dbamp, 1.0,
-        compRatio.reciprocal, compAttackMs / 1000, compReleaseMs / 1000) * compMakeupDb.dbamp;
-      sig = Select.ar(compBypass, [compressed, sig]);
-      sig = sig * gain.lag(controlLag);
+    SynthDef(name.(\in), { |bus, firstChannel=1, meterId=0|
+      var sig = SoundIn.ar((firstChannel - 1) + (0..w-1), ~mxLg.(\input, \mul, 1), ~mxLg.(\input, \add, 0));
+      sig = ~mxBandCompress.(sig, linked.(sig, w), \inputCompressor)[0];
+      sig = sig * ~mxLg.(\input, \gain, 1);
       SendPeakRMS.kr(sig, 10, 0.25, '/mx/source-meter', meterId);
       ReplaceOut.ar(bus, sig);
     }),
 
-    SynthDef(name.(\eq), { |bus, eqLow=0.5, eqMid=0.5, eqHigh=0.5, controlLag=0.05|
-      var sig = In.ar(bus, w);
-      var lowDb = (eqLow.lag(controlLag) * 2 - 1) * 12;
-      var midDb = (eqMid.lag(controlLag) * 2 - 1) * 12;
-      var highDb = (eqHigh.lag(controlLag) * 2 - 1) * 12;
-      sig = BLowShelf.ar(sig, 80, 0.5, lowDb);
-      sig = BPeakEQ.ar(sig, 1000, 0.7, midDb);
-      sig = BHiShelf.ar(sig, 8000, 0.5, highDb);
-      ReplaceOut.ar(bus, sig);
+    SynthDef(name.(\eq), { |bus|
+      ReplaceOut.ar(bus, ~mxEqChain.(In.ar(bus, w), nil, 80));
     }),
 
     // EQ neutre : graphe distinct, sans UGen d'égalisation.
@@ -55,95 +105,91 @@
       ReplaceOut.ar(bus, In.ar(bus, w));
     }),
 
-    SynthDef(name.(\hp), { |bus, enabled=0, model=0, freq=0, q=1, mul=1, add=0, controlLag=0.05|
-      var dry = In.ar(bus, w);
-      var cutoff = freq.lag(controlLag).linexp(0, 1, 20, 20000);
-      var rq = q.lag(controlLag).reciprocal;
-      var filtered = SelectX.ar(model.lag(controlLag), [
-        BHiPass.ar(dry, cutoff, rq), RHPF.ar(dry, cutoff.max(40), rq)
-      ]) * mul.lag(controlLag) + add.lag(controlLag);
-      // L'interpolation linéaire garde l'unité sur un matériau corrélé pendant la bascule.
-      ReplaceOut.ar(bus, dry + ((filtered - dry) * enabled.lag(controlLag)));
+    pass.(\hpBHiPass, w, 0, { |dry, cutoff, lg|
+      BHiPass.ar(dry, cutoff, lg.(\q, 1).reciprocal, lg.(\mul, 1), lg.(\add, 0))
+    }),
+    pass.(\hpRHPF, w, 0, { |dry, cutoff, lg|
+      RHPF.ar(dry, cutoff.max(lg.(\floorHz, 40)), lg.(\q, 1).reciprocal, lg.(\mul, 1), lg.(\add, 0))
+    }),
+    pass.(\hpBHiPass4, w, 0, { |dry, cutoff, lg|
+      BHiPass4.ar(dry, cutoff, lg.(\q, 1).reciprocal, lg.(\mul, 1), lg.(\add, 0))
+    }),
+    pass.(\lpBLowPass, w, 1, { |dry, cutoff, lg|
+      BLowPass.ar(dry, cutoff, lg.(\q, 1).reciprocal, lg.(\mul, 1), lg.(\add, 0))
+    }),
+    pass.(\lpRLPF, w, 1, { |dry, cutoff, lg|
+      RLPF.ar(dry, cutoff, lg.(\q, 1).reciprocal, lg.(\mul, 1), lg.(\add, 0))
+    }),
+    pass.(\lpBLowPass4, w, 1, { |dry, cutoff, lg|
+      BLowPass4.ar(dry, cutoff, lg.(\q, 1).reciprocal, lg.(\mul, 1), lg.(\add, 0))
+    }),
+    // MoogFF : reset est un déclencheur (POST .../lp/reset-state), pas un champ du contrat.
+    pass.(\lpMoogFF, w, 1, { |dry, cutoff, lg|
+      MoogFF.ar(dry, cutoff, lg.(\gain, 2), \reset.tr(0), lg.(\mul, 1), lg.(\add, 0))
     }),
 
-    SynthDef(name.(\hp4), { |bus, enabled=0, freq=0, q=1, mul=1, add=0, controlLag=0.05|
-      var dry = In.ar(bus, w);
-      var cutoff = freq.lag(controlLag).linexp(0, 1, 20, 20000);
-      var filtered = BHiPass4.ar(dry, cutoff, q.lag(controlLag).reciprocal)
-        * mul.lag(controlLag) + add.lag(controlLag);
-      ReplaceOut.ar(bus, dry + ((filtered - dry) * enabled.lag(controlLag)));
-    }),
-
-    SynthDef(name.(\lp), { |bus, enabled=0, model=0, freq=1, q=1, mul=1, add=0, controlLag=0.05|
-      var dry = In.ar(bus, w);
-      var cutoff = freq.lag(controlLag).linexp(0, 1, 20, 20000);
-      var rq = q.lag(controlLag).reciprocal;
-      var filtered = SelectX.ar(model.lag(controlLag), [
-        BLowPass.ar(dry, cutoff, rq), RLPF.ar(dry, cutoff, rq)
-      ]) * mul.lag(controlLag) + add.lag(controlLag);
-      ReplaceOut.ar(bus, dry + ((filtered - dry) * enabled.lag(controlLag)));
-    }),
-
-    SynthDef(name.(\lp4), { |bus, enabled=0, freq=1, q=1, mul=1, add=0, controlLag=0.05|
-      var dry = In.ar(bus, w);
-      var cutoff = freq.lag(controlLag).linexp(0, 1, 20, 20000);
-      var filtered = BLowPass4.ar(dry, cutoff, q.lag(controlLag).reciprocal)
-        * mul.lag(controlLag) + add.lag(controlLag);
-      ReplaceOut.ar(bus, dry + ((filtered - dry) * enabled.lag(controlLag)));
-    }),
-
-    SynthDef(name.(\lpmoog), { |bus, enabled=0, freq=1, gain=2, t_reset=0, mul=1, add=0, controlLag=0.05|
-      var dry = In.ar(bus, w);
-      var cutoff = freq.lag(controlLag).linexp(0, 1, 20, 20000);
-      var filtered = MoogFF.ar(dry, cutoff, gain.lag(controlLag), t_reset)
-        * mul.lag(controlLag) + add.lag(controlLag);
-      ReplaceOut.ar(bus, dry + ((filtered - dry) * enabled.lag(controlLag)));
-    }),
-
-    SynthDef(name.(\pitch), { |bus, pitch=0, controlLag=0.05|
+    SynthDef(name.(\pitch), { |bus|
       var sig = In.ar(bus, w);
-      var shifted = PitchShift.ar(sig, ~mxPitchWindowSeconds, pitch.lag(controlLag).midiratio, 0, 0.01);
-      // PitchShift colore le signal même au rapport 1 : chemin direct à zéro demi-ton.
-      ReplaceOut.ar(bus, XFade2.ar(sig, shifted, ((pitch.abs > 0).lag(controlLag) * 2) - 1));
+      var lg = { |field, default| ~mxLg.(nil, field, default) };
+      // windowSize : argument fixé à la création du UGen, donc ni lissé ni modulé ; borné au maximum du contrat.
+      var window = ~mxCtl.(nil, \windowSize, ~mxPitchWindowMaxSeconds).min(~mxPitchWindowMaxSeconds);
+      var shifted = PitchShift.ar(sig, window, lg.(\semitones, 0).midiratio, lg.(\pitchDispersion, 0),
+        lg.(\timeDispersion, 0.01), lg.(\mul, 1), lg.(\add, 0));
+      // PitchShift colore le signal même au rapport 1 : blend = -1 donne le chemin direct.
+      ReplaceOut.ar(bus, XFade2.ar(sig, shifted, lg.(\blend, -1), lg.(\level, 1)));
     }),
 
-    // Compresseur trois bandes ; chaque bande est liée sur l'ensemble des canaux.
+    // Compresseur trois bandes ; chaque bande est liée sur l'ensemble des canaux. Répartition LR4 :
+    // chaque cascade est formée de deux filtres identiques (mul et add propres à chaque UGen).
     SynthDef(name.(\dyn), { |bus|
       var sig = In.ar(bus, w);
-      var bands = [
-        LPF.ar(LPF.ar(sig, 250), 250),
-        LPF.ar(LPF.ar(HPF.ar(HPF.ar(sig, 250), 250), 4000), 4000),
-        HPF.ar(HPF.ar(sig, 4000), 4000)
-      ];
-      var bypasses = List.new;
-      var processed = [\low, \mid, \high].collect { |band, index|
-        var prefix = band.asString;
-        var input = bands[index];
-        var threshold = (prefix ++ "ThresholdDb").asSymbol.kr(-20);
-        var ratio = (prefix ++ "Ratio").asSymbol.kr(4);
-        var attack = (prefix ++ "AttackMs").asSymbol.kr(10);
-        var release = (prefix ++ "ReleaseMs").asSymbol.kr(100);
-        var makeup = (prefix ++ "MakeupDb").asSymbol.kr(0);
-        var bypass = (prefix ++ "Bypass").asSymbol.kr(1);
-        var compressed = Compander.ar(input, linked.(input, w), threshold.dbamp, 1.0,
-          ratio.reciprocal, attack / 1000, release / 1000) * makeup.dbamp;
-        bypasses.add(bypass);
-        Select.ar(bypass, [compressed, input])
+      var cl = { |field, default| ~mxLg.(\crossover, field, default) };
+      var lowMid = cl.(\lowMidFreq, 250);
+      var midHigh = cl.(\midHighFreq, 4000);
+      var cascade = { |filter, in, freq, id|
+        2.do { |i|
+          in = filter.ar(in, freq, cl.((id ++ (i + 1) ++ "Mul").asSymbol, 1), cl.((id ++ (i + 1) ++ "Add").asSymbol, 0));
+        };
+        in
       };
+      var bands = [
+        cascade.(LPF, sig, lowMid, "lowLp"),
+        cascade.(LPF, cascade.(HPF, sig, lowMid, "midHp"), midHigh, "midLp"),
+        cascade.(HPF, sig, midHigh, "highHp")
+      ];
+      var results = [\low, \mid, \high].collect { |group, index|
+        ~mxBandCompress.(bands[index], linked.(bands[index], w), group)
+      };
+      var processed = results.collect { |r| r[0] };
+      var allBypassed = results.collect { |r| r[1] }.inject(1, { |a, b| a * b });
       // Toutes bandes contournées : passage direct, sans coloration du filtre de répartition.
-      ReplaceOut.ar(bus, Select.ar(bypasses[0] * bypasses[1] * bypasses[2], [processed.sum, sig]));
+      ReplaceOut.ar(bus, Select.ar(allBypassed, [processed.sum, sig]));
     }),
 
-    SynthDef(name.(\mix), { |bus, out, cueOut, volume=1, cueLevel=0, mute=0, pan=0, controlLag=0.05|
+    // Retrait : fadeGate 0 ramène le niveau à zéro en fadeSeconds (VarLag linéaire) avant /n_free (graph.scd).
+    SynthDef(name.(\mix), { |bus, out, cueOut, fadeGate=1, fadeSeconds=0.05|
       var input = In.ar(bus, w);
-      var level = volume.lag(controlLag) * (1 - mute.lag(controlLag));
-      var position = pan.lag(controlLag);
+      var lg = { |field, default| ~mxLg.(nil, field, default) };
+      var volume = lg.(\volume, 1);
+      var cue = lg.(\cue, 0);
+      var mute = lg.(\mute, 0);
+      var position = lg.(\balance, 0.5) * 2 - 1;
+      var panLevel = lg.(\panLevel, 1);
+      var balanceLevel = lg.(\balanceLevel, 1);
+      var spread = lg.(\spread, 1);
+      var splayLevel = lg.(\splayLevel, 1);
+      var center = lg.(\center, 0);
+      var levelComp = lg.(\levelComp, 0.5);
+      var level = volume * (1 - mute) * VarLag.kr(fadeGate, fadeSeconds, warp: \linear);
       var stereo = case
-        { w == 1 } { Pan2.ar(input * level, position) }
-        { w == 2 } { Balance2.ar(input[0] * level, input[1] * level, position) }
-        { true } { var spread = Splay.ar(input) * level; Balance2.ar(spread[0], spread[1], position) };
+        { w == 1 } { Pan2.ar(input * level, position, panLevel) }
+        { w == 2 } { Balance2.ar(input[0] * level, input[1] * level, position, balanceLevel) }
+        { true } {
+          var splayed = Splay.ar(input, spread, splayLevel, center, levelComp) * level;
+          Balance2.ar(splayed[0], splayed[1], position, balanceLevel)
+        };
       Out.ar(out, stereo);
-      Out.ar(cueOut, stereo * cueLevel.lag(controlLag));
+      Out.ar(cueOut, stereo * cue);
     })
   ]
 };

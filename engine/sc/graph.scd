@@ -25,17 +25,45 @@
  *                                                 server.options.numInputBusChannels)
  *   ~mxEnsureWidth.(width)                      -> true si construite, false si déjà présente
  *   ~mxAddSource.(id, meterId, firstChannel, width, proc)   -> ~mxNodeIds.(id)
- *   ~mxRemoveSource.(id)
- *   ~mxSetSourceStage.(id, stage, values)
- *   ~mxSetOutputStage.(output, stage, values)
+ *   ~mxRemoveSource.(id)                        -> fondu à zéro puis /n_free différé (voir plus bas)
+ *   ~mxSetSourceStage.(id, stage, controls)
+ *   ~mxSetOutputStage.(output, stage, controls)
  *   ~mxResetMoog.(id)
  *   ~mxNodeIds.(id)                             -> ID des 7 Synths, dans l'ordre de la chaîne
  *
- * `proc` et `values` reprennent les noms de champs JSON du contrat ; booléens
- * en 0/1, modèles en symboles. Étages de source : \mix \input \inputCompressor
- * \eq \hp \lp \pitch \bandCompressor ; pour \bandCompressor, `values` est une
- * CompBand complétée de `band` (\low, \mid ou \high). Étages de sortie : \mix
- * \eq \infraHpf \sideHpf \clipper \limiter \compressor ; sorties \master \cue.
+ * RÈGLE DE NOMMAGE DES CONTRÔLES (une seule, sans table de correspondance).
+ *   Le nom d'un contrôle de SynthDef est le nom du champ du contrat. Quand une SynthDef porte
+ *   plusieurs groupes du contrat, le nom est préfixé : <groupe><Champ> (premier caractère du champ
+ *   en majuscule). Groupes multiples : \mx_in_<w> (input, inputCompressor), \mx_dyn_<w> (low, mid,
+ *   high, crossover : lowThresholdDb, crossoverLowMidFreq...) et la SynthDef de sortie
+ *   \mx_output_* (mix, eq, infraHpf, sideHpf, clipper, limiter, compressor : eqLowFreq,
+ *   limiterDurMs...). Les autres SynthDefs de source portent un seul groupe : champ seul.
+ *   Les conversions (dB -> amp, 0..1 -> Hz, semitones -> rapport, ms -> s) sont dans les SynthDefs :
+ *   `/n_set <nœud> <contrôle> <valeur>` avec le nom du contrat suffit (src/contract/controls.js
+ *   calcule le préfixe, tests/parameters.test.js le compare aux SynthDefs construites).
+ *   `proc` et `controls` sont des Events dont les clés sont ces noms de contrôles ; booléens en 0/1.
+ *   Exceptions, toutes structurelles : la clé `model` (symbole) choisit la SynthDef et n'est jamais un
+ *   contrôle ; la clé `band` (\low, \mid, \high, \crossover) désigne le groupe de \bandCompressor ;
+ *   `proc` regroupe les contrôles par étage : (mix: (...), input: (...), inputCompressor: (...), eq,
+ *   hp, lp, pitch, bandCompressor: (low: (...), mid: (...), high: (...), crossover: (...))).
+ *   Les contrôles non applicables au modèle chargé (par exemple gain hors MoogFF, floorHz hors RHPF)
+ *   sont mémorisés par l'API et ignorés ici.
+ *   Étages de source : \mix \input \inputCompressor \eq \hp \lp \pitch \bandCompressor ; étages de
+ *   sortie : \mix \eq \infraHpf \sideHpf \clipper \limiter \compressor ; sorties \master \cue.
+ *
+ * ARGUMENTS FIXÉS À LA CRÉATION (structure, pas valeur). windowSize de PitchShift et dur de Limiter ne
+ * peuvent pas être modulés (PitchShift.schelp, Limiter.schelp : « cannot be modulated ») : le tampon est
+ * alloué à la création du UGen. Leur changement recrée le Synth (source : Synth.replace ; sortie :
+ * bascule avec fondu comme un changement de modèle) ; ce sont les seules valeurs qui passent par sclang.
+ * L'EQ de source neutre (low = mid = high = 0.5, mul = 1, add = 0, valeurs exactes) est la SynthDef
+ * \mx_eqdirect_<w> sans UGen d'égalisation ; en sortir recrée le Synth.
+ *
+ * RETRAIT D'UNE SOURCE (suppression, changement de largeur ou de canal, remplacement d'un preset).
+ *   Server-Command-Reference, /n_free : libérer un nœud non silencieux peut produire un clic. Le Synth
+ *   \mix passe donc à zéro (fadeGate 0, VarLag linéaire de fadeSeconds) avant la libération :
+ *   fadeSeconds = max(~mxFadeSeconds, 2 périodes matérielles) ; la libération du groupe et du bus a lieu
+ *   fadeSeconds + ~mxFadeMargin plus tard (SystemClock, sans horodatage). L'identifiant de la source est
+ *   libre immédiatement ; le bus reste réservé jusqu'à la libération.
  *
  * Vumètres (SendPeakRMS) : '/mx/source-meter' avec le meterId de la source,
  * un couple crête/RMS par canal ; '/mx/output-meter' avec les ID 0/1 (Master
@@ -44,13 +72,17 @@
 
 (thisProcess.nowExecutingPath.dirname +/+ "source-defs.scd").load;
 
-~mxControlLag = 0.05;
 // Délai maximal du DelayN du modèle CompanderD : maximum de la plage d'attaque du contrat
 // (attackMs 1..100, soit 0.1 s). Constante de SynthDef : la taille du tampon est fixée à la
 // création (DelayN.schelp : maxdelaytime « used to initialize the delay buffer size »).
+// C'est la définition de CompanderD (Compander.sc : DelayN.ar(in, clampTime, clampTime)) ; le délai
+// effectif suit attackMs.
 ~mxCompanderDMaxDelay = 0.1;
-// Fondu du compresseur de sortie : durée du VarLag de l'écrivain, puis marge avant de libérer
-// l'ancien Synth (Server-Command-Reference /n_free : un nœud non silencieux libéré peut cliquer).
+// dur maximal du Limiter (s) : LIMITER_DUR_MAX_MS du contrat (schemas.js), dimensionnement de memSize.
+~mxLimiterDurMaxSeconds = 0.05;
+// Fondu du compresseur de sortie : durée par défaut du VarLag de l'écrivain (contrôle compressorFadeSeconds,
+// champ compressor.fadeSeconds), puis marge avant de libérer l'ancien Synth (Server-Command-Reference
+// /n_free : un nœud non silencieux libéré peut cliquer). Sert aussi de plancher au fondu de retrait de source.
 ~mxFadeSeconds = 0.05;
 // Marge avant libération : 8 périodes matérielles (hardwareBufferSize / sampleRate du serveur, issus de
 // l'horloge TimoxVasio) avec un plancher de 0.1 s. Le `set` du fondu et le `/n_free` partent sans
@@ -58,73 +90,124 @@
 // images et 48 kHz (5.3 ms) le plancher s'applique ; à 2048 images la marge vaut 0.34 s.
 ~mxFadeMarginPeriods = 8;
 ~mxFadeMarginFloorSeconds = 0.1;
-~mxFadeMargin = { |server|
-  var period = (server.options.hardwareBufferSize ? 0) / (server.sampleRate ? server.options.sampleRate ? 48000);
-  max(~mxFadeMarginFloorSeconds, ~mxFadeMarginPeriods * period)
+~mxHardwarePeriod = { |server|
+  (server.options.hardwareBufferSize ? 0) / (server.sampleRate ? server.options.sampleRate ? 48000)
 };
+~mxFadeMargin = { |server|
+  max(~mxFadeMarginFloorSeconds, ~mxFadeMarginPeriods * ~mxHardwarePeriod.(server))
+};
+// Durée du fondu de retrait : au moins une période matérielle (deux ici), jamais sous ~mxFadeSeconds.
+~mxRemoveRamp = { |server| max(~mxFadeSeconds, 2 * ~mxHardwarePeriod.(server)) };
 ~mxInitDone = false;
-~mxHpModels = (BHiPass: 0, RHPF: 1, BHiPass4: 2);
-~mxLpModels = (BLowPass: 0, RLPF: 1, BLowPass4: 2, MoogFF: 3);
+~mxHpModels = [\BHiPass, \RHPF, \BHiPass4];
+~mxLpModels = [\BLowPass, \RLPF, \BLowPass4, \MoogFF];
 ~mxCompressorDefs = (Compander: \mx_output_compander, CompanderD: \mx_output_companderD,
   FaustRMS: \mx_output_faustRMS);
+// Contrôles de sortie lus à la création du UGen (voir ARGUMENTS FIXÉS À LA CRÉATION).
+~mxOutputInitControls = [\limiterDurMs];
+// Contrôles de l'écrivain de sortie (ce n'est pas le Synth du traitement).
+~mxWriterControls = [\compressorFadeSeconds];
+~mxOutputStages = [\mix, \eq, \infraHpf, \sideHpf, \clipper, \limiter, \compressor];
 
-// Valeurs d'un Event dans l'ordre des clés ; un champ absent est une erreur.
-~mxRequire = { |values, keys|
+// Paires [clé, valeur, ...] d'un Event de contrôles, sans les clés structurelles `model` et `band`.
+~mxControls = { |values|
+  var pairs = List.new;
   if(values.isKindOf(Dictionary).not) { Error("Valeurs attendues sous forme d'Event").throw };
-  keys.collect { |key|
-    var value = values[key];
-    if(value.isNil) { Error("Champ manquant : " ++ key).throw };
-    value
-  }
+  values.keysValuesDo { |key, value|
+    if([\model, \band].includes(key).not) { pairs.add(key); pairs.add(value) };
+  };
+  pairs.asArray
+};
+
+// Valeurs par défaut des contrôles d'une SynthDef (lues dans son SynthDesc, jamais redéclarées).
+~mxDefaults = { |defName|
+  var desc = SynthDescLib.global[defName];
+  var defaults = ();
+  if(desc.isNil) { Error("SynthDef inconnue : " ++ defName).throw };
+  desc.controls.do { |control| defaults[control.name] = control.defaultValue };
+  defaults
+};
+
+// Contrôles d'une liste de paires applicables à une SynthDef. `strict` : un contrôle inconnu lève une
+// erreur ; sinon il est ignoré (champ non applicable au modèle chargé).
+~mxForDef = { |defName, pairs, strict|
+  var desc = SynthDescLib.global[defName];
+  var known, kept = List.new;
+  if(desc.isNil) { Error("SynthDef inconnue : " ++ defName).throw };
+  known = desc.controls.collect { |control| control.name };
+  pairs.pairsDo { |key, value|
+    if(known.includes(key)) { kept.add(key); kept.add(value) } {
+      if(strict) { Error("Contrôle inconnu " ++ key ++ " pour " ++ defName).throw };
+    };
+  };
+  kept.asArray
 };
 
 // === SORTIES (filtres infra et latéral, EQ, volume, écrêteur, limiteur, compresseur) ===
+// `compress.(sig, thresholdDb, slopeBelow, slopeAbove, attackMs, releaseMs, mul, add)` construit le modèle
+// de compresseur (unités du contrat : dB et ms).
 ~mxOutputDef = { |name, compress|
   SynthDef(name, {
-    |in, out, volume=1, eqLow=0.5, eqMid=0.5, eqHigh=0.5, controlLag=0.05,
-     infraHpfEnabled=0, infraHpfHz=25, sideHpfEnabled=0, sideHpfHz=100,
-     clipEnabled=0, clipCeilingDb=0, limitEnabled=0, limitCeilingDb=(-1),
-     compThresholdDb=(-20), compSlopeBelow=1, compSlopeAbove=0.25,
-     compAttackMs=10, compReleaseMs=100, compMul=1, compAdd=0, compBypass=1|
+    var in = \in.kr(0), out = \out.kr(0);
     var sig = In.ar(in, 2);
-    var eqMix = (((eqLow - 0.5).abs + (eqMid - 0.5).abs + (eqHigh - 0.5).abs) > 0.0001).lag(controlLag);
-    var lowDb = (eqLow.lag(controlLag) * 2 - 1) * 12;
-    var midDb = (eqMid.lag(controlLag) * 2 - 1) * 12;
-    var highDb = (eqHigh.lag(controlLag) * 2 - 1) * 12;
-    var dry, mid, side, clipLevel, limited, compressed;
+    var lg = { |group, field, default| ~mxLg.(group, field, default) };
+    var dry, mid, side, limited, compressed;
 
-    sig = sig + ((HPF.ar(sig, infraHpfHz.lag(controlLag)) - sig) * infraHpfEnabled.lag(controlLag));
+    sig = sig + ((HPF.ar(sig, lg.(\infraHpf, \hz, 25), lg.(\infraHpf, \mul, 1), lg.(\infraHpf, \add, 0)) - sig)
+      * lg.(\infraHpf, \enabled, 0));
     mid = (sig[0] + sig[1]) * 0.5;
     side = (sig[0] - sig[1]) * 0.5;
-    side = side + ((HPF.ar(side, sideHpfHz.lag(controlLag)) - side) * sideHpfEnabled.lag(controlLag));
+    side = side + ((HPF.ar(side, lg.(\sideHpf, \hz, 100), lg.(\sideHpf, \mul, 1), lg.(\sideHpf, \add, 0)) - side)
+      * lg.(\sideHpf, \enabled, 0));
     sig = [mid + side, mid - side];
-    dry = sig;
 
-    sig = BLowShelf.ar(sig, 200, 0.5, lowDb);
-    sig = BPeakEQ.ar(sig, 1000, 0.7, midDb);
-    sig = BHiShelf.ar(sig, 8000, 0.5, highDb);
-    sig = dry + ((sig - dry) * eqMix);
+    sig = ~mxEqChain.(sig, \eq, 200);
 
     // Le volume précède le compresseur final.
-    sig = sig * volume.lag(controlLag);
+    sig = sig * lg.(\mix, \volume, 1);
 
-    clipLevel = clipCeilingDb.dbamp;
-    sig = sig + ((Clip.ar(sig, clipLevel.neg, clipLevel) - sig) * clipEnabled.lag(controlLag));
-    limited = Limiter.ar(sig, limitCeilingDb.dbamp, 0.01);
-    sig = sig + ((limited - sig) * limitEnabled.lag(controlLag));
+    sig = sig + ((Clip.ar(sig, lg.(\clipper, \lo, -1), lg.(\clipper, \hi, 1)) - sig) * lg.(\clipper, \enabled, 0));
+    // dur : argument fixé à la création du UGen, donc ni lissé ni modulé ; borné au maximum du contrat.
+    limited = Limiter.ar(sig, lg.(\limiter, \ceilingDb, -1).dbamp,
+      (~mxCtl.(\limiter, \durMs, 10) / 1000).min(~mxLimiterDurMaxSeconds));
+    sig = sig + ((limited - sig) * lg.(\limiter, \enabled, 0));
 
     // Le compresseur est le dernier traitement audio.
-    compressed = compress.(sig, compThresholdDb, compSlopeBelow, compSlopeAbove,
-      compAttackMs, compReleaseMs, compMul, compAdd);
-    sig = Select.ar(compBypass, [compressed, sig]);
+    compressed = compress.(sig, lg.(\compressor, \thresholdDb, -20), lg.(\compressor, \slopeBelow, 1),
+      lg.(\compressor, \slopeAbove, 0.25), lg.(\compressor, \attackMs, 10), lg.(\compressor, \releaseMs, 100),
+      lg.(\compressor, \mul, 1), lg.(\compressor, \add, 0));
+    sig = Select.ar(~mxCtl.(\compressor, \bypass, 1), [compressed, sig]);
 
     Out.ar(out, sig);
   })
 };
 
-// Seul écrivain matériel de chaque sortie ; les processeurs écrivent sur deux bus privés.
-~mxOutputWriterDef = SynthDef(\mx_output_writer, { |inA, inB, out, mix=0, fadeSeconds=(~mxFadeSeconds), meterId=0|
-  var blend = VarLag.kr(mix, fadeSeconds, warp: \linear);
+// SynthDefs de sortie : un par modèle de compresseur ; `faust` inclut FaustRMS (plug-in chargé).
+~mxBuildOutputDefs = { |faust|
+  var defs = [
+    ~mxOutputDef.(\mx_output_compander, { |sig, threshold, below, above, attack, release, mul, add|
+      Compander.ar(sig, sig, threshold.dbamp, below, above, attack / 1000, release / 1000, mul, add)
+    }),
+    // Équivalent de CompanderD.ar (Compander.sc : DelayN.ar(in, clampTime, clampTime) en entrée de traitement,
+    // signal direct en contrôle) mais avec un maxdelaytime fixe (~mxCompanderDMaxDelay) : une attaque
+    // modifiée après la création du Synth reste valide.
+    ~mxOutputDef.(\mx_output_companderD, { |sig, threshold, below, above, attack, release, mul, add|
+      Compander.ar(DelayN.ar(sig, ~mxCompanderDMaxDelay, (attack / 1000).min(~mxCompanderDMaxDelay)), sig,
+        threshold.dbamp, below, above, attack / 1000, release / 1000).madd(mul, add)
+    })
+  ];
+  if(faust) {
+    defs = defs ++ [~mxOutputDef.(\mx_output_faustRMS, { |sig, threshold, below, above, attack, release, mul, add|
+      \MixetteFaustRMS.asClass.ar(sig[0], sig[1], threshold, below, above, attack, release) * mul + add
+    })];
+  };
+  defs
+};
+
+// Seul écrivain matériel de chaque sortie ; les processeurs écrivent sur deux bus privés. La durée du fondu
+// est le champ compressor.fadeSeconds (contrôle compressorFadeSeconds).
+~mxOutputWriterDef = SynthDef(\mx_output_writer, { |inA, inB, out, mix=0, meterId=0|
+  var blend = VarLag.kr(mix, ~mxCtl.(\compressor, \fadeSeconds, ~mxFadeSeconds), warp: \linear);
   var sig = (In.ar(inA, 2) * (1 - blend)) + (In.ar(inB, 2) * blend);
   SendPeakRMS.kr(sig[0], 10, 0.25, '/mx/output-meter', meterId);
   SendPeakRMS.kr(sig[1], 10, 0.25, '/mx/output-meter', meterId + 1);
@@ -221,21 +304,7 @@
   models = (Compander: true, CompanderD: true, FaustRMS: faustLoaded);
   ~mxModels = models;
 
-  ~mxOutputDef.(\mx_output_compander, { |sig, threshold, below, above, attack, release, mul, add|
-    Compander.ar(sig, sig, threshold.dbamp, below, above, attack / 1000, release / 1000, mul, add)
-  }).add;
-  // Équivalent de CompanderD.ar (Compander.sc : DelayN.ar(in, clampTime, clampTime) en entrée de traitement,
-  // signal direct en contrôle) mais avec un maxdelaytime fixe (~mxCompanderDMaxDelay) : une attaque
-  // modifiée après la création du Synth reste valide.
-  ~mxOutputDef.(\mx_output_companderD, { |sig, threshold, below, above, attack, release, mul, add|
-    Compander.ar(DelayN.ar(sig, ~mxCompanderDMaxDelay, (attack / 1000).min(~mxCompanderDMaxDelay)), sig,
-      threshold.dbamp, below, above, attack / 1000, release / 1000).madd(mul, add)
-  }).add;
-  if(models[\FaustRMS]) {
-    ~mxOutputDef.(\mx_output_faustRMS, { |sig, threshold, below, above, attack, release, mul, add|
-      \MixetteFaustRMS.asClass.ar(sig[0], sig[1], threshold, below, above, attack, release) * mul + add
-    }).add;
-  };
+  ~mxBuildOutputDefs.(faustLoaded).do { |def| def.add };
   ~mxOutputWriterDef.add;
   ~mxBenchDefs.().do { |def| def.add };
   server.sync;
@@ -254,22 +323,21 @@
   ~mxOutputs = IdentityDictionary.new;
   [\master, \cue].do { |name, index|
     var slots = Array.fill(2, { Bus.audio(server, 2) });
-    var params = (in: if(name == \master) { ~mxMasterBus.index } { ~mxCueBus.index },
-      out: slots[0].index, volume: 1, eqLow: 0.5, eqMid: 0.5, eqHigh: 0.5, controlLag: ~mxControlLag,
-      infraHpfEnabled: 0, infraHpfHz: 25, sideHpfEnabled: 0, sideHpfHz: 100,
-      clipEnabled: 0, clipCeilingDb: 0, limitEnabled: 0, limitCeilingDb: -1,
-      compThresholdDb: -20, compSlopeBelow: 1, compSlopeAbove: 0.25, compAttackMs: 10,
-      compReleaseMs: 100, compMul: 1, compAdd: 0, compBypass: 1);
+    // Valeurs courantes des contrôles : celles de la SynthDef jusqu'au premier réglage de l'API.
+    var params = ~mxDefaults.(~mxCompressorDefs[\Compander]);
+    params[\in] = if(name == \master) { ~mxMasterBus.index } { ~mxCueBus.index };
+    params[\out] = slots[0].index;
     ~mxOutputs[name] = (name: name, slots: slots, slot: 0, params: params, model: \Compander,
-      synth: Synth.tail(~mxOutputGroup, \mx_output_compander, params.asKeyValuePairs),
-      phase: \stable, old: nil, routine: nil);
+      synth: Synth.tail(~mxOutputGroup, \mx_output_compander, [\in, params[\in], \out, params[\out]]),
+      phase: \stable, old: nil, routine: nil,
+      fadeSeconds: ~mxDefaults.(\mx_output_writer)[\compressorFadeSeconds]);
   };
   // Master vers les sorties matérielles 0/1, Cue vers 2/3.
   [\master, \cue].do { |name, index|
     var output = ~mxOutputs[name];
     output[\writer] = Synth.tail(~mxOutputGroup, \mx_output_writer, [
       \inA, output[\slots][0].index, \inB, output[\slots][1].index,
-      \out, index * 2, \meterId, index * 2, \fadeSeconds, ~mxFadeSeconds]);
+      \out, index * 2, \meterId, index * 2]);
   };
   server.sync;
   ~mxInitDone = true;
@@ -290,63 +358,44 @@
   [\input, \eq, \hp, \lp, \pitch, \dyn, \mix].collect { |key| nodes[key].nodeID }
 };
 
-~mxCompArgs = { |prefix, values|
-  var v = ~mxRequire.(values, [\thresholdDb, \ratio, \attackMs, \releaseMs, \makeupDb, \bypass]);
-  [\ThresholdDb, \Ratio, \AttackMs, \ReleaseMs, \MakeupDb, \Bypass].collect { |suffix, index|
-    [(prefix ++ suffix).asSymbol, v[index]]
-  }.flatten
+// Valeurs d'un étage de `proc` ; un étage absent est une erreur.
+~mxStageValues = { |proc, stage|
+  var values = proc[stage];
+  if(values.isNil) { Error("Champ manquant : " ++ stage).throw };
+  values
 };
 
+// EQ neutre : valeurs exactes (aucun seuil), voir l'en-tête.
 ~mxEqKind = { |values|
-  var v = ~mxRequire.(values, [\low, \mid, \high]);
-  if(v.every { |value| (value - 0.5).abs < 0.0001 }) { \eqdirect } { \eq }
+  var neutral = [\low, \mid, \high].every { |key| values[key] == 0.5 }
+    and: { [\lowMul, \midMul, \highMul].every { |key| values[key] == 1 }
+      and: { [\lowAdd, \midAdd, \highAdd].every { |key| values[key] == 0 } } };
+  if(neutral) { \eqdirect } { \eq }
 };
 
 ~mxHpKind = { |values|
-  var model = ~mxHpModels[~mxRequire.(values, [\model])[0]];
-  if(model.isNil) { Error("Modèle de passe-haut inconnu : " ++ values[\model]).throw };
-  if(model == 2) { \hp4 } { \hp }
+  var model = values[\model];
+  if(~mxHpModels.includes(model).not) { Error("Modèle de passe-haut inconnu : " ++ model).throw };
+  ("hp" ++ model).asSymbol
 };
 
 ~mxLpKind = { |values|
-  var model = ~mxLpModels[~mxRequire.(values, [\model])[0]];
-  if(model.isNil) { Error("Modèle de passe-bas inconnu : " ++ values[\model]).throw };
-  [\lp, \lp, \lp4, \lpmoog][model]
+  var model = values[\model];
+  if(~mxLpModels.includes(model).not) { Error("Modèle de passe-bas inconnu : " ++ model).throw };
+  ("lp" ++ model).asSymbol
 };
 
-// Contrôles de Synth correspondant à un étage de source.
-~mxSourceStageArgs = { |stage, values|
-  var v;
-  switch(stage,
-    \mix, {
-      v = ~mxRequire.(values, [\volume, \cue, \mute, \balance]);
-      [\volume, v[0], \cueLevel, v[1], \mute, v[2], \pan, v[3] * 2 - 1]
-    },
-    \input, { [\gain, ~mxRequire.(values, [\gain])[0]] },
-    \inputCompressor, { ~mxCompArgs.("comp", values) },
-    \eq, {
-      v = ~mxRequire.(values, [\low, \mid, \high]);
-      if(~mxEqKind.(values) == \eq) { [\eqLow, v[0], \eqMid, v[1], \eqHigh, v[2]] } { [] }
-    },
-    \hp, {
-      v = ~mxRequire.(values, [\enabled, \model, \freq, \q, \mul, \add]);
-      [\enabled, v[0], \freq, v[2], \q, v[3], \mul, v[4], \add, v[5]]
-        ++ if(~mxHpKind.(values) == \hp) { [\model, ~mxHpModels[v[1]]] } { [] }
-    },
-    \lp, {
-      var kind = ~mxLpKind.(values);
-      v = ~mxRequire.(values, [\enabled, \model, \freq, \q, \gain, \mul, \add]);
-      [\enabled, v[0], \freq, v[2], \mul, v[5], \add, v[6]]
-        ++ switch(kind, \lpmoog, { [\gain, v[4]] }, \lp4, { [\q, v[3]] }, { [\q, v[3], \model, ~mxLpModels[v[1]]] })
-    },
-    \pitch, { [\pitch, ~mxRequire.(values, [\semitones])[0]] },
-    { Error("Étage de source inconnu : " ++ stage).throw }
-  )
-};
+// Étage de `proc` -> clé du nœud de la chaîne qui le porte.
+~mxStageNode = (mix: \mix, input: \input, inputCompressor: \input, eq: \eq, hp: \hp, lp: \lp,
+  pitch: \pitch, bandCompressor: \dyn);
+~mxBandGroups = [\low, \mid, \high, \crossover];
+
+// Nom de la SynthDef du nœud `key` de la source.
+~mxNodeDef = { |source, key| ~mxDefName.(source[\kinds][key], source[\width]) };
 
 ~mxAddSource = { |id, meterId, firstChannel, width, proc|
   var server = ~mxServer;
-  var source, group, bus, nodes, args, bands;
+  var source, group, bus, nodes, kinds, args, bands;
   if(~mxSources[id].notNil) {
     if(~mxSources[id][\pending] == true) { Error("Source en cours de création : " ++ id).throw };
     Error("Source déjà présente : " ++ id).throw;
@@ -361,15 +410,21 @@
   ~mxSources[id] = (id: id, pending: true);
   try {
     // Valide toutes les valeurs avant de créer le moindre nœud.
-    args = IdentityDictionary.new;
-    [\mix, \input, \inputCompressor, \eq, \hp, \lp, \pitch].do { |stage|
-      args[stage] = ~mxSourceStageArgs.(stage, ~mxRequire.(proc, [stage])[0]);
-    };
-    bands = ~mxRequire.(proc, [\bandCompressor])[0];
-    args[\bandCompressor] = [\low, \mid, \high].collect { |band|
-      ~mxCompArgs.(band.asString, ~mxRequire.(bands, [band])[0])
-    }.flatten;
+    kinds = (input: \in, eq: ~mxEqKind.(~mxStageValues.(proc, \eq)), hp: ~mxHpKind.(~mxStageValues.(proc, \hp)),
+      lp: ~mxLpKind.(~mxStageValues.(proc, \lp)), pitch: \pitch, dyn: \dyn, mix: \mix);
+    bands = ~mxStageValues.(proc, \bandCompressor);
     ~mxEnsureWidth.(width);
+    args = (
+      input: ~mxForDef.(~mxDefName.(\in, width),
+        ~mxControls.(~mxStageValues.(proc, \input)) ++ ~mxControls.(~mxStageValues.(proc, \inputCompressor)), true),
+      eq: if(kinds[\eq] == \eq) { ~mxForDef.(~mxDefName.(\eq, width), ~mxControls.(proc[\eq]), true) } { [] },
+      hp: ~mxForDef.(~mxDefName.(kinds[\hp], width), ~mxControls.(proc[\hp]), false),
+      lp: ~mxForDef.(~mxDefName.(kinds[\lp], width), ~mxControls.(proc[\lp]), false),
+      pitch: ~mxForDef.(~mxDefName.(\pitch, width), ~mxControls.(~mxStageValues.(proc, \pitch)), true),
+      dyn: ~mxForDef.(~mxDefName.(\dyn, width), ~mxBandGroups.collect { |g|
+        ~mxControls.(~mxStageValues.(bands, g)) }.flatten, true),
+      mix: ~mxForDef.(~mxDefName.(\mix, width), ~mxControls.(~mxStageValues.(proc, \mix)), true)
+    );
 
     bus = Bus.audio(server, width);
     nodes = IdentityDictionary.new;
@@ -377,20 +432,20 @@
     // bundle sont exécutés ensemble) : le serveur ne voit jamais une chaîne partielle.
     server.makeBundle(nil, {
       group = Group.tail(~mxSourcesGroup);
-      nodes[\input] = Synth.tail(group, ~mxDefName.(\in, width), [\bus, bus.index,
-        \firstChannel, firstChannel, \meterId, meterId] ++ args[\input] ++ args[\inputCompressor]);
-      nodes[\eq] = Synth.tail(group, ~mxDefName.(~mxEqKind.(proc[\eq]), width), [\bus, bus.index] ++ args[\eq]);
-      nodes[\hp] = Synth.tail(group, ~mxDefName.(~mxHpKind.(proc[\hp]), width), [\bus, bus.index] ++ args[\hp]);
-      nodes[\lp] = Synth.tail(group, ~mxDefName.(~mxLpKind.(proc[\lp]), width), [\bus, bus.index] ++ args[\lp]);
+      nodes[\input] = Synth.tail(group, ~mxDefName.(kinds[\input], width), [\bus, bus.index,
+        \firstChannel, firstChannel, \meterId, meterId] ++ args[\input]);
+      nodes[\eq] = Synth.tail(group, ~mxDefName.(kinds[\eq], width), [\bus, bus.index] ++ args[\eq]);
+      nodes[\hp] = Synth.tail(group, ~mxDefName.(kinds[\hp], width), [\bus, bus.index] ++ args[\hp]);
+      nodes[\lp] = Synth.tail(group, ~mxDefName.(kinds[\lp], width), [\bus, bus.index] ++ args[\lp]);
       nodes[\pitch] = Synth.tail(group, ~mxDefName.(\pitch, width), [\bus, bus.index] ++ args[\pitch]);
-      nodes[\dyn] = Synth.tail(group, ~mxDefName.(\dyn, width), [\bus, bus.index] ++ args[\bandCompressor]);
+      nodes[\dyn] = Synth.tail(group, ~mxDefName.(\dyn, width), [\bus, bus.index] ++ args[\dyn]);
       nodes[\mix] = Synth.tail(group, ~mxDefName.(\mix, width), [\bus, bus.index,
         \out, ~mxMasterBus.index, \cueOut, ~mxCueBus.index] ++ args[\mix]);
     });
 
     source = (id: id, meterId: meterId, firstChannel: firstChannel, width: width,
-      group: group, bus: bus, nodes: nodes,
-      kinds: (eq: ~mxEqKind.(proc[\eq]), hp: ~mxHpKind.(proc[\hp]), lp: ~mxLpKind.(proc[\lp])));
+      group: group, bus: bus, nodes: nodes, kinds: kinds,
+      pitchWindow: proc[\pitch][\windowSize]);
     ~mxSources[id] = source;
     server.sync;
   } { |error|
@@ -403,104 +458,109 @@
   ~mxNodeIds.(id)
 };
 
+// Retrait : fondu à zéro (étage \mix), puis libération différée du groupe et du bus (voir l'en-tête).
 ~mxRemoveSource = { |id|
   var source = ~mxSource.(id);
-  source[\group].free;
-  source[\bus].free;
+  var ramp = ~mxRemoveRamp.(~mxServer);
+  source[\nodes][\mix].set(\fadeSeconds, ramp, \fadeGate, 0);
   ~mxSources.removeAt(id);
+  SystemClock.sched(ramp + ~mxFadeMargin.(~mxServer), {
+    source[\group].free;
+    source[\bus].free;
+    nil
+  });
   true
 };
 
-// Étage à modèle (eq, hp, lp) : remplacement du Synth à la même position si le SynthDef change.
-~mxSetModelStage = { |source, stage, kind, args|
+// Remplacement du Synth d'un étage à la même position (changement de modèle ou argument fixé à la création).
+~mxReplaceStage = { |source, key, kind, args|
   var nodes = source[\nodes];
-  if(source[\kinds][stage] != kind) {
-    nodes[stage] = Synth.replace(nodes[stage], ~mxDefName.(kind, source[\width]),
-      [\bus, source[\bus].index] ++ args);
-    source[\kinds][stage] = kind;
+  nodes[key] = Synth.replace(nodes[key], ~mxDefName.(kind, source[\width]), [\bus, source[\bus].index] ++ args);
+  source[\kinds][key] = kind;
+};
+
+// Étage à modèle (eq, hp, lp) : remplacement si la SynthDef change, sinon réglage direct.
+~mxSetModelStage = { |source, stage, kind, controls, strict|
+  var old = source[\kinds][stage];
+  var args = if(kind == \eqdirect) { [] } { ~mxForDef.(~mxDefName.(kind, source[\width]), ~mxControls.(controls), strict) };
+  if(old != kind) {
+    ~mxReplaceStage.(source, stage, kind, args);
   } {
-    if(args.notEmpty) { nodes[stage].set(*args) };
+    if(args.notEmpty) { source[\nodes][stage].set(*args) };
   };
 };
 
 ~mxSetSourceStage = { |id, stage, values|
   var source = ~mxSource.(id);
   var nodes = source[\nodes];
-  var band;
+  var key = ~mxStageNode[stage];
+  var args, window;
+  if(key.isNil) { Error("Étage de source inconnu : " ++ stage).throw };
+  if(stage == \bandCompressor and: { ~mxBandGroups.includes(values[\band]).not }) {
+    Error("Bande inconnue : " ++ values[\band]).throw;
+  };
   switch(stage,
-    \eq, { ~mxSetModelStage.(source, \eq, ~mxEqKind.(values), ~mxSourceStageArgs.(\eq, values)) },
-    \hp, { ~mxSetModelStage.(source, \hp, ~mxHpKind.(values), ~mxSourceStageArgs.(\hp, values)) },
-    \lp, { ~mxSetModelStage.(source, \lp, ~mxLpKind.(values), ~mxSourceStageArgs.(\lp, values)) },
-    \bandCompressor, {
-      band = ~mxRequire.(values, [\band])[0].asSymbol;
-      if([\low, \mid, \high].includes(band).not) { Error("Bande inconnue : " ++ band).throw };
-      nodes[\dyn].set(*~mxCompArgs.(band.asString, values));
+    \eq, { ~mxSetModelStage.(source, \eq, ~mxEqKind.(values), values, true) },
+    \hp, { ~mxSetModelStage.(source, \hp, ~mxHpKind.(values), values, false) },
+    \lp, { ~mxSetModelStage.(source, \lp, ~mxLpKind.(values), values, false) },
+    \pitch, {
+      args = ~mxForDef.(~mxNodeDef.(source, \pitch), ~mxControls.(values), true);
+      window = values[\windowSize];
+      if(window.notNil and: { window != source[\pitchWindow] }) {
+        // PitchShift alloue son tampon à la création : un nouveau windowSize recrée le Synth.
+        ~mxReplaceStage.(source, \pitch, \pitch, args);
+        source[\pitchWindow] = window;
+      } {
+        nodes[\pitch].set(*args);
+      };
     },
-    \mix, { nodes[\mix].set(*~mxSourceStageArgs.(\mix, values)) },
-    \input, { nodes[\input].set(*~mxSourceStageArgs.(\input, values)) },
-    \inputCompressor, { nodes[\input].set(*~mxSourceStageArgs.(\inputCompressor, values)) },
-    \pitch, { nodes[\pitch].set(*~mxSourceStageArgs.(\pitch, values)) },
-    { Error("Étage de source inconnu : " ++ stage).throw }
+    {
+      args = ~mxForDef.(~mxNodeDef.(source, key), ~mxControls.(values), true);
+      nodes[key].set(*args);
+    }
   );
   true
 };
 
 ~mxResetMoog = { |id|
   var source = ~mxSource.(id);
-  if(source[\kinds][\lp] != \lpmoog) { Error("Le passe-bas de " ++ id ++ " n'est pas MoogFF").throw };
-  source[\nodes][\lp].set(\t_reset, 1);
+  if(source[\kinds][\lp] != \lpMoogFF) { Error("Le passe-bas de " ++ id ++ " n'est pas MoogFF").throw };
+  source[\nodes][\lp].set(\reset, 1);
   true
 };
 
 // === SORTIES : étages ===
 
-~mxOutputStageArgs = { |stage, values|
-  var v;
-  switch(stage,
-    \mix, { [\volume, ~mxRequire.(values, [\volume])[0]] },
-    \eq, {
-      v = ~mxRequire.(values, [\low, \mid, \high]);
-      [\eqLow, v[0], \eqMid, v[1], \eqHigh, v[2]]
-    },
-    \infraHpf, {
-      v = ~mxRequire.(values, [\enabled, \hz]);
-      [\infraHpfEnabled, v[0], \infraHpfHz, v[1]]
-    },
-    \sideHpf, {
-      v = ~mxRequire.(values, [\enabled, \hz]);
-      [\sideHpfEnabled, v[0], \sideHpfHz, v[1]]
-    },
-    \clipper, {
-      v = ~mxRequire.(values, [\enabled, \ceilingDb]);
-      [\clipEnabled, v[0], \clipCeilingDb, v[1]]
-    },
-    \limiter, {
-      v = ~mxRequire.(values, [\enabled, \ceilingDb]);
-      [\limitEnabled, v[0], \limitCeilingDb, v[1]]
-    },
-    \compressor, {
-      v = ~mxRequire.(values, [\thresholdDb, \slopeBelow, \slopeAbove, \attackMs, \releaseMs, \mul, \add, \bypass]);
-      [\compThresholdDb, \compSlopeBelow, \compSlopeAbove, \compAttackMs, \compReleaseMs,
-        \compMul, \compAdd, \compBypass].collect { |key, index| [key, v[index]] }.flatten
-    },
-    { Error("Étage de sortie inconnu : " ++ stage).throw }
-  )
-};
-
 ~mxSetOutputStage = { |output, stage, values|
   var state = ~mxOutputs[output];
-  var args, model, params, replacement;
+  var all, args, writerArgs, model, params, replacement, restructure;
   if(state.isNil) { Error("Sortie inconnue : " ++ output).throw };
-  args = ~mxOutputStageArgs.(stage, values);
-  model = if(stage == \compressor) { ~mxRequire.(values, [\model])[0].asSymbol } { state[\model] };
+  if(~mxOutputStages.includes(stage).not) { Error("Étage de sortie inconnu : " ++ stage).throw };
+  all = ~mxControls.(values);
+  writerArgs = List.new;
+  args = List.new;
+  all.pairsDo { |key, value|
+    if(~mxWriterControls.includes(key)) { writerArgs.add(key); writerArgs.add(value) } { args.add(key); args.add(value) };
+  };
+  model = if(stage == \compressor) { values[\model] } { state[\model] };
   if(~mxCompressorDefs[model].isNil) { Error("Modèle de compresseur inconnu : " ++ model).throw };
   if(~mxModels[model] != true) { Error("Modèle de compresseur indisponible : " ++ model).throw };
+  args = ~mxForDef.(~mxCompressorDefs[model], args.asArray, true);
+  writerArgs = ~mxForDef.(\mx_output_writer, writerArgs.asArray, true);
   params = state[\params];
+  restructure = model != state[\model];
+  args.pairsDo { |key, value|
+    if(~mxOutputInitControls.includes(key) and: { params[key] != value }) { restructure = true };
+  };
+  if(restructure and: { state[\phase] != \stable }) { Error("Bascule de compresseur en cours").throw };
+  if(writerArgs.notEmpty) {
+    state[\writer].set(*writerArgs);
+    writerArgs.pairsDo { |key, value| if(key == \compressorFadeSeconds) { state[\fadeSeconds] = value } };
+  };
 
-  if(model != state[\model]) {
-    if(state[\phase] != \stable) { Error("Bascule de modèle de compresseur en cours").throw };
+  if(restructure) {
     args.pairsDo { |key, value| params[key] = value };
-    // Le nouveau modèle écrit sur l'autre bus privé ; l'écrivain fait le fondu.
+    // Le nouveau Synth écrit sur l'autre bus privé ; l'écrivain fait le fondu.
     state[\slot] = 1 - state[\slot];
     params[\out] = state[\slots][state[\slot]].index;
     replacement = Synth.before(state[\writer], ~mxCompressorDefs[model], params.asKeyValuePairs);
@@ -508,13 +568,13 @@
     state[\synth] = replacement;
     state[\model] = model;
     state[\phase] = \warming;
-    // Laisse le nouveau compresseur établir ses enveloppes avant de l'exposer.
+    // Laisse le nouveau Synth établir ses enveloppes avant de l'exposer.
     state[\routine] = Routine({
       0.5.wait;
       state[\writer].set(\mix, state[\slot]);
       state[\phase] = \fading;
       // Durée du fondu de l'écrivain plus la marge dérivée de la période matérielle (~mxFadeMargin).
-      (~mxFadeSeconds + ~mxFadeMargin.(~mxServer)).wait;
+      (state[\fadeSeconds] + ~mxFadeMargin.(~mxServer)).wait;
       state[\old].free;
       state[\old] = nil;
       state[\phase] = \stable;
@@ -522,9 +582,9 @@
     }).play(SystemClock);
   } {
     args.pairsDo { |key, value| params[key] = value };
-    state[\synth].set(*args);
+    if(args.notEmpty) { state[\synth].set(*args) };
     // Pendant un fondu, les réglages s'appliquent aux deux signaux.
-    if(state[\old].notNil) { state[\old].set(*args) };
+    if(state[\old].notNil and: { args.notEmpty }) { state[\old].set(*args) };
   };
   true
 };

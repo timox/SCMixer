@@ -35,17 +35,8 @@ var live = { |def|
 [1, 2, 3, 8, 64, 256].do { |w|
   ~mxBuildSourceDefs.(w).do { |def| ("MX-WIRE " ++ w ++ " " ++ def.name ++ " " ++ live.(def)).postln };
 };
-// Sorties : modèles Compander et CompanderD (même graphe que dans ~mxInit) et écrivain matériel.
-[
-  ~mxOutputDef.(\mx_output_compander, { |sig, threshold, below, above, attack, release, mul, add|
-    Compander.ar(sig, sig, threshold.dbamp, below, above, attack / 1000, release / 1000, mul, add)
-  }),
-  ~mxOutputDef.(\mx_output_companderD, { |sig, threshold, below, above, attack, release, mul, add|
-    Compander.ar(DelayN.ar(sig, ~mxCompanderDMaxDelay, (attack / 1000).min(~mxCompanderDMaxDelay)), sig,
-      threshold.dbamp, below, above, attack / 1000, release / 1000).madd(mul, add)
-  }),
-  ~mxOutputWriterDef
-].do { |def| ("MX-WIRE 0 " ++ def.name ++ " " ++ live.(def)).postln };
+// Sorties : les trois modèles (mêmes graphes que dans ~mxInit, ~mxBuildOutputDefs) et écrivain matériel.
+(~mxBuildOutputDefs.(true) ++ [~mxOutputWriterDef]).do { |def| ("MX-WIRE 0 " ++ def.name ++ " " ++ live.(def)).postln };
 "MX-TEST-OK".postln;
 0.exit;
 )

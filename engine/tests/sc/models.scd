@@ -48,8 +48,7 @@ server.waitForBoot({
     // Une bascule vers un modèle indisponible est refusée.
     raised = false;
     try {
-      ~mxSetOutputStage.(\master, \compressor, (model: \FaustRMS, thresholdDb: -20, slopeBelow: 1, slopeAbove: 0.25,
-        attackMs: 10, releaseMs: 100, mul: 1, add: 0, bypass: 0))
+      ~mxSetOutputStage.(\master, \compressor, (model: \FaustRMS, compressorThresholdDb: -20, compressorBypass: 0))
     } { |error| raised = error.errorString.find("indisponible").notNil };
     check.(raised, "bascule vers FaustRMS indisponible acceptée");
 

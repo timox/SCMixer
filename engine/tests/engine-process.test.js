@@ -9,6 +9,7 @@ import { ProcessRegistry } from '../src/runtime/process-registry.js';
 import { SessionStore } from '../src/session/session-store.js';
 import { addSource, setOutputStage } from '../src/session/session-model.js';
 import { ApiError } from '../src/contract/errors.js';
+import { defaultOutput } from '../src/contract/schemas.js';
 import { fakeTimoxVasio } from './helpers/api-harness.js';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -136,7 +137,7 @@ test('start fixe les options de scsynth calculées : bus, interconnexions, nœud
   assert.match(src, /numAudioBusChannels = 1024;/);
   assert.match(src, /numWireBufs = 2048;/);
   assert.match(src, /maxNodes = 4096;/);
-  assert.match(src, /memSize = 147456;/);
+  assert.match(src, /memSize = 163840;/);
   assert.match(src, /~mxSynthDefTimeout = 5;/);
   assert.match(src, /blockSize = 64;/);
   assert.doesNotMatch(src, /numAudioBusChannels = 2048|numWireBufs = 8192|memSize = 262144/);
@@ -152,7 +153,7 @@ test('le dimensionnement choisi est journalisé dans sclang.log à chaque démar
   assert.equal(lines.length, 2);
   assert.match(lines[0], /"numWireBufs":2048/);
   assert.match(lines[0], /"maxNodes":4096/);
-  assert.match(lines[0], /"memSize":147456/);
+  assert.match(lines[0], /"memSize":163840/);
   assert.match(lines[0], /"maxSources":256/);
   await engine.stop();
 });
@@ -211,7 +212,7 @@ test('échec sclang : session et fichier inchangés, aucun événement session',
   const sessions = [];
   engine.on('session', (e) => sessions.push(e));
   await assert.rejects(
-    engine.mutate((s) => ({ session: setOutputStage(s, 'master', 'mix', { volume: 0.2 }), code: 'BOOM' })),
+    engine.mutate((s) => ({ session: setOutputStage(s, 'master', 'mix', { ...defaultOutput().mix, volume: 0.2 }), code: 'BOOM' })),
     (e) => e.code === 'SC_COMMAND_FAILED',
   );
   assert.equal(engine.session().outputs.master.mix.volume, 1);
@@ -252,7 +253,7 @@ test('50 mutate eq successifs : ordre, valeur finale, générations strictement 
   for (let i = 1; i <= 50; i += 1) {
     const value = i / 100;
     jobs.push(engine.mutate((s) => ({
-      session: setOutputStage(s, 'master', 'eq', { low: value, mid: 0.5, high: 0.5 }),
+      session: setOutputStage(s, 'master', 'eq', { ...defaultOutput().eq, low: value }),
       code: `EQ(${i})`,
     })));
   }
@@ -429,7 +430,7 @@ test('mutate en vol au moment du crash : rejet ENGINE_NOT_RUNNING, aucune valida
   const before = fs.readFileSync(store.file, 'utf8');
   const sessions = [];
   engine.on('session', (e) => sessions.push(e));
-  const p = engine.mutate((s) => ({ session: setOutputStage(s, 'master', 'mix', { volume: 0.1 }), code: 'HOLD' }));
+  const p = engine.mutate((s) => ({ session: setOutputStage(s, 'master', 'mix', { ...defaultOutput().mix, volume: 0.1 }), code: 'HOLD' }));
   await wait(20);
   langs[0].crash();
   await assert.rejects(p, (e) => e.code === 'ENGINE_NOT_RUNNING');

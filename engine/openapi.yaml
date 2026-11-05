@@ -8,6 +8,35 @@ info:
     inconnu ou une valeur hors plage renvoie 400 VALIDATION. Toute mutation exige un moteur
     en état running (409 ENGINE_NOT_RUNNING sinon). Les routes de presets et de bancs d'essai
     sont décrites par leurs tâches respectives.
+
+    Paramètres de traitement. Chaque argument de contrôle de chaque UGen utilisé par un étage de
+    source ou de sortie est un champ du contrat, avec sa plage et son défaut ; les défauts reproduisent
+    le son précédent. Seuls les arguments qui portent le signal (in, control, bus) ne sont pas des
+    paramètres. Les étages sont remplacés par leur objet complet (champ manquant ou inconnu : 400
+    VALIDATION). Ancien contrat refusé : ratio, makeupDb et ceilingDb du clipper n'existent plus
+    (remplacés par slopeAbove, mul et lo/hi). Chaque étage porte controlLag (lissage Lag.kr de ses
+    contrôles continus, défaut 0 : aucun lissage). Les sessions de version 2 sont refusées (version 3).
+
+    Noms de contrôles de SynthDef (pour un futur /n_set direct). Le nom du contrôle est le nom du
+    champ. Une SynthDef qui porte plusieurs objets du contrat préfixe le champ par le nom de l'objet,
+    premier caractère du champ en majuscule : mx_in_<largeur> (input, inputCompressor : inputGain,
+    inputCompressorThresholdDb), mx_dyn_<largeur> (low, mid, high, crossover : lowThresholdDb,
+    crossoverLowMidFreq) et la SynthDef de sortie (mix, eq, infraHpf, sideHpf, clipper, limiter,
+    compressor : mixVolume, eqLowFreq, limiterDurMs). Les autres SynthDefs de source (eq, hp, lp, pitch,
+    mix) portent un seul objet : champ seul. Le champ model n'est pas un contrôle : il choisit la
+    SynthDef (BHiPass, RHPF, BHiPass4 ; BLowPass, RLPF, BLowPass4, MoogFF ; Compander, CompanderD,
+    FaustRMS). Les conversions (dB vers amplitude, 0..1 vers Hz, demi-tons vers rapport, ms vers s) sont
+    dans les SynthDefs. compressor.fadeSeconds est le contrôle compressorFadeSeconds de l'écrivain de
+    sortie.
+
+    Arguments fixés à la création du UGen (pitch.windowSize, limiter.durMs) : PitchShift.schelp et
+    Limiter.schelp précisent qu'ils ne peuvent pas être modulés ; leur changement recrée le Synth
+    (opération de structure traitée par sclang). Tous les autres changements de valeur sont des
+    réglages de contrôles.
+
+    Retrait d'une source (DELETE, changement de largeur ou de canaux, remplacement d'un preset) : le
+    niveau de l'étage mix descend à zéro en au moins une période matérielle avant la libération du
+    nœud (Server-Command-Reference, /n_free : un nœud non silencieux libéré peut produire un clic).
 servers:
   - url: http://127.0.0.1:3100
 tags:
@@ -143,7 +172,7 @@ paths:
                 - $ref: '#/components/schemas/SourceMix'
                 - $ref: '#/components/schemas/SourceInput'
                 - $ref: '#/components/schemas/CompBand'
-                - $ref: '#/components/schemas/Eq'
+                - $ref: '#/components/schemas/SourceEq'
                 - $ref: '#/components/schemas/Hp'
                 - $ref: '#/components/schemas/Lp'
                 - $ref: '#/components/schemas/Pitch'
@@ -158,11 +187,18 @@ paths:
       - name: band
         in: path
         required: true
-        schema: { type: string, enum: [low, mid, high] }
+        schema: { type: string, enum: [low, mid, high, crossover] }
     put:
       tags: [Sources]
-      summary: Remplace une bande du compresseur multibande
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CompBand' } } } }
+      summary: "Remplace une bande du compresseur multibande (low, mid, high : CompBand) ou ses filtres de répartition (crossover)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/CompBand'
+                - $ref: '#/components/schemas/Crossover'
       responses:
         '200': { $ref: '#/components/responses/Source' }
         '400': { $ref: '#/components/responses/Error' }
@@ -221,9 +257,11 @@ paths:
             schema:
               oneOf:
                 - $ref: '#/components/schemas/OutputMix'
-                - $ref: '#/components/schemas/Eq'
-                - $ref: '#/components/schemas/Hpf'
-                - $ref: '#/components/schemas/Ceiling'
+                - $ref: '#/components/schemas/OutputEq'
+                - $ref: '#/components/schemas/InfraHpf'
+                - $ref: '#/components/schemas/SideHpf'
+                - $ref: '#/components/schemas/Clipper'
+                - $ref: '#/components/schemas/Limiter'
                 - $ref: '#/components/schemas/OutputCompressor'
       responses:
         '200': { $ref: '#/components/responses/Output' }
@@ -417,136 +455,260 @@ components:
         mix: { $ref: '#/components/schemas/SourceMix' }
         input: { $ref: '#/components/schemas/SourceInput' }
         inputCompressor: { $ref: '#/components/schemas/CompBand' }
-        eq: { $ref: '#/components/schemas/Eq' }
+        eq: { $ref: '#/components/schemas/SourceEq' }
         hp: { $ref: '#/components/schemas/Hp' }
         lp: { $ref: '#/components/schemas/Lp' }
         pitch: { $ref: '#/components/schemas/Pitch' }
-        bandCompressor:
-          type: object
-          additionalProperties: false
-          required: [low, mid, high]
-          properties:
-            low: { $ref: '#/components/schemas/CompBand' }
-            mid: { $ref: '#/components/schemas/CompBand' }
-            high: { $ref: '#/components/schemas/CompBand' }
-    SourceMix:
+        bandCompressor: { $ref: '#/components/schemas/BandCompressor' }
+    BandCompressor:
       type: object
+      description: "Compresseur trois bandes : trois compresseurs Compander (low, mid, high) et les filtres de répartition LR4 (crossover). Les trois bandes et la répartition sont portées par une seule SynthDef (mx_dyn_<largeur>) ; contrôles préfixés par le groupe (lowThresholdDb, midBypass, crossoverLowMidFreq...)."
       additionalProperties: false
-      required: [volume, cue, mute, balance]
+      required: [low, mid, high, crossover]
       properties:
-        volume: { type: number, minimum: 0, maximum: 1, default: 1 }
-        cue: { type: number, minimum: 0, maximum: 1, default: 0 }
-        mute: { type: boolean, default: false }
-        balance: { type: number, minimum: 0, maximum: 1, default: 0.5 }
-    SourceInput:
-      type: object
-      additionalProperties: false
-      required: [gain]
-      properties:
-        gain: { type: number, minimum: 0, maximum: 1, default: 1 }
-    CompBand:
-      type: object
-      additionalProperties: false
-      required: [thresholdDb, ratio, attackMs, releaseMs, makeupDb, bypass]
-      properties:
-        thresholdDb: { type: number, minimum: -80, maximum: 0, default: -20 }
-        ratio: { type: number, minimum: 1, maximum: 16, default: 4 }
-        attackMs: { type: number, minimum: 1, maximum: 100, default: 10 }
-        releaseMs: { type: number, minimum: 10, maximum: 1000, default: 100 }
-        makeupDb: { type: number, minimum: -24, maximum: 24, default: 0 }
-        bypass: { type: boolean, default: true }
-    Eq:
-      type: object
-      additionalProperties: false
-      required: [low, mid, high]
-      properties:
-        low: { type: number, minimum: 0, maximum: 1, default: 0.5 }
-        mid: { type: number, minimum: 0, maximum: 1, default: 0.5 }
-        high: { type: number, minimum: 0, maximum: 1, default: 0.5 }
-    Hp:
-      type: object
-      additionalProperties: false
-      required: [enabled, model, freq, q, mul, add]
-      properties:
-        enabled: { type: boolean, default: false }
-        model: { type: string, enum: [BHiPass, RHPF, BHiPass4], default: BHiPass }
-        freq: { type: number, minimum: 0, maximum: 1, default: 0 }
-        q: { type: number, minimum: 0.5, maximum: 10, default: 1 }
-        mul: { type: number, minimum: 0, maximum: 2, default: 1 }
-        add: { type: number, minimum: -1, maximum: 1, default: 0 }
-    Lp:
-      type: object
-      additionalProperties: false
-      required: [enabled, model, freq, q, gain, mul, add]
-      properties:
-        enabled: { type: boolean, default: false }
-        model: { type: string, enum: [BLowPass, RLPF, BLowPass4, MoogFF], default: BLowPass }
-        freq: { type: number, minimum: 0, maximum: 1, default: 1 }
-        q: { type: number, minimum: 0.5, maximum: 10, default: 1 }
-        gain: { type: number, minimum: 0, maximum: 4, default: 2 }
-        mul: { type: number, minimum: 0, maximum: 2, default: 1 }
-        add: { type: number, minimum: -1, maximum: 1, default: 0 }
-    Pitch:
-      type: object
-      additionalProperties: false
-      required: [semitones]
-      properties:
-        semitones: { type: integer, minimum: -12, maximum: 12, default: 0 }
+        low: { $ref: '#/components/schemas/CompBand' }
+        mid: { $ref: '#/components/schemas/CompBand' }
+        high: { $ref: '#/components/schemas/CompBand' }
+        crossover: { $ref: '#/components/schemas/Crossover' }
     Output:
       type: object
       additionalProperties: false
       required: [mix, eq, infraHpf, sideHpf, clipper, limiter, compressor]
       properties:
         mix: { $ref: '#/components/schemas/OutputMix' }
-        eq: { $ref: '#/components/schemas/Eq' }
-        infraHpf:
-          allOf: [ { $ref: '#/components/schemas/Hpf' } ]
-        sideHpf:
-          type: object
-          additionalProperties: false
-          required: [enabled, hz]
-          properties:
-            enabled: { type: boolean, default: false }
-            hz: { type: number, minimum: 20, maximum: 1000, default: 100 }
-        clipper: { $ref: '#/components/schemas/Ceiling' }
-        limiter: { $ref: '#/components/schemas/Ceiling' }
+        eq: { $ref: '#/components/schemas/OutputEq' }
+        infraHpf: { $ref: '#/components/schemas/InfraHpf' }
+        sideHpf: { $ref: '#/components/schemas/SideHpf' }
+        clipper: { $ref: '#/components/schemas/Clipper' }
+        limiter: { $ref: '#/components/schemas/Limiter' }
         compressor: { $ref: '#/components/schemas/OutputCompressor' }
+    SourceMix:
+      type: object
+      description: "Étage mix de source : fader, envoi Cue, répartition stéréo (Pan2 pour la largeur 1, Balance2 pour 2, Splay puis Balance2 pour 3 et plus). Contrôles de la SynthDef mx_mix_<largeur> : champ seul."
+      additionalProperties: false
+      required: [volume, cue, mute, balance, panLevel, balanceLevel, spread, splayLevel, center, levelComp, controlLag]
+      properties:
+        volume: { type: number, minimum: 0, maximum: 1, default: 1, description: "Niveau du fader (amplitude 0..1), appliqué avant la répartition stéréo." }
+        cue: { type: number, minimum: 0, maximum: 1, default: 0, description: "Niveau d'envoi vers le bus Cue (0..1)." }
+        mute: { type: boolean, default: false, description: "Coupe la source : niveau = volume × (1 - mute)." }
+        balance: { type: number, minimum: 0, maximum: 1, default: 0.5, description: "Position 0..1 (0.5 = centre) convertie en pos = balance × 2 - 1 : Pan2.pos (largeur 1), Balance2.pos (largeurs 2 et plus)." }
+        panLevel: { type: number, minimum: 0, maximum: 2, default: 1, description: "Pan2.level (largeur 1 uniquement ; Pan2.schelp : « A control rate level input »)." }
+        balanceLevel: { type: number, minimum: 0, maximum: 2, default: 1, description: "Balance2.level (largeurs 2 et plus ; Balance2.schelp : « a control rate level input »)." }
+        spread: { type: number, minimum: 0, maximum: 1, default: 1, description: "Splay.spread (largeurs 3 et plus) : 0 = tous les canaux au centre, 1 = distribution maximale." }
+        splayLevel: { type: number, minimum: 0, maximum: 2, default: 1, description: "Splay.level (largeurs 3 et plus) : multiplicateur d'amplitude de tous les canaux." }
+        center: { type: number, minimum: -1, maximum: 1, default: 0, description: "Splay.center (largeurs 3 et plus) : décalage du centre de la distribution, -1..1." }
+        levelComp: { type: number, minimum: 0, maximum: 1, default: 0.5, description: "Splay.levelComp en valeur numérique (largeurs 3 et plus) : 0 = aucune compensation, 0.5 = puissance égale (défaut, équivalent de true en débit audio), 1 = amplitude égale." }
+        controlLag: { type: number, minimum: 0, maximum: 2, default: 0, description: "Temps de lissage en secondes des contrôles continus de l'étage (Lag.kr, Lag.schelp : lagTime). 0 = application immédiate (défaut : aucun lissage, décision du 05/11)." }
+    SourceInput:
+      type: object
+      description: "Étage input : SoundIn et gain. Porté par la SynthDef mx_in_<largeur> avec inputCompressor : contrôles préfixés (inputGain, inputMul, inputAdd, inputControlLag)."
+      additionalProperties: false
+      required: [gain, mul, add, controlLag]
+      properties:
+        gain: { type: number, minimum: 0, maximum: 1, default: 1, description: "Gain 0..1 appliqué après le compresseur d'entrée." }
+        mul: { type: number, minimum: 0, maximum: 4, default: 1, description: "SoundIn.mul : multiplicateur de sortie de l'UGen (SoundIn.schelp)." }
+        add: { type: number, minimum: -1, maximum: 1, default: 0, description: "SoundIn.add : valeur ajoutée à la sortie de l'UGen (SoundIn.schelp)." }
+        controlLag: { type: number, minimum: 0, maximum: 2, default: 0, description: "Temps de lissage en secondes des contrôles continus de l'étage (Lag.kr, Lag.schelp : lagTime). 0 = application immédiate (défaut : aucun lissage, décision du 05/11)." }
+    CompBand:
+      type: object
+      description: "Compresseur Compander complet : inputCompressor (contrôles préfixés inputCompressor<Champ>) et chaque bande de bandCompressor (contrôles préfixés low, mid, high : lowThresholdDb...). Arguments de Compander.schelp : thresh, slopeBelow, slopeAbove, clampTime, relaxTime, mul, add. Le signal de contrôle est le maximum des valeurs absolues des canaux (compression liée) : il porte le signal, ce n'est pas un paramètre."
+      additionalProperties: false
+      required: [thresholdDb, slopeBelow, slopeAbove, attackMs, releaseMs, mul, add, bypass, controlLag]
+      properties:
+        thresholdDb: { type: number, minimum: -80, maximum: 0, default: -20, description: "Seuil en dB : Compander.thresh = dbamp(thresholdDb) (Compander.schelp : thresh)." }
+        slopeBelow: { type: number, minimum: 0.05, maximum: 10, default: 1, description: "Compander.slopeBelow : pente sous le seuil (1 = inchangé ; supérieure à 1 = expanseur ou porte)." }
+        slopeAbove: { type: number, minimum: 0.05, maximum: 10, default: 0.25, description: "Compander.slopeAbove : pente au-dessus du seuil (inférieure à 1 = compression, 0.25 = 4:1 ; supérieure à 1 = expansion). Remplace l'ancien ratio (slopeAbove = 1 / ratio)." }
+        attackMs: { type: number, minimum: 1, maximum: 100, default: 10, description: "Compander.clampTime = attackMs / 1000 (Compander.schelp : clampTime)." }
+        releaseMs: { type: number, minimum: 10, maximum: 1000, default: 100, description: "Compander.relaxTime = releaseMs / 1000 (Compander.schelp : relaxTime)." }
+        mul: { type: number, minimum: 0, maximum: 16, default: 1, description: "Compander.mul : multiplicateur de sortie de l'UGen. Remplace l'ancien makeupDb (mul = dbamp(makeupDb)), appliqué dans l'UGen et non plus par un étage de gain séparé." }
+        add: { type: number, minimum: -1, maximum: 1, default: 0, description: "Compander.add : valeur ajoutée à la sortie de l'UGen (Compander.schelp)." }
+        bypass: { type: boolean, default: true, description: "Select.which : true = signal non compressé (la bande ou le compresseur est contourné)." }
+        controlLag: { type: number, minimum: 0, maximum: 2, default: 0, description: "Temps de lissage en secondes des contrôles continus de l'étage (Lag.kr, Lag.schelp : lagTime). 0 = application immédiate (défaut : aucun lissage, décision du 05/11)." }
+    SourceEq:
+      type: object
+      description: "EQ trois bandes de source : BLowShelf, BPeakEQ, BHiShelf. Contrôles de la SynthDef mx_eq_<largeur> : champ seul. Exactement neutre (low = mid = high = 0.5, mul = 1, add = 0) : SynthDef mx_eqdirect_<largeur> sans UGen d'égalisation."
+      additionalProperties: false
+      required: [low, mid, high, rangeDb, lowFreq, lowRs, lowMul, lowAdd, midFreq, midRq, midMul, midAdd, highFreq, highRs, highMul, highAdd, controlLag]
+      properties:
+        low: { type: number, minimum: 0, maximum: 1, default: 0.5, description: "BLowShelf.db en position 0..1 : db = (low × 2 - 1) × rangeDb (0.5 = 0 dB)." }
+        mid: { type: number, minimum: 0, maximum: 1, default: 0.5, description: "BPeakEQ.db en position 0..1 : db = (mid × 2 - 1) × rangeDb (0.5 = 0 dB)." }
+        high: { type: number, minimum: 0, maximum: 1, default: 0.5, description: "BHiShelf.db en position 0..1 : db = (high × 2 - 1) × rangeDb (0.5 = 0 dB)." }
+        rangeDb: { type: number, minimum: 0, maximum: 24, default: 12, description: "Étendue en dB de la position 0..1 : ± rangeDb." }
+        lowFreq: { type: number, minimum: 20, maximum: 20000, default: 80, description: "BLowShelf.freq en Hz (défaut 80 pour une source)." }
+        lowRs: { type: number, minimum: 0.1, maximum: 10, default: 0.5, description: "BLowShelf.rs (inverse de la pente S du plateau)." }
+        lowMul: { type: number, minimum: 0, maximum: 4, default: 1, description: "BLowShelf.mul : multiplicateur de sortie de l'UGen (BLowShelf.schelp)." }
+        lowAdd: { type: number, minimum: -1, maximum: 1, default: 0, description: "BLowShelf.add : valeur ajoutée à la sortie de l'UGen (BLowShelf.schelp)." }
+        midFreq: { type: number, minimum: 20, maximum: 20000, default: 1000, description: "BPeakEQ.freq en Hz." }
+        midRq: { type: number, minimum: 0.05, maximum: 10, default: 0.7, description: "BPeakEQ.rq (inverse de Q)." }
+        midMul: { type: number, minimum: 0, maximum: 4, default: 1, description: "BPeakEQ.mul : multiplicateur de sortie de l'UGen (BPeakEQ.schelp)." }
+        midAdd: { type: number, minimum: -1, maximum: 1, default: 0, description: "BPeakEQ.add : valeur ajoutée à la sortie de l'UGen (BPeakEQ.schelp)." }
+        highFreq: { type: number, minimum: 20, maximum: 20000, default: 8000, description: "BHiShelf.freq en Hz." }
+        highRs: { type: number, minimum: 0.1, maximum: 10, default: 0.5, description: "BHiShelf.rs (inverse de la pente S du plateau)." }
+        highMul: { type: number, minimum: 0, maximum: 4, default: 1, description: "BHiShelf.mul : multiplicateur de sortie de l'UGen (BHiShelf.schelp)." }
+        highAdd: { type: number, minimum: -1, maximum: 1, default: 0, description: "BHiShelf.add : valeur ajoutée à la sortie de l'UGen (BHiShelf.schelp)." }
+        controlLag: { type: number, minimum: 0, maximum: 2, default: 0, description: "Temps de lissage en secondes des contrôles continus de l'étage (Lag.kr, Lag.schelp : lagTime). 0 = application immédiate (défaut : aucun lissage, décision du 05/11)." }
+    Hp:
+      type: object
+      description: "Passe-haut de source. Champs applicables par modèle : BHiPass et BHiPass4 : enabled, freq, minHz, maxHz, q, mul, add, controlLag ; RHPF : les mêmes et floorHz. Les champs non applicables au modèle chargé sont mémorisés et ignorés. Contrôles : champ seul."
+      additionalProperties: false
+      required: [enabled, model, freq, minHz, maxHz, q, mul, add, floorHz, controlLag]
+      properties:
+        enabled: { type: boolean, default: false, description: "Mélange sec/filtré : 0 = signal sec, 1 = signal filtré (lissé par controlLag)." }
+        model: { type: string, enum: [BHiPass, RHPF, BHiPass4], default: BHiPass, description: "Modèle de filtre : choisit la SynthDef (BHiPass, RHPF ou BHiPass4) ; un changement de modèle remplace le Synth (opération de structure)." }
+        freq: { type: number, minimum: 0, maximum: 1, default: 0, description: "Position 0..1 convertie en fréquence : freq = linexp(position, 0, 1, minHz, maxHz) (UGen.freq)." }
+        minHz: { type: number, minimum: 20, maximum: 20000, default: 20, description: "Fréquence (Hz) de la position 0 de freq." }
+        maxHz: { type: number, minimum: 20, maximum: 20000, default: 20000, description: "Fréquence (Hz) de la position 1 de freq ; doit dépasser minHz." }
+        q: { type: number, minimum: 0.5, maximum: 10, default: 1, description: "Facteur de qualité : rq = 1 / q (BHiPass.rq, RHPF.rq, BHiPass4.rq ; tous modèles)." }
+        mul: { type: number, minimum: 0, maximum: 2, default: 1, description: "UGen.mul du filtre du modèle chargé (tous modèles)." }
+        add: { type: number, minimum: -1, maximum: 1, default: 0, description: "UGen.add du filtre du modèle chargé (tous modèles)." }
+        floorHz: { type: number, minimum: 20, maximum: 20000, default: 40, description: "RHPF seulement : plancher de fréquence en Hz (freq = max(freq, floorHz)) ; sans effet pour BHiPass et BHiPass4." }
+        controlLag: { type: number, minimum: 0, maximum: 2, default: 0, description: "Temps de lissage en secondes des contrôles continus de l'étage (Lag.kr, Lag.schelp : lagTime). 0 = application immédiate (défaut : aucun lissage, décision du 05/11)." }
+    Lp:
+      type: object
+      description: "Passe-bas de source. Champs applicables par modèle : BLowPass, RLPF et BLowPass4 : enabled, freq, minHz, maxHz, q, mul, add, controlLag ; MoogFF : enabled, freq, minHz, maxHz, gain, mul, add, controlLag (et le déclencheur reset de POST .../lp/reset-state). Les champs non applicables au modèle chargé sont mémorisés et ignorés."
+      additionalProperties: false
+      required: [enabled, model, freq, minHz, maxHz, q, gain, mul, add, controlLag]
+      properties:
+        enabled: { type: boolean, default: false, description: "Mélange sec/filtré : 0 = signal sec, 1 = signal filtré (lissé par controlLag)." }
+        model: { type: string, enum: [BLowPass, RLPF, BLowPass4, MoogFF], default: BLowPass, description: "Modèle de filtre : choisit la SynthDef (BLowPass, RLPF, BLowPass4 ou MoogFF) ; un changement de modèle remplace le Synth (opération de structure)." }
+        freq: { type: number, minimum: 0, maximum: 1, default: 1, description: "Position 0..1 convertie en fréquence : freq = linexp(position, 0, 1, minHz, maxHz) (UGen.freq)." }
+        minHz: { type: number, minimum: 20, maximum: 20000, default: 20, description: "Fréquence (Hz) de la position 0 de freq." }
+        maxHz: { type: number, minimum: 20, maximum: 20000, default: 20000, description: "Fréquence (Hz) de la position 1 de freq ; doit dépasser minHz." }
+        q: { type: number, minimum: 0.5, maximum: 10, default: 1, description: "Facteur de qualité : rq = 1 / q (BLowPass, RLPF, BLowPass4 ; sans effet pour MoogFF)." }
+        gain: { type: number, minimum: 0, maximum: 4, default: 2, description: "MoogFF seulement : MoogFF.gain, résonance entre 0 et 4 (MoogFF.schelp) ; sans effet pour les autres modèles." }
+        mul: { type: number, minimum: 0, maximum: 2, default: 1, description: "UGen.mul du filtre du modèle chargé (tous modèles)." }
+        add: { type: number, minimum: -1, maximum: 1, default: 0, description: "UGen.add du filtre du modèle chargé (tous modèles)." }
+        controlLag: { type: number, minimum: 0, maximum: 2, default: 0, description: "Temps de lissage en secondes des contrôles continus de l'étage (Lag.kr, Lag.schelp : lagTime). 0 = application immédiate (défaut : aucun lissage, décision du 05/11)." }
+    Pitch:
+      type: object
+      description: "Transposition PitchShift suivie d'un XFade2 entre signal direct et signal transposé. windowSize est le seul champ fixé à la création du UGen."
+      additionalProperties: false
+      required: [semitones, blend, level, windowSize, pitchDispersion, timeDispersion, mul, add, controlLag]
+      properties:
+        semitones: { type: integer, minimum: -12, maximum: 12, default: 0, description: "Transposition entière en demi-tons : pitchRatio = midiratio(semitones), soit 0.5 à 2 pour -12..12 (PitchShift.schelp : pitchRatio entre 0 et 4)." }
+        blend: { type: number, minimum: -1, maximum: 1, default: -1, description: "XFade2.pan : -1 = signal direct sans PitchShift (défaut), 1 = signal transposé ; valeurs intermédiaires = mélange. Remplace la sélection automatique « semitones différent de 0 »." }
+        level: { type: number, minimum: 0, maximum: 2, default: 1, description: "XFade2.level (XFade2.schelp : « A control rate level input »)." }
+        windowSize: { type: number, minimum: 0.01, maximum: 0.2, default: 0.2, description: "PitchShift.windowSize en secondes. Argument fixé à la création du UGen (PitchShift.schelp : « cannot be modulated ») : un changement recrée le Synth de l'étage. Borne maximale = dimensionnement de memSize (PITCH_WINDOW_MAX_SECONDS)." }
+        pitchDispersion: { type: number, minimum: 0, maximum: 1, default: 0, description: "PitchShift.pitchDispersion : écart aléatoire maximal autour du rapport de hauteur." }
+        timeDispersion: { type: number, minimum: 0, maximum: 0.2, default: 0.01, description: "PitchShift.timeDispersion en secondes (PitchShift.schelp : au plus windowSize)." }
+        mul: { type: number, minimum: 0, maximum: 4, default: 1, description: "PitchShift.mul : multiplicateur de sortie de l'UGen (PitchShift.schelp)." }
+        add: { type: number, minimum: -1, maximum: 1, default: 0, description: "PitchShift.add : valeur ajoutée à la sortie de l'UGen (PitchShift.schelp)." }
+        controlLag: { type: number, minimum: 0, maximum: 2, default: 0, description: "Temps de lissage en secondes des contrôles continus de l'étage (Lag.kr, Lag.schelp : lagTime). 0 = application immédiate (défaut : aucun lissage, décision du 05/11)." }
+    Crossover:
+      type: object
+      description: "Filtres de répartition LR4 du compresseur trois bandes (cascades de deux LPF ou HPF identiques, PUT .../bandCompressor/crossover). Contrôles préfixés crossover<Champ> : crossoverLowMidFreq, crossoverLowLp1Mul..."
+      additionalProperties: false
+      required: [lowMidFreq, midHighFreq, controlLag, lowLp1Mul, lowLp1Add, lowLp2Mul, lowLp2Add, midHp1Mul, midHp1Add, midHp2Mul, midHp2Add, midLp1Mul, midLp1Add, midLp2Mul, midLp2Add, highHp1Mul, highHp1Add, highHp2Mul, highHp2Add]
+      properties:
+        lowMidFreq: { type: number, minimum: 20, maximum: 20000, default: 250, description: "Fréquence de répartition grave/médium (Hz) : freq des filtres LPF de la bande grave et HPF de la bande médium (cascades LR4 : deux UGens identiques)." }
+        midHighFreq: { type: number, minimum: 20, maximum: 20000, default: 4000, description: "Fréquence de répartition médium/aigu (Hz) : freq des filtres LPF de la bande médium et HPF de la bande aiguë ; doit dépasser lowMidFreq." }
+        controlLag: { type: number, minimum: 0, maximum: 2, default: 0, description: "Temps de lissage en secondes des contrôles continus de l'étage (Lag.kr, Lag.schelp : lagTime). 0 = application immédiate (défaut : aucun lissage, décision du 05/11)." }
+        lowLp1Mul: { type: number, minimum: 0, maximum: 4, default: 1, description: "mul du UGen 1 (sur 2) de la cascade LR4 : LPF de la bande grave (LPF.mul ou HPF.mul)." }
+        lowLp1Add: { type: number, minimum: -1, maximum: 1, default: 0, description: "add du UGen 1 (sur 2) de la cascade LR4 : LPF de la bande grave (LPF.add ou HPF.add)." }
+        lowLp2Mul: { type: number, minimum: 0, maximum: 4, default: 1, description: "mul du UGen 2 (sur 2) de la cascade LR4 : LPF de la bande grave (LPF.mul ou HPF.mul)." }
+        lowLp2Add: { type: number, minimum: -1, maximum: 1, default: 0, description: "add du UGen 2 (sur 2) de la cascade LR4 : LPF de la bande grave (LPF.add ou HPF.add)." }
+        midHp1Mul: { type: number, minimum: 0, maximum: 4, default: 1, description: "mul du UGen 1 (sur 2) de la cascade LR4 : HPF de la bande médium (LPF.mul ou HPF.mul)." }
+        midHp1Add: { type: number, minimum: -1, maximum: 1, default: 0, description: "add du UGen 1 (sur 2) de la cascade LR4 : HPF de la bande médium (LPF.add ou HPF.add)." }
+        midHp2Mul: { type: number, minimum: 0, maximum: 4, default: 1, description: "mul du UGen 2 (sur 2) de la cascade LR4 : HPF de la bande médium (LPF.mul ou HPF.mul)." }
+        midHp2Add: { type: number, minimum: -1, maximum: 1, default: 0, description: "add du UGen 2 (sur 2) de la cascade LR4 : HPF de la bande médium (LPF.add ou HPF.add)." }
+        midLp1Mul: { type: number, minimum: 0, maximum: 4, default: 1, description: "mul du UGen 1 (sur 2) de la cascade LR4 : LPF de la bande médium (LPF.mul ou HPF.mul)." }
+        midLp1Add: { type: number, minimum: -1, maximum: 1, default: 0, description: "add du UGen 1 (sur 2) de la cascade LR4 : LPF de la bande médium (LPF.add ou HPF.add)." }
+        midLp2Mul: { type: number, minimum: 0, maximum: 4, default: 1, description: "mul du UGen 2 (sur 2) de la cascade LR4 : LPF de la bande médium (LPF.mul ou HPF.mul)." }
+        midLp2Add: { type: number, minimum: -1, maximum: 1, default: 0, description: "add du UGen 2 (sur 2) de la cascade LR4 : LPF de la bande médium (LPF.add ou HPF.add)." }
+        highHp1Mul: { type: number, minimum: 0, maximum: 4, default: 1, description: "mul du UGen 1 (sur 2) de la cascade LR4 : HPF de la bande aiguë (LPF.mul ou HPF.mul)." }
+        highHp1Add: { type: number, minimum: -1, maximum: 1, default: 0, description: "add du UGen 1 (sur 2) de la cascade LR4 : HPF de la bande aiguë (LPF.add ou HPF.add)." }
+        highHp2Mul: { type: number, minimum: 0, maximum: 4, default: 1, description: "mul du UGen 2 (sur 2) de la cascade LR4 : HPF de la bande aiguë (LPF.mul ou HPF.mul)." }
+        highHp2Add: { type: number, minimum: -1, maximum: 1, default: 0, description: "add du UGen 2 (sur 2) de la cascade LR4 : HPF de la bande aiguë (LPF.add ou HPF.add)." }
     OutputMix:
       type: object
+      description: "Étage mix de sortie : volume avant le compresseur. Contrôles préfixés (mixVolume, mixControlLag)."
       additionalProperties: false
-      required: [volume]
+      required: [volume, controlLag]
       properties:
-        volume: { type: number, minimum: 0, maximum: 1, default: 1 }
-    Hpf:
+        volume: { type: number, minimum: 0, maximum: 1, default: 1, description: "Niveau de la sortie (amplitude 0..1), appliqué avant l'écrêteur, le limiteur et le compresseur." }
+        controlLag: { type: number, minimum: 0, maximum: 2, default: 0, description: "Temps de lissage en secondes des contrôles continus de l'étage (Lag.kr, Lag.schelp : lagTime). 0 = application immédiate (défaut : aucun lissage, décision du 05/11)." }
+    OutputEq:
       type: object
-      description: infraHpf (hz 20..200, défaut 25) ; sideHpf (hz 20..1000, défaut 100, voir Output).
+      description: "EQ trois bandes de sortie (mêmes arguments que SourceEq, fréquence grave 200 Hz par défaut). Contrôles préfixés (eqLow, eqLowFreq...)."
       additionalProperties: false
-      required: [enabled, hz]
+      required: [low, mid, high, rangeDb, lowFreq, lowRs, lowMul, lowAdd, midFreq, midRq, midMul, midAdd, highFreq, highRs, highMul, highAdd, controlLag]
       properties:
-        enabled: { type: boolean, default: false }
-        hz: { type: number, minimum: 20, maximum: 1000 }
-    Ceiling:
+        low: { type: number, minimum: 0, maximum: 1, default: 0.5, description: "BLowShelf.db en position 0..1 : db = (low × 2 - 1) × rangeDb (0.5 = 0 dB)." }
+        mid: { type: number, minimum: 0, maximum: 1, default: 0.5, description: "BPeakEQ.db en position 0..1 : db = (mid × 2 - 1) × rangeDb (0.5 = 0 dB)." }
+        high: { type: number, minimum: 0, maximum: 1, default: 0.5, description: "BHiShelf.db en position 0..1 : db = (high × 2 - 1) × rangeDb (0.5 = 0 dB)." }
+        rangeDb: { type: number, minimum: 0, maximum: 24, default: 12, description: "Étendue en dB de la position 0..1 : ± rangeDb." }
+        lowFreq: { type: number, minimum: 20, maximum: 20000, default: 200, description: "BLowShelf.freq en Hz (défaut 200 pour une sortie)." }
+        lowRs: { type: number, minimum: 0.1, maximum: 10, default: 0.5, description: "BLowShelf.rs (inverse de la pente S du plateau)." }
+        lowMul: { type: number, minimum: 0, maximum: 4, default: 1, description: "BLowShelf.mul : multiplicateur de sortie de l'UGen (BLowShelf.schelp)." }
+        lowAdd: { type: number, minimum: -1, maximum: 1, default: 0, description: "BLowShelf.add : valeur ajoutée à la sortie de l'UGen (BLowShelf.schelp)." }
+        midFreq: { type: number, minimum: 20, maximum: 20000, default: 1000, description: "BPeakEQ.freq en Hz." }
+        midRq: { type: number, minimum: 0.05, maximum: 10, default: 0.7, description: "BPeakEQ.rq (inverse de Q)." }
+        midMul: { type: number, minimum: 0, maximum: 4, default: 1, description: "BPeakEQ.mul : multiplicateur de sortie de l'UGen (BPeakEQ.schelp)." }
+        midAdd: { type: number, minimum: -1, maximum: 1, default: 0, description: "BPeakEQ.add : valeur ajoutée à la sortie de l'UGen (BPeakEQ.schelp)." }
+        highFreq: { type: number, minimum: 20, maximum: 20000, default: 8000, description: "BHiShelf.freq en Hz." }
+        highRs: { type: number, minimum: 0.1, maximum: 10, default: 0.5, description: "BHiShelf.rs (inverse de la pente S du plateau)." }
+        highMul: { type: number, minimum: 0, maximum: 4, default: 1, description: "BHiShelf.mul : multiplicateur de sortie de l'UGen (BHiShelf.schelp)." }
+        highAdd: { type: number, minimum: -1, maximum: 1, default: 0, description: "BHiShelf.add : valeur ajoutée à la sortie de l'UGen (BHiShelf.schelp)." }
+        controlLag: { type: number, minimum: 0, maximum: 2, default: 0, description: "Temps de lissage en secondes des contrôles continus de l'étage (Lag.kr, Lag.schelp : lagTime). 0 = application immédiate (défaut : aucun lissage, décision du 05/11)." }
+    InfraHpf:
       type: object
-      description: clipper (plafond défaut 0 dB) ou limiter (défaut -1 dB).
+      description: "Passe-haut infrasonore de sortie (HPF.ar : freq, mul, add)."
       additionalProperties: false
-      required: [enabled, ceilingDb]
+      required: [enabled, hz, mul, add, controlLag]
       properties:
-        enabled: { type: boolean, default: false }
-        ceilingDb: { type: number, minimum: -24, maximum: 0 }
+        enabled: { type: boolean, default: false, description: "Mélange sec/filtré du passe-haut infrasonore (0 = désactivé)." }
+        hz: { type: number, minimum: 20, maximum: 200, default: 25, description: "HPF.freq en Hz." }
+        mul: { type: number, minimum: 0, maximum: 4, default: 1, description: "HPF.mul : multiplicateur de sortie de l'UGen (HPF.schelp)." }
+        add: { type: number, minimum: -1, maximum: 1, default: 0, description: "HPF.add : valeur ajoutée à la sortie de l'UGen (HPF.schelp)." }
+        controlLag: { type: number, minimum: 0, maximum: 2, default: 0, description: "Temps de lissage en secondes des contrôles continus de l'étage (Lag.kr, Lag.schelp : lagTime). 0 = application immédiate (défaut : aucun lissage, décision du 05/11)." }
+    SideHpf:
+      type: object
+      description: "Passe-haut du canal latéral de sortie (HPF.ar : freq, mul, add)."
+      additionalProperties: false
+      required: [enabled, hz, mul, add, controlLag]
+      properties:
+        enabled: { type: boolean, default: false, description: "Mélange sec/filtré du passe-haut appliqué au canal latéral (0 = désactivé)." }
+        hz: { type: number, minimum: 20, maximum: 1000, default: 100, description: "HPF.freq en Hz (canal latéral)." }
+        mul: { type: number, minimum: 0, maximum: 4, default: 1, description: "HPF.mul : multiplicateur de sortie de l'UGen (HPF.schelp)." }
+        add: { type: number, minimum: -1, maximum: 1, default: 0, description: "HPF.add : valeur ajoutée à la sortie de l'UGen (HPF.schelp)." }
+        controlLag: { type: number, minimum: 0, maximum: 2, default: 0, description: "Temps de lissage en secondes des contrôles continus de l'étage (Lag.kr, Lag.schelp : lagTime). 0 = application immédiate (défaut : aucun lissage, décision du 05/11)." }
+    Clipper:
+      type: object
+      description: "Écrêteur de sortie (Clip.ar : lo, hi)."
+      additionalProperties: false
+      required: [enabled, lo, hi, controlLag]
+      properties:
+        enabled: { type: boolean, default: false, description: "Mélange sec/écrêté (0 = désactivé)." }
+        lo: { type: number, minimum: -4, maximum: 4, default: -1, description: "Clip.lo : seuil bas (amplitude) ; doit être inférieur à hi (Clip.schelp). Remplace l'ancien ceilingDb (lo = -dbamp(ceilingDb))." }
+        hi: { type: number, minimum: -4, maximum: 4, default: 1, description: "Clip.hi : seuil haut (amplitude) ; doit dépasser lo. Remplace l'ancien ceilingDb (hi = dbamp(ceilingDb))." }
+        controlLag: { type: number, minimum: 0, maximum: 2, default: 0, description: "Temps de lissage en secondes des contrôles continus de l'étage (Lag.kr, Lag.schelp : lagTime). 0 = application immédiate (défaut : aucun lissage, décision du 05/11)." }
+    Limiter:
+      type: object
+      description: "Limiteur de sortie (Limiter.ar : level, dur)."
+      additionalProperties: false
+      required: [enabled, ceilingDb, durMs, controlLag]
+      properties:
+        enabled: { type: boolean, default: false, description: "Mélange sec/limité (0 = désactivé)." }
+        ceilingDb: { type: number, minimum: -24, maximum: 0, default: -1, description: "Limiter.level = dbamp(ceilingDb) : niveau de crête de sortie (Limiter.schelp : level)." }
+        durMs: { type: number, minimum: 1, maximum: 50, default: 10, description: "Limiter.dur = durMs / 1000 : durée d'anticipation. Argument fixé à la création du UGen (Limiter.schelp : « cannot be modulated ») : un changement bascule vers un nouveau Synth avec fondu. Borne maximale = dimensionnement de memSize (LIMITER_DUR_MAX_MS)." }
+        controlLag: { type: number, minimum: 0, maximum: 2, default: 0, description: "Temps de lissage en secondes des contrôles continus de l'étage (Lag.kr, Lag.schelp : lagTime). 0 = application immédiate (défaut : aucun lissage, décision du 05/11)." }
     OutputCompressor:
       type: object
+      description: "Compresseur de sortie, dernier étage audio. Champs communs aux trois modèles (Compander, CompanderD, FaustRMS)."
       additionalProperties: false
-      required: [model, thresholdDb, slopeBelow, slopeAbove, attackMs, releaseMs, mul, add, bypass]
+      required: [model, thresholdDb, slopeBelow, slopeAbove, attackMs, releaseMs, mul, add, bypass, controlLag, fadeSeconds]
       properties:
-        model: { type: string, enum: [Compander, CompanderD, FaustRMS], default: Compander }
-        thresholdDb: { type: number, minimum: -80, maximum: 0, default: -20 }
-        slopeBelow: { type: number, minimum: 0.1, maximum: 4, default: 1 }
-        slopeAbove: { type: number, minimum: 0.1, maximum: 4, default: 0.25 }
-        attackMs: { type: number, minimum: 1, maximum: 100, default: 10 }
-        releaseMs: { type: number, minimum: 10, maximum: 1000, default: 100 }
-        mul: { type: number, minimum: 0, maximum: 4, default: 1 }
-        add: { type: number, minimum: -1, maximum: 1, default: 0 }
-        bypass: { type: boolean, default: true }
+        model: { type: string, enum: [Compander, CompanderD, FaustRMS], default: Compander, description: "Modèle de compresseur : choisit la SynthDef (Compander, CompanderD ou FaustRMS) ; un changement de modèle bascule vers un nouveau Synth avec fondu. Indisponible : 409 MODEL_UNAVAILABLE." }
+        thresholdDb: { type: number, minimum: -80, maximum: 0, default: -20, description: "Seuil en dB : thresh = dbamp(thresholdDb) pour Compander et CompanderD ; en dB tel quel pour FaustRMS." }
+        slopeBelow: { type: number, minimum: 0.05, maximum: 10, default: 1, description: "slopeBelow du modèle (Compander.schelp : 1 = inchangé)." }
+        slopeAbove: { type: number, minimum: 0.05, maximum: 10, default: 0.25, description: "slopeAbove du modèle (inférieure à 1 = compression, 0.25 = 4:1)." }
+        attackMs: { type: number, minimum: 1, maximum: 100, default: 10, description: "clampTime = attackMs / 1000 (Compander, CompanderD) ; en ms pour FaustRMS. CompanderD : le délai du DelayN interne suit attackMs, borné à 100 ms." }
+        releaseMs: { type: number, minimum: 10, maximum: 1000, default: 100, description: "relaxTime = releaseMs / 1000 (Compander, CompanderD) ; en ms pour FaustRMS." }
+        mul: { type: number, minimum: 0, maximum: 16, default: 1, description: "mul du modèle (Compander.mul, CompanderD.mul ; multiplication de la sortie pour FaustRMS)." }
+        add: { type: number, minimum: -1, maximum: 1, default: 0, description: "add du modèle (Compander.add, CompanderD.add ; addition à la sortie pour FaustRMS)." }
+        bypass: { type: boolean, default: true, description: "Select.which : true = signal non compressé." }
+        controlLag: { type: number, minimum: 0, maximum: 2, default: 0, description: "Temps de lissage en secondes des contrôles continus de l'étage (Lag.kr, Lag.schelp : lagTime). 0 = application immédiate (défaut : aucun lissage, décision du 05/11)." }
+        fadeSeconds: { type: number, minimum: 0.005, maximum: 2, default: 0.05, description: "VarLag.time de l'écrivain de sortie : durée en secondes du fondu entre deux Synths lors d'un changement de modèle ou d'un argument fixé à la création (compressor.model, limiter.durMs)." }
     GraphStage:
       type: object
       required: [stage, enabled, requestedModel, loadedModel]

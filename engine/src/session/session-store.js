@@ -25,7 +25,10 @@ export class SessionStore {
       throw unreadable(`JSON invalide : ${e.message}`);
     }
     if (json?.version === 1) {
-      throw unreadable('session de version 1 (profil audio persisté) ; le contrat est passé à la version 2, le profil audio est désormais lu depuis TimoxVasio. Supprimer ce fichier pour repartir d’une session vide');
+      throw unreadable('session de version 1 (profil audio persisté) ; le contrat est passé à la version 3, le profil audio est désormais lu depuis TimoxVasio. Supprimer ce fichier pour repartir d’une session vide');
+    }
+    if (json?.version === 2) {
+      throw unreadable('session de version 2 (champs de traitement ratio, makeupDb, ceilingDb remplacés par les arguments réels des UGens) ; le contrat est passé à la version 3, sans migration. Supprimer ce fichier pour repartir d’une session vide');
     }
     const r = Session.safeParse(json);
     if (!r.success) {

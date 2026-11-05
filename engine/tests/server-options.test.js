@@ -17,7 +17,7 @@ test('dimensionnement par défaut (256 sources, largeur 256, 48 kHz) : valeurs �
     numAudioBusChannels: 1024, // besoin 528 (260 + 12 + 256), puissance de deux suivante
     numWireBufs: 2048, // besoin mesuré 1283 (mx_dyn_256), marge 25 % = 1604, puissance de deux suivante
     maxNodes: 4096, // besoin 8 x 256 + 12 = 2060, marge 50 % = 3090, puissance de deux suivante
-    memSize: 147456, // Ko : 96 221 372 octets de besoin (dont une sonde transitoire de largeur 256) x 1,5, arrondi au multiple de 8192 Ko
+    memSize: 163840, // Ko : 106 576 060 octets de besoin (dont une sonde transitoire de largeur 256 ; Synths mis à l'échelle des UGens de 8b-2) x 1,5, arrondi au multiple de 8192 Ko
     blockSize: 64,
   });
 });

@@ -6,6 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeServerOptions, SYNTHDEF_TIMEOUT_SECONDS } from '../src/runtime/server-options.js';
+import { OUTPUT_STAGES, defaultOutput, defaultSourceProcessing } from '../src/contract/schemas.js';
+import { outputStageEventCode, processingEventCode } from '../src/sc/commands.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const sclang = process.env.SCLANG_PATH || 'C:\\Program Files\\SuperCollider-3.14.1\\sclang.exe';
@@ -42,9 +44,25 @@ function runSclang(file) {
   });
 }
 
+/**
+ * Script d'amorce : ~mxFixture porte le traitement par défaut et les étages de sortie par défaut du contrat
+ * (noms de contrôles produits par src/sc/commands.js), puis charge le test sclang.
+ */
+function fixtureScript(testFile) {
+  const outputs = OUTPUT_STAGES.map((stage) => `${stage}: ${outputStageEventCode(stage, defaultOutput()[stage])}`).join(', ');
+  const forward = testFile.split(path.sep).join('/');
+  return `~mxFixture = (proc: ${processingEventCode(defaultSourceProcessing())}, outputs: (${outputs}));\n"${forward}".load;\n`;
+}
+
+async function runWithFixture(testFile) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mx-fixture-'));
+  const file = path.join(dir, 'fixture.scd');
+  fs.writeFileSync(file, fixtureScript(testFile), 'utf8');
+  try { return await runSclang(file); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+}
+
 test('graphe SuperCollider : sources par largeur, ordre des étages, retrait', { timeout: TIMEOUT_MS + 10000 }, async () => {
-  const file = path.resolve(here, 'sc', 'source-defs.scd');
-  const { output, timedOut } = await runSclang(file);
+  const { output, timedOut } = await runWithFixture(path.resolve(here, 'sc', 'source-defs.scd'));
   const verdict = output.split(/\r?\n/).filter((line) => line.startsWith('MX-TEST-'));
   assert.equal(timedOut, false, `sclang n'a pas terminé en ${TIMEOUT_MS} ms\n${output.slice(-4000)}`);
   assert.ok(verdict.includes('MX-TEST-OK'), `verdict absent ou en échec : ${verdict.join(' | ')}\n${output.slice(-4000)}`);

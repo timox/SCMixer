@@ -79,20 +79,24 @@ test('id inconnu → NOT_FOUND', () => {
 
 test('setSourceStage valide la valeur et le nom d’étage', () => {
   const s = withAB();
-  const out = setSourceStage(s, 'src-1', 'eq', { low: 0.8, mid: 0.5, high: 0.5 });
+  const out = setSourceStage(s, 'src-1', 'eq', { ...defaultSourceProcessing().eq, low: 0.8 });
   assert.equal(out.sources[0].processing.eq.low, 0.8);
-  assert.throws(() => setSourceStage(s, 'src-1', 'eq', { low: 2, mid: 0.5, high: 0.5 }), { code: 'VALIDATION' });
+  assert.throws(() => setSourceStage(s, 'src-1', 'eq', { ...defaultSourceProcessing().eq, low: 2 }), { code: 'VALIDATION' });
   assert.throws(() => setSourceStage(s, 'src-1', 'bogus', {}), { code: 'VALIDATION' });
   assert.throws(() => setSourceStage(s, 'src-1', 'bandCompressor', {}), { code: 'VALIDATION' });
 });
 
 test('setSourceBand', () => {
   const s = withAB();
-  const band = { ...defaultSourceProcessing().bandCompressor.mid, ratio: 8 };
+  const band = { ...defaultSourceProcessing().bandCompressor.mid, slopeAbove: 0.125 };
   const out = setSourceBand(s, 'src-2', 'mid', band);
-  assert.equal(out.sources[1].processing.bandCompressor.mid.ratio, 8);
+  assert.equal(out.sources[1].processing.bandCompressor.mid.slopeAbove, 0.125);
+  const crossover = { ...defaultSourceProcessing().bandCompressor.crossover, lowMidFreq: 300 };
+  assert.equal(setSourceBand(s, 'src-2', 'crossover', crossover).sources[1].processing.bandCompressor.crossover.lowMidFreq, 300);
+  assert.throws(() => setSourceBand(s, 'src-2', 'crossover', band), { code: 'VALIDATION' });
+  assert.throws(() => setSourceBand(s, 'src-2', 'mid', { ...band, ratio: 4 }), { code: 'VALIDATION' });
   assert.throws(() => setSourceBand(s, 'src-2', 'x', band), { code: 'VALIDATION' });
-  assert.throws(() => setSourceBand(s, 'src-2', 'mid', { ...band, ratio: 99 }), { code: 'VALIDATION' });
+  assert.throws(() => setSourceBand(s, 'src-2', 'mid', { ...band, slopeAbove: 99 }), { code: 'VALIDATION' });
 });
 
 test('resetSourceStage hp/lp seulement', () => {
@@ -107,17 +111,17 @@ test('resetSourceStage hp/lp seulement', () => {
 
 test('setOutputStage', () => {
   const s = emptySession();
-  const out = setOutputStage(s, 'master', 'eq', { low: 0.2, mid: 0.5, high: 0.5 });
+  const out = setOutputStage(s, 'master', 'eq', { ...defaultOutput().eq, low: 0.2 });
   assert.equal(out.outputs.master.eq.low, 0.2);
   assert.equal(out.outputs.cue.eq.low, 0.5);
-  assert.throws(() => setOutputStage(s, 'x', 'eq', { low: 0.2, mid: 0.5, high: 0.5 }), { code: 'NOT_FOUND' });
+  assert.throws(() => setOutputStage(s, 'x', 'eq', { ...defaultOutput().eq, low: 0.2 }), { code: 'NOT_FOUND' });
   assert.throws(() => setOutputStage(s, 'cue', 'bogus', {}), { code: 'VALIDATION' });
-  assert.throws(() => setOutputStage(s, 'cue', 'limiter', { enabled: true, ceilingDb: 5 }), { code: 'VALIDATION' });
+  assert.throws(() => setOutputStage(s, 'cue', 'limiter', { ...defaultOutput().limiter, enabled: true, ceilingDb: 5 }), { code: 'VALIDATION' });
 });
 
 test('copyMasterToCue copie tous les étages', () => {
-  let s = setOutputStage(emptySession(), 'master', 'eq', { low: 0.8, mid: 0.5, high: 0.5 });
-  s = setOutputStage(s, 'master', 'limiter', { enabled: true, ceilingDb: -3 });
+  let s = setOutputStage(emptySession(), 'master', 'eq', { ...defaultOutput().eq, low: 0.8 });
+  s = setOutputStage(s, 'master', 'limiter', { ...defaultOutput().limiter, enabled: true, ceilingDb: -3 });
   const c = copyMasterToCue(s);
   assert.deepEqual(c.outputs.cue, c.outputs.master);
   assert.equal(c.outputs.cue.eq.low, 0.8);
@@ -150,10 +154,10 @@ test('les opérations ne mutent pas l’entrée', () => {
     addSource(s, { name: 'C', firstChannel: 5, width: 1 });
     patchSource(s, 'src-1', { name: 'Q' });
     removeSource(s, 'src-1');
-    setSourceStage(s, 'src-1', 'pitch', { semitones: 3 });
+    setSourceStage(s, 'src-1', 'pitch', { ...defaultSourceProcessing().pitch, semitones: 3 });
     setSourceBand(s, 'src-1', 'low', band);
     resetSourceStage(s, 'src-1', 'lp');
-    setOutputStage(s, 'cue', 'mix', { volume: 0.3 });
+    setOutputStage(s, 'cue', 'mix', { ...defaultOutput().mix, volume: 0.3 });
     copyMasterToCue(s);
     replaceSessionContent(s, { sources: s.sources, outputs: s.outputs, nextSourceSeq: 9 });
   });

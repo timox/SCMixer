@@ -1,4 +1,4 @@
-import { SOURCE_STAGES, BANDS } from '../../contract/schemas.js';
+import { SOURCE_STAGES, BAND_GROUPS } from '../../contract/schemas.js';
 import { route } from '../async-route.js';
 import { ApiError } from '../../contract/errors.js';
 import {
@@ -61,7 +61,7 @@ export function registerSourceRoutes(api, engine) {
   // Routes littérales avant la route à paramètre `:stage`.
   api.put('/sources/:id/processing/bandCompressor/:band', route(async (req, res) => {
     const { id, band } = req.params;
-    known(BANDS, band, 'Bande');
+    known(BAND_GROUPS, band, 'Bande');
     const session = await engine.mutate((current) => {
       const next = setSourceBand(current, id, band, req.body);
       return { session: next, code: setSourceBandCode(id, band, find(next, id).processing.bandCompressor[band]) };

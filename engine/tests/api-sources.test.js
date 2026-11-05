@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { startHarness } from './helpers/api-harness.js';
+import { defaultSourceProcessing } from '../src/contract/schemas.js';
+
+const D = defaultSourceProcessing();
 
 const NEW = { name: 'A', firstChannel: 1, width: 2 };
 
@@ -49,7 +52,7 @@ test('PUT processing/eq avec champ en trop : 400 VALIDATION', async (t) => {
 test('PUT processing/hp RHPF : 200 et code sclang envoyé', async (t) => {
   const h = await startHarness(); t.after(() => h.close());
   await h.call('POST', '/api/sources', NEW);
-  const r = await h.call('PUT', '/api/sources/src-1/processing/hp', { enabled: true, model: 'RHPF', freq: 0.3, q: 2, mul: 1, add: 0 });
+  const r = await h.call('PUT', '/api/sources/src-1/processing/hp', { ...D.hp, enabled: true, model: 'RHPF', freq: 0.3, q: 2 });
   assert.equal(r.status, 200);
   assert.equal(r.body.processing.hp.model, 'RHPF');
   const last = h.langs[0].commands().at(-1);
@@ -59,7 +62,7 @@ test('PUT processing/hp RHPF : 200 et code sclang envoyé', async (t) => {
 test('PUT bandCompressor/{band} et étage inconnu', async (t) => {
   const h = await startHarness(); t.after(() => h.close());
   await h.call('POST', '/api/sources', NEW);
-  const band = { thresholdDb: -30, ratio: 2, attackMs: 5, releaseMs: 50, makeupDb: 1, bypass: false };
+  const band = { ...D.bandCompressor.mid, thresholdDb: -30, slopeAbove: 0.5, attackMs: 5, releaseMs: 50, mul: 1.2, bypass: false };
   const r = await h.call('PUT', '/api/sources/src-1/processing/bandCompressor/mid', band);
   assert.equal(r.status, 200);
   assert.deepEqual(r.body.processing.bandCompressor.mid, band);
@@ -71,7 +74,7 @@ test('PUT bandCompressor/{band} et étage inconnu', async (t) => {
 test('hp/reset et lp/reset rétablissent les défauts', async (t) => {
   const h = await startHarness(); t.after(() => h.close());
   await h.call('POST', '/api/sources', NEW);
-  await h.call('PUT', '/api/sources/src-1/processing/lp', { enabled: true, model: 'RLPF', freq: 0.2, q: 3, gain: 2, mul: 1, add: 0 });
+  await h.call('PUT', '/api/sources/src-1/processing/lp', { ...D.lp, enabled: true, model: 'RLPF', freq: 0.2, q: 3 });
   const r = await h.call('POST', '/api/sources/src-1/processing/lp/reset');
   assert.equal(r.status, 200);
   assert.equal(r.body.processing.lp.model, 'BLowPass');
@@ -85,7 +88,7 @@ test('lp/reset-state : 400 sur BLowPass, ok sur MoogFF', async (t) => {
   const bad = await h.call('POST', '/api/sources/src-1/processing/lp/reset-state');
   assert.equal(bad.status, 400);
   assert.equal(bad.body.error.code, 'VALIDATION');
-  await h.call('PUT', '/api/sources/src-1/processing/lp', { enabled: true, model: 'MoogFF', freq: 0.5, q: 1, gain: 2, mul: 1, add: 0 });
+  await h.call('PUT', '/api/sources/src-1/processing/lp', { ...D.lp, enabled: true, model: 'MoogFF', freq: 0.5 });
   const ok = await h.call('POST', '/api/sources/src-1/processing/lp/reset-state');
   assert.equal(ok.status, 200);
   assert.match(h.langs[0].commands().at(-1), /~mxResetMoog\.\("src-1"\)/);
@@ -131,4 +134,55 @@ test('dimensionnement dépassé : 409 ENGINE_RESTART_REQUIRED, source non créé
   assert.equal(grow.status, 409);
   assert.equal(grow.body.error.code, 'ENGINE_RESTART_REQUIRED');
   assert.deepEqual((await h.call('GET', '/api/sources')).body.map((s) => [s.id, s.width]), [['src-1', 2]]);
+});
+
+test('anciens champs refusés (400 VALIDATION) : ratio, makeupDb, étages incomplets, contrôles hors plage', async (t) => {
+  const h = await startHarness(); t.after(() => h.close());
+  await h.call('POST', '/api/sources', NEW);
+  const rejected = async (path, body) => {
+    const r = await h.call('PUT', `/api/sources/src-1/processing/${path}`, body);
+    assert.equal(r.status, 400, `${path} ${JSON.stringify(body)}`);
+    assert.equal(r.body.error.code, 'VALIDATION');
+  };
+  const oldBand = { thresholdDb: -20, ratio: 4, attackMs: 10, releaseMs: 100, makeupDb: 0, bypass: true };
+  await rejected('inputCompressor', oldBand);
+  await rejected('bandCompressor/low', oldBand);
+  await rejected('inputCompressor', { ...D.inputCompressor, ratio: 4 });
+  await rejected('inputCompressor', { ...D.inputCompressor, makeupDb: 0 });
+  await rejected('bandCompressor/mid', { ...D.bandCompressor.mid, ratio: 4 });
+  await rejected('eq', { low: 0.5, mid: 0.5, high: 0.5 });
+  await rejected('hp', { enabled: true, model: 'BHiPass', freq: 0, q: 1, mul: 1, add: 0 });
+  await rejected('pitch', { semitones: 3 });
+  await rejected('mix', { volume: 1, cue: 0, mute: false, balance: 0.5 });
+  await rejected('inputCompressor', { ...D.inputCompressor, slopeAbove: 11 });
+  await rejected('hp', { ...D.hp, minHz: 5000, maxHz: 100 });
+  await rejected('pitch', { ...D.pitch, windowSize: 0.3 });
+  await rejected('pitch', { ...D.pitch, windowSize: 0.05, timeDispersion: 0.1 });
+  await rejected('eq', { ...D.eq, controlLag: -1 });
+  await rejected('bandCompressor/crossover', { ...D.bandCompressor.crossover, lowMidFreq: 5000, midHighFreq: 4000 });
+  assert.deepEqual((await h.call('GET', '/api/sources/src-1')).body.processing, D);
+});
+
+test('PUT bandCompressor/crossover : filtres de répartition, noms de contrôles préfixés', async (t) => {
+  const h = await startHarness(); t.after(() => h.close());
+  await h.call('POST', '/api/sources', NEW);
+  const crossover = { ...D.bandCompressor.crossover, lowMidFreq: 300, lowLp2Mul: 0.9, midHp1Add: 0.01 };
+  const r = await h.call('PUT', '/api/sources/src-1/processing/bandCompressor/crossover', crossover);
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.processing.bandCompressor.crossover, crossover);
+  const code = h.langs[0].commands().at(-1);
+  assert.match(code, /~mxSetSourceStage\.\("src-1", \\bandCompressor, \(band: \\crossover, crossoverLowMidFreq: 300, /);
+  assert.match(code, /crossoverLowLp2Mul: 0\.9/);
+  assert.match(code, /crossoverMidHp1Add: 0\.01/);
+});
+
+test('étage mis à jour : le code sclang porte les noms de contrôles du contrat (préfixe de groupe si la SynthDef en porte plusieurs)', async (t) => {
+  const h = await startHarness(); t.after(() => h.close());
+  await h.call('POST', '/api/sources', NEW);
+  await h.call('PUT', '/api/sources/src-1/processing/inputCompressor', { ...D.inputCompressor, slopeBelow: 1.5, mul: 2, bypass: false });
+  assert.match(h.langs[0].commands().at(-1), /\\inputCompressor, \(inputCompressorThresholdDb: -20, inputCompressorSlopeBelow: 1\.5, inputCompressorSlopeAbove: 0\.25, /);
+  await h.call('PUT', '/api/sources/src-1/processing/eq', { ...D.eq, lowFreq: 120, midRq: 0.9 });
+  assert.match(h.langs[0].commands().at(-1), /\\eq, \(low: 0\.5, mid: 0\.5, high: 0\.5, rangeDb: 12, lowFreq: 120, lowRs: 0\.5, /);
+  await h.call('PUT', '/api/sources/src-1/processing/pitch', { ...D.pitch, semitones: 5, blend: 1, windowSize: 0.1 });
+  assert.match(h.langs[0].commands().at(-1), /\\pitch, \(semitones: 5, blend: 1, level: 1, windowSize: 0\.1, /);
 });

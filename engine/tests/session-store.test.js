@@ -31,9 +31,9 @@ test('JSON tronque : load leve et le fichier reste identique', withDir((dir) => 
   assert.ok(before.equals(fs.readFileSync(file)));
 }));
 
-test('version 3 : refus', withDir((dir) => {
+test('version 4 : refus', withDir((dir) => {
   const file = path.join(dir, 'session.json');
-  fs.writeFileSync(file, JSON.stringify({ ...emptySession(), version: 3 }));
+  fs.writeFileSync(file, JSON.stringify({ ...emptySession(), version: 4 }));
   assert.throws(() => new SessionStore(dir).load(), (e) => e.message.includes(file));
 }));
 
@@ -46,9 +46,17 @@ test('session version 1 : refus explicite nommant le fichier, sans migration', w
   assert.ok(before.equals(fs.readFileSync(file)));
 }));
 
+test('session version 2 : refus explicite nommant le fichier, sans migration', withDir((dir) => {
+  const file = path.join(dir, 'session.json');
+  fs.writeFileSync(file, JSON.stringify({ ...emptySession(), version: 2 }));
+  const before = fs.readFileSync(file);
+  assert.throws(() => new SessionStore(dir).load(), (e) => e.message.includes(file) && /version 2/.test(e.message) && /version 3/.test(e.message) && /sans migration/.test(e.message));
+  assert.ok(before.equals(fs.readFileSync(file)));
+}));
+
 test('schema invalide : refus', withDir((dir) => {
   const file = path.join(dir, 'session.json');
-  fs.writeFileSync(file, '{"version":2}');
+  fs.writeFileSync(file, '{"version":3}');
   assert.throws(() => new SessionStore(dir).load(), (e) => e.message.includes(file));
 }));
 

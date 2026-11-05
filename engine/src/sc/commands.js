@@ -1,4 +1,5 @@
-import { SOURCE_STAGES, OUTPUT_STAGES, BANDS } from '../contract/schemas.js';
+import { SOURCE_STAGES, OUTPUT_STAGES, BAND_GROUPS } from '../contract/schemas.js';
+import { sourceControls, outputControls } from '../contract/controls.js';
 
 const OUTPUTS = ['master', 'cue'];
 const SOURCE_ID = /^src-\d+$/;
@@ -43,9 +44,27 @@ function oneOf(list, value, label) {
   return `\\${value}`;
 }
 
+/** Traitement complet -> Event de contrôles par étage (noms de contrôles : src/contract/controls.js). */
+function processingEvent(processing) {
+  const proc = {};
+  for (const stage of SOURCE_STAGES) proc[stage] = sourceControls(stage, processing[stage]);
+  proc.bandCompressor = Object.fromEntries(BAND_GROUPS.map((group) => [group, sourceControls(group, processing.bandCompressor[group])]));
+  return proc;
+}
+
+/** Event sclang du traitement complet (contrôles par étage) : forme du paramètre `proc` de ~mxAddSource. */
+export function processingEventCode(processing) {
+  return toScEvent(processingEvent(processing));
+}
+
+/** Event sclang d'un étage de sortie (noms de contrôles) : forme du paramètre `controls` de ~mxSetOutputStage. */
+export function outputStageEventCode(stage, value) {
+  return toScEvent(outputControls(stage, value));
+}
+
 export function addSourceCode(source, meterId) {
   if (!Number.isInteger(meterId) || meterId < 0) throw new Error(`meterId invalide : ${meterId}`);
-  return `~mxAddSource.(${sourceId(source.id)}, ${meterId}, ${number(source.firstChannel)}, ${number(source.width)}, ${toScEvent(source.processing)})`;
+  return `~mxAddSource.(${sourceId(source.id)}, ${meterId}, ${number(source.firstChannel)}, ${number(source.width)}, ${processingEventCode(source.processing)})`;
 }
 
 export function ensureWidthCode(width) {
@@ -58,17 +77,19 @@ export function removeSourceCode(id) {
 }
 
 export function setSourceStageCode(id, stage, value) {
-  return `~mxSetSourceStage.(${sourceId(id)}, ${oneOf(SOURCE_STAGES, stage, 'Étage de source')}, ${toScEvent(value)})`;
+  const symbol = oneOf(SOURCE_STAGES, stage, 'Étage de source');
+  return `~mxSetSourceStage.(${sourceId(id)}, ${symbol}, ${toScEvent(sourceControls(stage, value))})`;
 }
 
 export function setSourceBandCode(id, band, value) {
-  const event = toScEvent({ band, ...value });
-  oneOf(BANDS, band, 'Bande');
+  oneOf(BAND_GROUPS, band, 'Bande');
+  const event = toScEvent({ band, ...sourceControls(band, value) });
   return `~mxSetSourceStage.(${sourceId(id)}, \\bandCompressor, ${event})`;
 }
 
 export function setOutputStageCode(output, stage, value) {
-  return `~mxSetOutputStage.(${oneOf(OUTPUTS, output, 'Sortie')}, ${oneOf(OUTPUT_STAGES, stage, "Étage de sortie")}, ${toScEvent(value)})`;
+  const symbols = `${oneOf(OUTPUTS, output, 'Sortie')}, ${oneOf(OUTPUT_STAGES, stage, 'Étage de sortie')}`;
+  return `~mxSetOutputStage.(${symbols}, ${toScEvent(outputControls(stage, value))})`;
 }
 
 export function resetMoogCode(id) {
