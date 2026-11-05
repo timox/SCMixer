@@ -67,6 +67,12 @@ export function addSourceCode(source, meterId) {
   return `~mxAddSource.(${sourceId(source.id)}, ${meterId}, ${number(source.firstChannel)}, ${number(source.width)}, ${processingEventCode(source.processing)})`;
 }
 
+/** Remplacement d'une source existante (déplacement) : construction de la largeur puis fondu enchaîné en un seul bundle. */
+export function replaceSourceCode(source, meterId) {
+  if (!Number.isInteger(meterId) || meterId < 0) throw new Error(`meterId invalide : ${meterId}`);
+  return `~mxReplaceSource.(${sourceId(source.id)}, ${meterId}, ${number(source.firstChannel)}, ${number(source.width)}, ${processingEventCode(source.processing)})`;
+}
+
 export function ensureWidthCode(width) {
   if (!Number.isInteger(width) || width < 1 || width > 256) throw new Error(`Largeur invalide : ${width}`);
   return `~mxEnsureWidth.(${width})`;

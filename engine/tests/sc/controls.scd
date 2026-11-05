@@ -9,6 +9,9 @@
  *   MX-HIDDEN <def> <opérateur> <index> <valeur>      multiplicateur ou décalage numérique appliqué directement à la
  *                                                     sortie d'un filtre, d'un Compander, d'un PitchShift ou d'une
  *                                                     lecture (MulAdd ou BinaryOpUGen : mul/add cachés)
+ *   MX-PATH <def> <classe/opérateur> <index> <valeur>  constante numérique dans une opération audio située entre un
+ *                                                     UGen de traitement et la sortie (Out/ReplaceOut), après
+ *                                                     Select/Sum/XFade/Mix : parcours du graphe depuis chaque sortie
  * SynthDef \mx_hidden_bad : cas négatif volontaire (multiplicateur 0.8 et décalage 0.1 cachés) que le test JS doit voir.
  * puis "MX-TEST-OK". Les tests JS comparent ces lignes au contrat (tests/parameters.test.js).
  */
@@ -19,13 +22,26 @@ var audited = [\BLowShelf, \BPeakEQ, \BHiShelf, \BHiPass, \BLowPass, \BHiPass4, 
   \VarLag, \LinExp, \DelayN, \MixetteFaustRMS, \SendPeakRMS, \Lag];
 var sources = [\BLowShelf, \BPeakEQ, \BHiShelf, \BHiPass, \BLowPass, \BHiPass4, \BLowPass4, \RHPF, \RLPF,
   \MoogFF, \LPF, \HPF, \Compander, \PitchShift, \In, \MixetteFaustRMS];
-var describe, fromSource;
+var describe, fromSource, walk;
 ~mxServer = nil;
 (root +/+ "sc" +/+ "graph.scd").load;
 
 fromSource = { |input|
   var source = if(input.isKindOf(OutputProxy)) { input.source } { input };
   source.isKindOf(UGen) and: { sources.includes(source.class.name) }
+};
+
+// Parcours en arrière depuis les entrées d'un Out/ReplaceOut : toute opération audio (MulAdd, BinaryOpUGen) ayant un opérande numérique.
+walk = { |def, u, seen|
+  if(seen.includes(u).not) {
+    seen.add(u);
+    if(u.rate == \audio and: { [\MulAdd, \BinaryOpUGen].includes(u.class.name) }) {
+      u.inputs.do { |in, i|
+        if(in.isNumber) { ("MX-PATH " ++ def.name ++ " " ++ u.class.name ++ "/" ++ u.operator ++ " " ++ i ++ " " ++ in).postln };
+      };
+    };
+    u.inputs.do { |in| var source = if(in.isKindOf(OutputProxy)) { in.source } { in }; if(source.isKindOf(UGen)) { walk.(def, source, seen) } };
+  };
 };
 
 describe = { |def|
@@ -49,6 +65,10 @@ describe = { |def|
         if(in.isNumber) { ("MX-CONST " ++ def.name ++ " " ++ u.class.name ++ " " ++ i ++ " " ++ in).postln };
       };
     };
+    if([\Out, \ReplaceOut].includes(u.class.name)) {
+      var seen = IdentitySet.new;
+      u.inputs.drop(1).do { |in| var source = if(in.isKindOf(OutputProxy)) { in.source } { in }; if(source.isKindOf(UGen)) { walk.(def, source, seen) } };
+    };
     // mul/add cachés : constante numérique combinée directement à la sortie d'un UGen à mul/add.
     if([\MulAdd, \BinaryOpUGen].includes(u.class.name) and: { u.inputs.any { |in| fromSource.(in) } }) {
       u.inputs.do { |in, i|
@@ -63,6 +83,7 @@ describe = { |def|
 describe.(~mxOutputWriterDef);
 // Cas négatif : un * 0.8 et un décalage 0.1 cachés après un filtre.
 describe.(SynthDef(\mx_hidden_bad, { Out.ar(0, BLowShelf.ar(In.ar(0), \f.kr(1000), 0.5, 0) * 0.8) }));
+describe.(SynthDef(\mx_hidden_bad_sum, { Out.ar(0, [RLPF.ar(In.ar(0), \f.kr(1000), 0.5), HPF.ar(In.ar(1), \g.kr(100))].sum * 0.8) }));
 describe.(SynthDef(\mx_hidden_bad_add, { Out.ar(0, RLPF.ar(In.ar(0), \f.kr(1000), 0.5).madd(1, 0.1)) }));
 "MX-TEST-OK".postln;
 0.exit;

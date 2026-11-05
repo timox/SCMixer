@@ -105,8 +105,9 @@ test('PATCH : nom seul sans recréation, largeur recrée la source ; DELETE 204'
   const wide = await h.call('PATCH', '/api/sources/src-1', { width: 4 });
   assert.equal(wide.body.width, 4);
   const code = h.langs[0].commands().at(-1);
-  // Les SynthDefs de la nouvelle largeur sont construits avant le retrait : la source n'est absente que le temps du bundle.
-  assert.match(code, /{ ~mxEnsureWidth\.\(4\); ~mxRemoveSource\.\("src-1"\); ~mxAddSource\.\("src-1", 0, 1, 4,/);
+  // Un seul appel : construction de la largeur, puis fondu enchaîné ancienne/nouvelle chaîne dans un seul bundle.
+  assert.match(code, /~mxReplaceSource\.\("src-1", 0, 1, 4,/);
+  assert.doesNotMatch(code, /mxRemoveSource|mxAddSource/);
   assert.equal((await h.call('PATCH', '/api/sources/src-1', {})).status, 400);
   const del = await h.call('DELETE', '/api/sources/src-1');
   assert.equal(del.status, 204);

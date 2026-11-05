@@ -166,9 +166,9 @@
       ReplaceOut.ar(bus, Select.ar(allBypassed, [processed.sum, sig]));
     }),
 
-    // Entrée et retrait : fadeGate 0 au départ (défaut), 1 envoyé par ~mxAddSource ; fadeGate 0 au retrait ; VarLag linéaire de
-    // fadeSeconds, avant /n_free (graph.scd).
-    SynthDef(name.(\mix), { |bus, out, cueOut, fadeGate=0, fadeSeconds=0.05|
+    // Entrée et retrait : le VarLag part de 0 (start fixe : état initial d'un fondu d'entrée) vers fadeGate 1 ; fadeGate 0 au
+    // retrait ; rampe linéaire de fadeSeconds, avant /n_free (graph.scd).
+    SynthDef(name.(\mix), { |bus, out, cueOut, fadeGate=1, fadeSeconds=0.05|
       var input = In.ar(bus, w);
       var lg = { |field, default| ~mxLg.(nil, field, default) };
       var volume = lg.(\volume, 1);
@@ -181,7 +181,7 @@
       var splayLevel = lg.(\splayLevel, 1);
       var center = lg.(\center, 0);
       var levelComp = lg.(\levelComp, 0.5);
-      var level = volume * (1 - mute) * VarLag.kr(fadeGate, fadeSeconds, warp: \linear);
+      var level = volume * (1 - mute) * VarLag.kr(fadeGate, fadeSeconds, warp: \linear, start: 0);
       var stereo = case
         { w == 1 } { Pan2.ar(input * level, position, panLevel) }
         { w == 2 } { Balance2.ar(input[0] * level, input[1] * level, position, balanceLevel) }

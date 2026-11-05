@@ -12,7 +12,7 @@ import {
 import {
   SOURCE_SYNTH_GROUPS, OUTPUT_GROUPS, controlName, sourceControls, outputControls,
 } from '../src/contract/controls.js';
-import { INVENTORY, DOCUMENTED_ARGS, EXCLUSIONS } from './helpers/exposure-inventory.js';
+import { INVENTORY, DOCUMENTED_ARGS, EXCLUSIONS, FIXED_CONSTANTS } from './helpers/exposure-inventory.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
@@ -40,13 +40,14 @@ const defs = async () => {
   introspection ??= runSclang(path.join(here, 'sc', 'controls.scd')).then((out) => {
     assert.match(out, /MX-TEST-OK/, out.slice(-3000));
     const byDef = new Map();
-    const entry = (name) => { if (!byDef.has(name)) byDef.set(name, { controls: new Map(), unused: new Set(), consts: [], hidden: [] }); return byDef.get(name); };
+    const entry = (name) => { if (!byDef.has(name)) byDef.set(name, { controls: new Map(), unused: new Set(), consts: [], hidden: [], path: [] }); return byDef.get(name); };
     for (const m of out.matchAll(/^MX-CTL (\S+) (\S+) (\S+) (\S+)/gm)) entry(m[1]).controls.set(m[2], { value: Number(m[3]), rate: m[4] });
     for (const m of out.matchAll(/^MX-UNUSED (\S+) (\S+)/gm)) entry(m[1]).unused.add(m[2]);
     for (const m of out.matchAll(/^MX-CONST (\S+) (\S+) (\d+) (\S+)/gm)) entry(m[1]).consts.push({ ugen: m[2], index: Number(m[3]), value: Number(m[4]) });
+    for (const m of out.matchAll(/^MX-PATH (\S+) (\S+) (\d+) (\S+)/gm)) entry(m[1]).path.push({ op: m[2], index: Number(m[3]), value: Number(m[4]) });
     for (const m of out.matchAll(/^MX-HIDDEN (\S+) (\S+) (\d+) (\S+)/gm)) entry(m[1]).hidden.push({ op: m[2], index: Number(m[3]), value: Number(m[4]) });
     // Cas négatifs volontaires : retirés des SynthDefs du moteur, vérifiés à part.
-    for (const name of ['mx_hidden_bad', 'mx_hidden_bad_add']) { negatives.set(name, byDef.get(name)); byDef.delete(name); }
+    for (const name of ['mx_hidden_bad', 'mx_hidden_bad_add', 'mx_hidden_bad_sum']) { negatives.set(name, byDef.get(name)); byDef.delete(name); }
     return byDef;
   });
   return introspection;
@@ -178,16 +179,30 @@ test('aucun multiplicateur ni décalage caché appliqué à la sortie d\'un filt
   for (const [name, def] of await defs()) assert.deepEqual(def.hidden, [], `${name} : constante numérique combinée à la sortie d'un UGen à mul/add`);
 });
 
+test('aucune constante numérique sur le chemin audio entre traitement et sortie (Select, Sum, XFade, Mix)', async () => {
+  // Seule exception : matrice mid/side des sorties, facteur 0.5 sur (L + R) et (L - R), sans paramètre (structure).
+  const msMatrix = (p) => p.op === 'BinaryOpUGen/*' && p.value === 0.5;
+  for (const [name, def] of await defs()) {
+    const offenders = def.path.filter((p) => !(name.startsWith('mx_output_') && msMatrix(p)));
+    assert.deepEqual(offenders, [], `${name} : constante numérique après traitement`);
+    if (name.startsWith('mx_output_') && name !== 'mx_output_writer') assert.equal(def.path.filter(msMatrix).length, 2, `${name} : matrice mid/side`);
+  }
+});
+
 test('cas négatif : un * 0.8 ou un décalage 0.1 caché fait échouer l\'audit', async () => {
   await defs();
   const mul = negatives.get('mx_hidden_bad');
   const add = negatives.get('mx_hidden_bad_add');
   assert.ok(mul.hidden.some((h) => h.value === 0.8), JSON.stringify(mul.hidden));
   assert.ok(add.hidden.some((h) => h.value === 0.1), JSON.stringify(add.hidden));
+  // .sum * 0.8 après deux filtres : seul le parcours depuis la sortie le voit.
+  const sum = negatives.get('mx_hidden_bad_sum');
+  assert.ok(sum.path.some((p) => p.value === 0.8), JSON.stringify(sum.path));
 });
 
 test('inventaire : chaque UGen audité couvre tous ses arguments documentés (exposé ou exclu par écrit)', () => {
   const covered = (ugen, arg) => INVENTORY.some(([u, a]) => u === ugen && a.split(' ')[0] === arg)
+    || FIXED_CONSTANTS.some(([u, a]) => u === ugen && a === arg)
     || EXCLUSIONS.some(([u, a]) => u === ugen && a === arg);
   for (const [ugen, args] of Object.entries(DOCUMENTED_ARGS)) {
     for (const arg of args) assert.ok(covered(ugen, arg), `${ugen}.${arg} ni exposé ni exclu`);

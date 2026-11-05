@@ -98,7 +98,7 @@ server.options.ugenPluginsPath = [Platform.resourceDir +/+ "plugins", root +/+ "
 server.waitForBoot({
   try {
     var neutral = [\in, \eqdirect, \hpBHiPass, \lpBLowPass, \pitch, \dyn, \mix];
-    var errors, tasks, groupsBefore, groupsAfter, defaultTree, sourcesTree, outputTree, outputDefs, ids1, ids3, removedGroup, raised, delays, node, oldPitch, probe, sampler, samples, peakBus, steadyA, steadyB, peak, tolerance, getBus;
+    var errors, tasks, groupsBefore, groupsAfter, defaultTree, sourcesTree, outputTree, outputDefs, ids1, ids3, removedGroup, raised, delays, node, oldPitch, probe, sampler, samples, oldGroupId, peakBus, steadyA, steadyB, peak, tolerance, getBus;
     ("MX-TEST-SCSYNTH-PID " ++ server.pid).postln;
 
     ~mxInit.(server, 256);
@@ -309,10 +309,13 @@ server.waitForBoot({
     samples = List.new;
     sampler = Routine({ loop { probe.set(\reset, 1); 0.002.wait; samples.add(getBus.(peakBus)) } }).play(SystemClock);
     0.05.wait;
-    ~mxEnsureWidth.(3);
-    ~mxRemoveSource.("xf");
-    ~mxAddSource.("xf", 21, 100, 3, defaultProc.());
+    oldGroupId = ~mxSources["xf"][\group].nodeID;
+    ~mxReplaceSource.("xf", 21, 100, 3, defaultProc.());
     server.sync;
+    // Guides/Order-of-execution : la nouvelle chaîne suit l'ancienne dans le groupe des sources.
+    sourcesTree = query.(~mxSourcesGroup.nodeID);
+    check.(sourcesTree[\children].collect { |c| c[\id] }.asArray.indexOf(~mxSources["xf"][\group].nodeID)
+      == (sourcesTree[\children].collect { |c| c[\id] }.asArray.indexOf(oldGroupId) + 1), "nouvelle chaîne non placée après l'ancienne");
     // Un seul vumètre par identifiant : celui de l'ancienne chaîne est coupé (meterId -1).
     check.(getControl.(node[\input], \meterId) == -1, "vumètre de l'ancienne chaîne non coupé");
     check.(getControl.(~mxSources["xf"][\nodes][\input], \meterId) == 21, "vumètre de la nouvelle chaîne");
@@ -324,10 +327,10 @@ server.waitForBoot({
     steadyB = getBus.(peakBus);
     check.(steadyB > 0.1, "régime établi largeur 3 trop faible : " ++ steadyB);
     tolerance = 10 ** (0.5 / 20);
-    ("MX-TEST-CROSSFADE steady " ++ steadyA ++ " -> " ++ steadyB ++ " peak " ++ peak ++ " samples " ++ samples.size).postln;
+    ("MX-TEST-CROSSFADE steady " ++ steadyA ++ " -> " ++ steadyB ++ " peak " ++ peak ++ " dip " ++ samples.minItem ++ " samples " ++ samples.size).postln;
     check.(peak <= (max(steadyA, steadyB) * tolerance), "crête du déplacement " ++ peak ++ " au-dessus de " ++ (max(steadyA, steadyB) * tolerance));
-    // Creux toléré : au plus 6 dB sous le plus petit des deux régimes (envoi de fadeGate 1 après la construction).
-    check.(samples.minItem >= (min(steadyA, steadyB) * 0.5), "creux du déplacement " ++ samples.minItem);
+    // Creux : mêmes tolérances que la crête (0.5 dB) sous le plus petit des deux régimes, rampes démarrées dans le même bloc.
+    check.(samples.minItem >= (min(steadyA, steadyB) / tolerance), "creux du déplacement " ++ samples.minItem ++ " sous " ++ (min(steadyA, steadyB) / tolerance));
     ~mxRemoveSource.("xf");
     (~mxRemoveRamp.(server) + ~mxFadeMargin.(server) + 0.4).wait;
 

@@ -25,6 +25,7 @@
  *                                                 server.options.numInputBusChannels)
  *   ~mxEnsureWidth.(width)                      -> true si construite, false si déjà présente
  *   ~mxAddSource.(id, meterId, firstChannel, width, proc)   -> ~mxNodeIds.(id)  (entrée en fondu, voir plus bas)
+ *   ~mxReplaceSource.(id, meterId, firstChannel, width, proc)   -> ~mxNodeIds.(id)  (fondu enchaîné)
  *   ~mxRemoveSource.(id)                        -> fondu à zéro puis /n_free différé (voir plus bas)
  *   ~mxSetSourceStage.(id, stage, controls)
  *   ~mxSetOutputStage.(output, stage, controls)
@@ -65,11 +66,12 @@
  *   fadeSeconds + ~mxFadeMargin plus tard (SystemClock, sans horodatage). L'identifiant de la source est
  *   libre immédiatement ; le bus reste réservé jusqu'à la libération. Le vumètre de l'ancienne chaîne est coupé
  *   (meterId -1 : le relais ignore les identifiants inconnus), pour qu'un seul vumètre réponde sous un identifiant.
- *   Entrée en fondu : toute chaîne naît à fadeGate 0 (défaut de la SynthDef) puis ~mxAddSource envoie fadeGate 1 après la
- *   construction (server.sync) ; le niveau monte de 0 à 1 en fadeSeconds = ~mxRemoveRamp. Mesuré : un fadeGate 1 envoyé dans
- *   le bundle de création ne produit pas de montée (la chaîne arrive à pleine amplitude), d'où l'envoi après la construction ;
- *   il en résulte un creux de quelques millisecondes (au plus 3 dB mesurés) pendant un déplacement, jamais une surcharge. Déplacement (PATCH de largeur ou de canaux : retrait puis ~mxAddSource) :
- *   la nouvelle chaîne monte à 1 avec la même durée que l'ancienne descend à 0. Loi : amplitude linéaire
+ *   Entrée en fondu : le VarLag de \mx_mix_<w> part de 0 (start: 0, constante fixe, Filter.sc : `start = start ? in`) vers
+ *   fadeGate 1 (défaut) : toute chaîne monte de 0 à 1 en fadeSeconds = ~mxRemoveRamp dès son premier bloc de contrôle.
+ *   Déplacement (PATCH de largeur ou de canaux, ~mxReplaceSource.(id, meterId, firstChannel, width, proc)) : les SynthDefs
+ *   de la largeur sont construits d'abord (~mxEnsureWidth, avec attente), puis UN bundle fait descendre l'ancienne chaîne
+ *   (fadeGate 0) et créer la nouvelle juste après elle (Group.after : Guides/Order-of-execution, les deux restent dans le
+ *   groupe des sources, avant les sorties) : les deux rampes démarrent dans le même bloc, sans creux ni surcharge. Loi : amplitude linéaire
  *   complémentaire (g_ancien + g_nouveau = 1 à chaque instant, VarLag linéaire de même durée) : pour un matériau
  *   corrélé (même canal d'entrée) la somme garde le gain unitaire, alors que la loi à puissance égale donnerait
  *   jusqu'à +3 dB. Un matériau décorrélé baisse au plus de 3 dB au milieu du fondu.
@@ -405,10 +407,13 @@
 // Nom de la SynthDef du nœud `key` de la source.
 ~mxNodeDef = { |source, key| ~mxDefName.(source[\kinds][key], source[\width]) };
 
-~mxAddSource = { |id, meterId, firstChannel, width, proc|
+// Création d'une source. `old` (source à remplacer, ou nil) : le fondu de sortie de l'ancienne chaîne et la création de la
+// nouvelle partent dans le MÊME bundle (mêmes blocs de contrôle), la nouvelle chaîne étant placée juste après l'ancienne.
+~mxCreateSource = { |id, meterId, firstChannel, width, proc, old|
   var server = ~mxServer;
   var source, group, bus, nodes, kinds, args, bands;
-  if(~mxSources[id].notNil) {
+  var ramp = ~mxRemoveRamp.(server);
+  if(old.isNil and: { ~mxSources[id].notNil }) {
     if(~mxSources[id][\pending] == true) { Error("Source en cours de création : " ++ id).throw };
     Error("Source déjà présente : " ++ id).throw;
   };
@@ -443,7 +448,13 @@
     // Groupe et 7 Synths dans un seul bundle sans horodatage (Bundled-Messages : les messages d'un
     // bundle sont exécutés ensemble) : le serveur ne voit jamais une chaîne partielle.
     server.makeBundle(nil, {
-      group = Group.tail(~mxSourcesGroup);
+      if(old.notNil) {
+        // Fondu enchaîné : l'ancienne chaîne descend (fadeGate 0) dans le bundle où la nouvelle monte (VarLag start 0).
+        old[\nodes][\mix].set(\fadeSeconds, ramp, \fadeGate, 0);
+        old[\nodes][\input].set(\meterId, -1);
+      };
+      // Guides/Order-of-execution : la nouvelle chaîne reste dans le groupe des sources (avant les sorties), juste après l'ancienne.
+      group = if(old.notNil) { Group.after(old[\group]) } { Group.tail(~mxSourcesGroup) };
       nodes[\input] = Synth.tail(group, ~mxDefName.(kinds[\input], width), [\bus, bus.index,
         \firstChannel, firstChannel, \meterId, meterId] ++ args[\input]);
       nodes[\eq] = Synth.tail(group, ~mxDefName.(kinds[\eq], width), [\bus, bus.index] ++ args[\eq]);
@@ -453,7 +464,7 @@
       nodes[\dyn] = Synth.tail(group, ~mxDefName.(\dyn, width), [\bus, bus.index] ++ args[\dyn]);
       nodes[\mix] = Synth.tail(group, ~mxDefName.(\mix, width), [\bus, bus.index,
         \out, ~mxMasterBus.index, \cueOut, ~mxCueBus.index] ++ args[\mix]
-        ++ [\fadeSeconds, ~mxRemoveRamp.(server)]);
+        ++ [\fadeSeconds, ramp]);
     });
 
     source = (id: id, meterId: meterId, firstChannel: firstChannel, width: width,
@@ -461,31 +472,48 @@
       pitchWindow: proc[\pitch][\windowSize]);
     ~mxSources[id] = source;
     server.sync;
-    // Entrée en fondu : la chaîne est construite à fadeGate 0, la montée à 1 part ici (après la construction).
-    nodes[\mix].set(\fadeGate, 1);
+    if(old.notNil) { ~mxScheduleFree.(old) };
   } { |error|
     // Échec après réservation : libère l'id et ce qui a déjà été alloué.
     if(group.notNil) { group.free };
     if(bus.notNil) { bus.free };
-    ~mxSources.removeAt(id);
+    if(old.notNil) { ~mxSources[id] = old } { ~mxSources.removeAt(id) };
     error.throw;
   };
   ~mxNodeIds.(id)
 };
 
-// Retrait : fondu à zéro (étage \mix), puis libération différée du groupe et du bus (voir l'en-tête).
-~mxRemoveSource = { |id|
-  var source = ~mxSource.(id);
-  var ramp = ~mxRemoveRamp.(~mxServer);
-  source[\nodes][\mix].set(\fadeSeconds, ramp, \fadeGate, 0);
-  // Un seul vumètre par identifiant pendant le chevauchement d'un déplacement.
-  source[\nodes][\input].set(\meterId, -1);
-  ~mxSources.removeAt(id);
-  SystemClock.sched(ramp + ~mxFadeMargin.(~mxServer), {
+~mxAddSource = { |id, meterId, firstChannel, width, proc|
+  ~mxCreateSource.(id, meterId, firstChannel, width, proc, nil)
+};
+
+// Déplacement ou remplacement d'une source existante (PATCH de largeur ou de canaux) : les SynthDefs de la largeur sont
+// construits d'abord (~mxEnsureWidth, avec attente), puis un seul bundle fait descendre l'ancienne chaîne et monter la nouvelle.
+~mxReplaceSource = { |id, meterId, firstChannel, width, proc|
+  var old = ~mxSource.(id);
+  ~mxEnsureWidth.(width);
+  // L'attente ci-dessus a pu laisser passer une autre commande : l'ancienne chaîne doit être toujours la source de l'id.
+  if(~mxSources[id] !== old) { Error("Source modifiée pendant la construction : " ++ id).throw };
+  ~mxCreateSource.(id, meterId, firstChannel, width, proc, old)
+};
+
+// Libération différée du groupe et du bus d'une source dont le fondu de sortie est lancé.
+~mxScheduleFree = { |source|
+  SystemClock.sched(~mxRemoveRamp.(~mxServer) + ~mxFadeMargin.(~mxServer), {
     source[\group].free;
     source[\bus].free;
     nil
   });
+};
+
+// Retrait : fondu à zéro (étage \mix), puis libération différée du groupe et du bus (voir l'en-tête).
+~mxRemoveSource = { |id|
+  var source = ~mxSource.(id);
+  source[\nodes][\mix].set(\fadeSeconds, ~mxRemoveRamp.(~mxServer), \fadeGate, 0);
+  // Un seul vumètre par identifiant.
+  source[\nodes][\input].set(\meterId, -1);
+  ~mxSources.removeAt(id);
+  ~mxScheduleFree.(source);
   true
 };
 

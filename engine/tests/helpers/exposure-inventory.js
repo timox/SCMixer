@@ -166,11 +166,17 @@ export const DOCUMENTED_ARGS = {
   Lag: ['lagTime', 'mul', 'add'],
 };
 
+/**
+ * Constantes fixes documentées : état initial d'un mécanisme, pas un paramètre de son.
+ */
+export const FIXED_CONSTANTS = [
+  ['VarLag', 'start', "Niveau initial du fondu d'entrée de l'étage mix : 0 (VarLag.new1, Filter.sc : `start = start ? in`, donc sans start la montée partirait de la valeur courante de l'entrée, soit pas de fondu). Constante fixe, état initial d'un fondu, pas un réglage de son ; la durée du fondu est fixée par le moteur (période matérielle)."],
+];
+
 /** Arguments documentés volontairement non exposés, avec la justification écrite. */
 export const EXCLUSIONS = [
   ['VarLag', 'warp', 'Fixé à la construction du SynthDef : VarLag.new1 (Filter.sc) évalue `Env.shapeNames[warp]` et `curve != 1` dans sclang pour choisir entre le UGen VarLag (linéaire) et un EnvGen dont le niveau initial est `in` ; une valeur de contrôle (UGen) ne peut pas être évaluée à ce stade et un EnvGen à niveau initial `in` supprimerait la rampe (VarLag.schelp : warp « determines the shape », Env.shapeNumber requis pour piloter de l\'extérieur sans garantie de rampe). Rampe linéaire retenue, exposée par fadeSeconds.'],
   ['VarLag', 'curvature', 'N\'agit que si warp vaut 5 (VarLag.schelp : « Control curvature if warp input is 5 ») ; warp étant fixé linéaire, curvature est sans effet.'],
-  ['VarLag', 'start', 'Valeur initiale de la rampe de fondu de sortie : par défaut celle de l\'entrée (VarLag.schelp : « If not specified, same as the input signal »), donc la position courante de l\'écrivain ; une autre valeur provoquerait un saut au démarrage de l\'écrivain.'],
   ['VarLag', 'mul', 'mul appliqué à la rampe de mélange changerait le poids du second signal sans changer celui du premier : la somme des poids cesserait de valoir 1 (1 - blend, blend). Le fondu complémentaire n\'a de sens qu\'avec mul = 1.'],
   ['VarLag', 'add', 'add décalerait les deux poids dans le même sens : même raison que mul, la somme des poids ne vaudrait plus 1.'],
   ['Lag', 'mul', 'Lag lisse un contrôle : mul/add appliqués au contrôle lissé dupliqueraient le paramètre lui-même (Lag.schelp : « Output will be multiplied by this value »).'],
