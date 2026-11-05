@@ -24,11 +24,13 @@ const fwd = (p) => p.replaceAll('\\', '/');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const busy = (message) => new ApiError('ENGINE_BUSY', 409, message);
 
+export const DEFAULT_SC_DIR = 'C:\\Program Files\\SuperCollider-3.14.1';
+
 /** Démarre sclang via supercolliderjs (chargé à la demande : absent des tests). */
-export async function defaultLangFactory({ includePaths, langPort }) {
+export async function defaultLangFactory({ includePaths, langPort, scDir = DEFAULT_SC_DIR }) {
   const { default: sc } = await import('supercolliderjs');
   const sclang = process.env.SCLANG_PATH
-    || (process.platform === 'win32' ? 'C:\\Program Files\\SuperCollider-3.14.1\\sclang.exe' : 'sclang');
+    || (process.platform === 'win32' ? path.join(scDir, 'sclang.exe') : 'sclang');
   return sc.lang.boot({ sclang, conf: { includePaths }, stdin: false, echo: false, langPort });
 }
 
@@ -99,7 +101,7 @@ class StaleBoot extends Error {}
 
 export class EngineProcess extends EventEmitter {
   #store; #registry; #langFactory; #listenerFactory; #resolveScsynth; #isAlive; #kill; #watchMs;
-  #apiUrl; #langPort; #askTimeoutMs; #resolveAttempts;
+  #apiUrl; #scDir; #langPort; #askTimeoutMs; #resolveAttempts;
   #status = 'stopped'; #error = null; #scsynthPid = null;
   #models = { Compander: true, CompanderD: false, FaustRMS: false };
   #session; #generation = 0;
@@ -114,6 +116,7 @@ export class EngineProcess extends EventEmitter {
     killProcess = (pid) => process.kill(pid, 'SIGTERM'),
     watchIntervalMs = 1000, langPort = DEFAULT_LANG_PORT, askTimeoutMs = 30_000, resolveAttempts = 20,
     apiUrl = process.env.MIXETTE_TIMOXVASIO_URL || 'http://127.0.0.1:52525',
+    scDir = DEFAULT_SC_DIR,
   }) {
     super();
     this.#store = store;
@@ -128,6 +131,7 @@ export class EngineProcess extends EventEmitter {
     this.#askTimeoutMs = askTimeoutMs;
     this.#resolveAttempts = resolveAttempts;
     this.#apiUrl = apiUrl;
+    this.#scDir = scDir;
     this.#session = store.load();
   }
 
@@ -262,7 +266,7 @@ export class EngineProcess extends EventEmitter {
     const relayPort = await ctx.listener.start();
     await this.#alive(ctx);
     const includePaths = [path.join(SC_DIR, 'plugins')];
-    const lang = await this.#langFactory({ includePaths, langPort: this.#langPort });
+    const lang = await this.#langFactory({ includePaths, langPort: this.#langPort, scDir: this.#scDir });
     ctx.lang = lang;
     lang.on('exit', (code) => this.#onLangExit(ctx, code));
     await this.#alive(ctx);

@@ -419,3 +419,9 @@ test('relais : meter et runtime émis depuis le récepteur OSC, runtime() remis 
   await engine.stop();
   assert.equal(engine.runtime(), null);
 });
+
+test('scDir est transmis à la fabrique sclang', async () => {
+  const { engine, langs } = setup({ engine: { scDir: 'D:\SC' } });
+  await engine.start();
+  assert.equal(langs[0].factoryOptions.scDir, 'D:\SC');
+});

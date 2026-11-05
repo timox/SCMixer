@@ -1,0 +1,568 @@
+openapi: 3.1.0
+info:
+  title: API du moteur audio Mixette
+  version: 0.1.0
+  description: >
+    Contrat HTTP et WebSocket du moteur SuperCollider. Écoute sur 127.0.0.1 uniquement
+    (port 3100, variable MIXETTE_ENGINE_PORT). Les corps de requête sont stricts : un champ
+    inconnu ou une valeur hors plage renvoie 400 VALIDATION. Toute mutation exige un moteur
+    en état running (409 ENGINE_NOT_RUNNING sinon). Les routes de presets et de bancs d'essai
+    sont décrites par leurs tâches respectives.
+servers:
+  - url: http://127.0.0.1:3100
+tags:
+  - name: Moteur
+  - name: Sources
+  - name: Sorties
+
+paths:
+  /api/state:
+    get:
+      tags: [Moteur]
+      summary: État complet publié par stateChanged
+      responses:
+        '200': { description: État, content: { application/json: { schema: { $ref: '#/components/schemas/State' } } } }
+  /api/engine:
+    get:
+      tags: [Moteur]
+      summary: État du moteur
+      responses:
+        '200': { $ref: '#/components/responses/EngineState' }
+  /api/engine/start:
+    post:
+      tags: [Moteur]
+      summary: Démarre sclang et scsynth puis restaure la session
+      responses:
+        '200': { $ref: '#/components/responses/EngineState' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/engine/stop:
+    post:
+      tags: [Moteur]
+      summary: Arrête scsynth et sclang
+      responses:
+        '200': { $ref: '#/components/responses/EngineState' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/engine/restart:
+    post:
+      tags: [Moteur]
+      summary: Arrête puis démarre le moteur
+      responses:
+        '200': { $ref: '#/components/responses/EngineState' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/engine/runtime:
+    get:
+      tags: [Moteur]
+      summary: Dernier statut d'exécution reçu de sclang (null moteur arrêté)
+      responses:
+        '200':
+          description: Statut ou null
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Runtime'
+                  - type: 'null'
+  /api/engine/node-tree:
+    get:
+      tags: [Moteur]
+      summary: Arbre des nœuds du serveur (/g_queryTree)
+      responses:
+        '200': { description: Arbre, content: { application/json: { schema: { $ref: '#/components/schemas/NodeTree' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/engine/audio-profile:
+    get:
+      tags: [Moteur]
+      summary: Profil audio courant
+      responses:
+        '200': { $ref: '#/components/responses/AudioProfile' }
+    put:
+      tags: [Moteur]
+      summary: Modifie le profil audio ; moteur démarré, scsynth est redémarré puis la session restaurée
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AudioProfile' } } } }
+      responses:
+        '200': { $ref: '#/components/responses/AudioProfile' }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /api/sources:
+    get:
+      tags: [Sources]
+      summary: Liste des sources
+      responses:
+        '200':
+          description: Sources
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Source' } } } }
+    post:
+      tags: [Sources]
+      summary: Crée une source avec le traitement par défaut
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SourceCreate' } } } }
+      responses:
+        '201': { $ref: '#/components/responses/Source' }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/sources/{id}:
+    parameters: [ { $ref: '#/components/parameters/SourceId' } ]
+    get:
+      tags: [Sources]
+      summary: Une source
+      responses:
+        '200': { $ref: '#/components/responses/Source' }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      tags: [Sources]
+      summary: Modifie le nom ou les canaux ; un changement de canaux recrée la source dans le moteur
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SourcePatch' } } } }
+      responses:
+        '200': { $ref: '#/components/responses/Source' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [Sources]
+      summary: Supprime la source
+      responses:
+        '204': { description: Supprimée }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/sources/{id}/processing/{stage}:
+    parameters:
+      - { $ref: '#/components/parameters/SourceId' }
+      - name: stage
+        in: path
+        required: true
+        schema: { type: string, enum: [mix, input, inputCompressor, eq, hp, lp, pitch] }
+    put:
+      tags: [Sources]
+      summary: Remplace un étage de traitement (objet complet)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/SourceMix'
+                - $ref: '#/components/schemas/SourceInput'
+                - $ref: '#/components/schemas/CompBand'
+                - $ref: '#/components/schemas/Eq'
+                - $ref: '#/components/schemas/Hp'
+                - $ref: '#/components/schemas/Lp'
+                - $ref: '#/components/schemas/Pitch'
+      responses:
+        '200': { $ref: '#/components/responses/Source' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/sources/{id}/processing/bandCompressor/{band}:
+    parameters:
+      - { $ref: '#/components/parameters/SourceId' }
+      - name: band
+        in: path
+        required: true
+        schema: { type: string, enum: [low, mid, high] }
+    put:
+      tags: [Sources]
+      summary: Remplace une bande du compresseur multibande
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CompBand' } } } }
+      responses:
+        '200': { $ref: '#/components/responses/Source' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/sources/{id}/processing/hp/reset:
+    parameters: [ { $ref: '#/components/parameters/SourceId' } ]
+    post:
+      tags: [Sources]
+      summary: Rétablit les valeurs par défaut du filtre passe-haut
+      responses:
+        '200': { $ref: '#/components/responses/Source' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/sources/{id}/processing/lp/reset:
+    parameters: [ { $ref: '#/components/parameters/SourceId' } ]
+    post:
+      tags: [Sources]
+      summary: Rétablit les valeurs par défaut du filtre passe-bas
+      responses:
+        '200': { $ref: '#/components/responses/Source' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/sources/{id}/processing/lp/reset-state:
+    parameters: [ { $ref: '#/components/parameters/SourceId' } ]
+    post:
+      tags: [Sources]
+      summary: Réinitialise l'état interne du filtre MoogFF (400 VALIDATION pour tout autre modèle)
+      responses:
+        '200': { $ref: '#/components/responses/Source' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /api/outputs/cue/copy-master:
+    post:
+      tags: [Sorties]
+      summary: Copie tous les étages de la sortie master vers la sortie cue
+      responses:
+        '200': { $ref: '#/components/responses/Output' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/outputs/{output}/{stage}:
+    parameters:
+      - { $ref: '#/components/parameters/Output' }
+      - name: stage
+        in: path
+        required: true
+        schema: { type: string, enum: [mix, eq, infraHpf, sideHpf, clipper, limiter, compressor] }
+    put:
+      tags: [Sorties]
+      summary: Remplace un étage de sortie (objet complet) ; modèle indisponible, 409 MODEL_UNAVAILABLE et état inchangé
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/OutputMix'
+                - $ref: '#/components/schemas/Eq'
+                - $ref: '#/components/schemas/Hpf'
+                - $ref: '#/components/schemas/Ceiling'
+                - $ref: '#/components/schemas/OutputCompressor'
+      responses:
+        '200': { $ref: '#/components/responses/Output' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/outputs/{output}/processing-graph:
+    parameters: [ { $ref: '#/components/parameters/Output' } ]
+    get:
+      tags: [Sorties]
+      summary: Étages ordonnés avec modèle demandé et modèle chargé (null si indisponible ou sans modèle)
+      responses:
+        '200':
+          description: Graphe de traitement
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/GraphStage' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+
+x-websocket:
+  path: /api/ws
+  description: >
+    Messages JSON { type, data } diffusés à tous les clients. À la connexion, un message
+    stateChanged est envoyé immédiatement.
+  events:
+    stateChanged:
+      description: Après chaque modification de session validée ; même charge utile que GET /api/state.
+      data: { $ref: '#/components/schemas/State' }
+    engineStateChanged:
+      description: À chaque changement d'état du moteur.
+      data: { $ref: '#/components/schemas/EngineState' }
+    engineRuntimeChanged:
+      description: Statut d'exécution de sclang, environ une fois par seconde.
+      data: { $ref: '#/components/schemas/Runtime' }
+    sourceMeter:
+      description: Mesure d'une source, 10 Hz.
+      data: { $ref: '#/components/schemas/SourceMeter' }
+    outputMeter:
+      description: Mesure d'un canal de sortie, 10 Hz.
+      data: { $ref: '#/components/schemas/OutputMeter' }
+
+components:
+  parameters:
+    SourceId:
+      name: id
+      in: path
+      required: true
+      description: Identifiant de la forme src-<n>
+      schema: { type: string, pattern: '^src-[0-9]+$' }
+    Output:
+      name: output
+      in: path
+      required: true
+      schema: { type: string, enum: [master, cue] }
+  responses:
+    Error:
+      description: Erreur
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    EngineState:
+      description: État du moteur
+      content: { application/json: { schema: { $ref: '#/components/schemas/EngineState' } } }
+    AudioProfile:
+      description: Profil audio
+      content: { application/json: { schema: { $ref: '#/components/schemas/AudioProfile' } } }
+    Source:
+      description: Source confirmée
+      content: { application/json: { schema: { $ref: '#/components/schemas/Source' } } }
+    Output:
+      description: Sortie confirmée
+      content: { application/json: { schema: { $ref: '#/components/schemas/Output' } } }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [VALIDATION, NOT_FOUND, CHANNEL_OVERLAP, CHANNEL_LIMIT, ENGINE_NOT_RUNNING, ENGINE_BUSY, MODEL_UNAVAILABLE, SC_COMMAND_FAILED, INTERNAL]
+              description: >
+                VALIDATION 400, NOT_FOUND 404, CHANNEL_OVERLAP 409, CHANNEL_LIMIT 400,
+                ENGINE_NOT_RUNNING 409, ENGINE_BUSY 409, MODEL_UNAVAILABLE 409,
+                SC_COMMAND_FAILED 502, INTERNAL 500.
+            message: { type: string }
+    State:
+      type: object
+      required: [engine, audioProfile, sources, outputs]
+      properties:
+        engine: { $ref: '#/components/schemas/EngineState' }
+        audioProfile: { $ref: '#/components/schemas/AudioProfile' }
+        sources: { type: array, items: { $ref: '#/components/schemas/Source' } }
+        outputs:
+          type: object
+          required: [master, cue]
+          properties:
+            master: { $ref: '#/components/schemas/Output' }
+            cue: { $ref: '#/components/schemas/Output' }
+    EngineState:
+      type: object
+      required: [status, error, scsynthPid, timoxVasio, models]
+      properties:
+        status: { type: string, enum: [stopped, starting, restoring, running, stopping, failed] }
+        error: { type: [string, 'null'] }
+        scsynthPid: { type: [integer, 'null'] }
+        timoxVasio:
+          type: object
+          required: [apiUrl]
+          properties: { apiUrl: { type: string } }
+        models:
+          type: object
+          required: [Compander, CompanderD, FaustRMS]
+          properties:
+            Compander: { type: boolean }
+            CompanderD: { type: boolean }
+            FaustRMS: { type: boolean }
+    Runtime:
+      type: object
+      required: [cpuAvg, cpuPeak, synths, ugens, groups, sampleRateRequested, sampleRateActual, blockSize, hardwareBufferFrames, latencyMs, lastFail]
+      properties:
+        cpuAvg: { type: number }
+        cpuPeak: { type: number }
+        synths: { type: integer }
+        ugens: { type: integer }
+        groups: { type: integer }
+        sampleRateRequested: { type: number }
+        sampleRateActual: { type: number }
+        blockSize: { type: integer }
+        hardwareBufferFrames: { type: integer }
+        latencyMs: { type: number }
+        lastFail: { type: [string, 'null'] }
+    NodeTree:
+      type: object
+      required: [rootId, nodes]
+      properties:
+        rootId: { type: integer }
+        nodes:
+          type: array
+          items:
+            type: object
+            required: [nodeId, parentId, order, kind]
+            properties:
+              nodeId: { type: integer }
+              parentId: { type: integer }
+              order: { type: integer }
+              kind: { type: string, enum: [group, synth] }
+              synthDef: { type: string }
+              controls: { type: object, additionalProperties: true }
+    AudioProfile:
+      type: object
+      additionalProperties: false
+      required: [sampleRate, bufferFrames]
+      properties:
+        sampleRate: { type: integer, enum: [44100, 48000, 88200, 96000] }
+        bufferFrames: { type: integer, enum: [32, 64, 128, 256, 512, 1024, 2048] }
+    SourceCreate:
+      type: object
+      additionalProperties: false
+      required: [name, firstChannel, width]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 60 }
+        firstChannel: { type: integer, minimum: 1, maximum: 256 }
+        width: { type: integer, minimum: 1, maximum: 256 }
+    SourcePatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 60 }
+        firstChannel: { type: integer, minimum: 1, maximum: 256 }
+        width: { type: integer, minimum: 1, maximum: 256 }
+    Source:
+      type: object
+      additionalProperties: false
+      required: [id, name, firstChannel, width, processing]
+      properties:
+        id: { type: string, pattern: '^src-[0-9]+$' }
+        name: { type: string, minLength: 1, maxLength: 60 }
+        firstChannel: { type: integer, minimum: 1, maximum: 256 }
+        width: { type: integer, minimum: 1, maximum: 256 }
+        processing: { $ref: '#/components/schemas/SourceProcessing' }
+    SourceProcessing:
+      type: object
+      additionalProperties: false
+      required: [mix, input, inputCompressor, eq, hp, lp, pitch, bandCompressor]
+      properties:
+        mix: { $ref: '#/components/schemas/SourceMix' }
+        input: { $ref: '#/components/schemas/SourceInput' }
+        inputCompressor: { $ref: '#/components/schemas/CompBand' }
+        eq: { $ref: '#/components/schemas/Eq' }
+        hp: { $ref: '#/components/schemas/Hp' }
+        lp: { $ref: '#/components/schemas/Lp' }
+        pitch: { $ref: '#/components/schemas/Pitch' }
+        bandCompressor:
+          type: object
+          additionalProperties: false
+          required: [low, mid, high]
+          properties:
+            low: { $ref: '#/components/schemas/CompBand' }
+            mid: { $ref: '#/components/schemas/CompBand' }
+            high: { $ref: '#/components/schemas/CompBand' }
+    SourceMix:
+      type: object
+      additionalProperties: false
+      required: [volume, cue, mute, balance]
+      properties:
+        volume: { type: number, minimum: 0, maximum: 1, default: 1 }
+        cue: { type: number, minimum: 0, maximum: 1, default: 0 }
+        mute: { type: boolean, default: false }
+        balance: { type: number, minimum: 0, maximum: 1, default: 0.5 }
+    SourceInput:
+      type: object
+      additionalProperties: false
+      required: [gain]
+      properties:
+        gain: { type: number, minimum: 0, maximum: 1, default: 1 }
+    CompBand:
+      type: object
+      additionalProperties: false
+      required: [thresholdDb, ratio, attackMs, releaseMs, makeupDb, bypass]
+      properties:
+        thresholdDb: { type: number, minimum: -80, maximum: 0, default: -20 }
+        ratio: { type: number, minimum: 1, maximum: 16, default: 4 }
+        attackMs: { type: number, minimum: 1, maximum: 100, default: 10 }
+        releaseMs: { type: number, minimum: 10, maximum: 1000, default: 100 }
+        makeupDb: { type: number, minimum: -24, maximum: 24, default: 0 }
+        bypass: { type: boolean, default: true }
+    Eq:
+      type: object
+      additionalProperties: false
+      required: [low, mid, high]
+      properties:
+        low: { type: number, minimum: 0, maximum: 1, default: 0.5 }
+        mid: { type: number, minimum: 0, maximum: 1, default: 0.5 }
+        high: { type: number, minimum: 0, maximum: 1, default: 0.5 }
+    Hp:
+      type: object
+      additionalProperties: false
+      required: [enabled, model, freq, q, mul, add]
+      properties:
+        enabled: { type: boolean, default: false }
+        model: { type: string, enum: [BHiPass, RHPF, BHiPass4], default: BHiPass }
+        freq: { type: number, minimum: 0, maximum: 1, default: 0 }
+        q: { type: number, minimum: 0.5, maximum: 10, default: 1 }
+        mul: { type: number, minimum: 0, maximum: 2, default: 1 }
+        add: { type: number, minimum: -1, maximum: 1, default: 0 }
+    Lp:
+      type: object
+      additionalProperties: false
+      required: [enabled, model, freq, q, gain, mul, add]
+      properties:
+        enabled: { type: boolean, default: false }
+        model: { type: string, enum: [BLowPass, RLPF, BLowPass4, MoogFF], default: BLowPass }
+        freq: { type: number, minimum: 0, maximum: 1, default: 1 }
+        q: { type: number, minimum: 0.5, maximum: 10, default: 1 }
+        gain: { type: number, minimum: 0, maximum: 4, default: 2 }
+        mul: { type: number, minimum: 0, maximum: 2, default: 1 }
+        add: { type: number, minimum: -1, maximum: 1, default: 0 }
+    Pitch:
+      type: object
+      additionalProperties: false
+      required: [semitones]
+      properties:
+        semitones: { type: integer, minimum: -12, maximum: 12, default: 0 }
+    Output:
+      type: object
+      additionalProperties: false
+      required: [mix, eq, infraHpf, sideHpf, clipper, limiter, compressor]
+      properties:
+        mix: { $ref: '#/components/schemas/OutputMix' }
+        eq: { $ref: '#/components/schemas/Eq' }
+        infraHpf:
+          allOf: [ { $ref: '#/components/schemas/Hpf' } ]
+        sideHpf:
+          type: object
+          additionalProperties: false
+          required: [enabled, hz]
+          properties:
+            enabled: { type: boolean, default: false }
+            hz: { type: number, minimum: 20, maximum: 1000, default: 100 }
+        clipper: { $ref: '#/components/schemas/Ceiling' }
+        limiter: { $ref: '#/components/schemas/Ceiling' }
+        compressor: { $ref: '#/components/schemas/OutputCompressor' }
+    OutputMix:
+      type: object
+      additionalProperties: false
+      required: [volume]
+      properties:
+        volume: { type: number, minimum: 0, maximum: 1, default: 1 }
+    Hpf:
+      type: object
+      description: infraHpf (hz 20..200, défaut 25) ; sideHpf (hz 20..1000, défaut 100, voir Output).
+      additionalProperties: false
+      required: [enabled, hz]
+      properties:
+        enabled: { type: boolean, default: false }
+        hz: { type: number, minimum: 20, maximum: 1000 }
+    Ceiling:
+      type: object
+      description: clipper (plafond défaut 0 dB) ou limiter (défaut -1 dB).
+      additionalProperties: false
+      required: [enabled, ceilingDb]
+      properties:
+        enabled: { type: boolean, default: false }
+        ceilingDb: { type: number, minimum: -24, maximum: 0 }
+    OutputCompressor:
+      type: object
+      additionalProperties: false
+      required: [model, thresholdDb, slopeBelow, slopeAbove, attackMs, releaseMs, mul, add, bypass]
+      properties:
+        model: { type: string, enum: [Compander, CompanderD, FaustRMS], default: Compander }
+        thresholdDb: { type: number, minimum: -80, maximum: 0, default: -20 }
+        slopeBelow: { type: number, minimum: 0.1, maximum: 4, default: 1 }
+        slopeAbove: { type: number, minimum: 0.1, maximum: 4, default: 0.25 }
+        attackMs: { type: number, minimum: 1, maximum: 100, default: 10 }
+        releaseMs: { type: number, minimum: 10, maximum: 1000, default: 100 }
+        mul: { type: number, minimum: 0, maximum: 4, default: 1 }
+        add: { type: number, minimum: -1, maximum: 1, default: 0 }
+        bypass: { type: boolean, default: true }
+    GraphStage:
+      type: object
+      required: [stage, enabled, requestedModel, loadedModel]
+      properties:
+        stage: { type: string, enum: [infraHpf, sideHpf, eq, compressor, clipper, limiter, mix] }
+        enabled: { type: boolean }
+        requestedModel: { type: [string, 'null'] }
+        loadedModel: { type: [string, 'null'] }
+    SourceMeter:
+      type: object
+      required: [sourceId, peakDb, rmsDb]
+      properties:
+        sourceId: { type: string }
+        peakDb: { type: number }
+        rmsDb: { type: number }
+    OutputMeter:
+      type: object
+      required: [output, channel, peakDb, rmsDb]
+      properties:
+        output: { type: string, enum: [master, cue] }
+        channel: { type: string, enum: [left, right] }
+        peakDb: { type: number }
+        rmsDb: { type: number }
