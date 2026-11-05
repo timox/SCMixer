@@ -396,3 +396,26 @@ test('mutate en vol au moment du crash : rejet ENGINE_NOT_RUNNING, aucune valida
   assert.equal(fs.readFileSync(store.file, 'utf8'), before);
   assert.equal(sessions.length, 0);
 });
+
+test('relais : meter et runtime émis depuis le récepteur OSC, runtime() remis à null à l\'arrêt', async () => {
+  const { engine, listener } = setup({ session: sessionWithSource() });
+  const meters = [];
+  const runtimes = [];
+  engine.on('meter', (e) => meters.push(e));
+  engine.on('runtime', (e) => runtimes.push(e));
+  await engine.start();
+  assert.equal(engine.runtime(), null);
+  listener.emit('message', { address: '/mx/source-meter', args: [1, 0, 0.5, 0.25] });
+  listener.emit('message', { address: '/mx/source-meter', args: [1, 42, 0.5, 0.25] });
+  listener.emit('message', { address: '/mx/output-meter', args: [1, 2, 0.5, 0.25] });
+  listener.emit('message', { address: '/mx/ack', args: [999, 'ok', ''] });
+  assert.deepEqual(meters.map((m) => m.type), ['sourceMeter', 'outputMeter']);
+  assert.equal(meters[0].data.sourceId, 'src-1');
+  assert.equal(meters[1].data.output, 'cue');
+  listener.emit('message', { address: '/mx/runtime', args: [1, 2, 3, 4, 5, 48000, 48000, 64, 256, 10, ''] });
+  assert.equal(runtimes.length, 1);
+  assert.equal(runtimes[0].type, 'engineRuntimeChanged');
+  assert.equal(engine.runtime().cpuAvg, 1);
+  await engine.stop();
+  assert.equal(engine.runtime(), null);
+});

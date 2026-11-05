@@ -7,6 +7,7 @@ import { ApiError } from '../contract/errors.js';
 import { setAudioProfile as setSessionAudioProfile } from '../session/session-model.js';
 import { applySessionCode } from '../sc/commands.js';
 import { CommandQueue } from './command-queue.js';
+import { MeterRelay } from './meter-relay.js';
 import { OscListener } from './osc-listener.js';
 import { ProcessRegistry, resolveScsynthWindows } from './process-registry.js';
 
@@ -88,7 +89,7 @@ if(tree.isNil) { Error("Pas de réponse /g_queryTree").throw };
  * États : stopped → starting → restoring → running ; running → stopping → stopped ;
  * arrêt inattendu de sclang ou de scsynth → failed (session.json inchangé).
  * Événements : `state` (EngineState), `session` ({ session, generation }), `runtime`, `meter`
- * (les deux derniers sont alimentés par le relais de mesures, tâche 7).
+ * (alimentés par MeterRelay depuis le récepteur OSC).
  *
  * Chaque démarrage possède un contexte (`ctx`) : sclang, récepteur OSC, file, processus
  * inscrits, surveillance. Un démarrage périmé (abandonné après une panne) libère ce qu'il
@@ -104,7 +105,7 @@ export class EngineProcess extends EventEmitter {
   #session; #generation = 0;
   #meterIds = new Map(); #nextMeterId = 0;
   #ctx = null; #abortBoot = null; #cleanup = Promise.resolve(); #transition = false;
-  #mutations = Promise.resolve();
+  #mutations = Promise.resolve(); #runtime = null;
 
   constructor({
     store, langFactory = defaultLangFactory, registry, dataDir,
@@ -145,6 +146,9 @@ export class EngineProcess extends EventEmitter {
 
   /** Récepteur OSC de la session moteur en cours (null moteur arrêté) ; sert au relais de mesures. */
   get oscListener() { return this.#ctx?.listener ?? null; }
+
+  /** Dernier statut runtime reçu de sclang (null moteur arrêté ou avant la première mesure). */
+  runtime() { return this.#runtime ? { ...this.#runtime } : null; }
 
   /** Source associée à un identifiant de vumètre, ou undefined. */
   resolveSourceId(meterId) {
@@ -243,6 +247,18 @@ export class EngineProcess extends EventEmitter {
   async #boot(ctx) {
     this.#rebuildMeterIds();
     ctx.listener = this.#listenerFactory();
+    const relay = new MeterRelay((meterId) => this.resolveSourceId(meterId) ?? null);
+    ctx.listener.on('message', (message) => {
+      if (this.#ctx !== ctx) return;
+      const event = relay.handle(message);
+      if (!event) return;
+      if (event.type === 'engineRuntimeChanged') {
+        this.#runtime = event.data;
+        this.emit('runtime', event);
+      } else {
+        this.emit('meter', event);
+      }
+    });
     const relayPort = await ctx.listener.start();
     await this.#alive(ctx);
     const includePaths = [path.join(SC_DIR, 'plugins')];
@@ -363,6 +379,7 @@ export class EngineProcess extends EventEmitter {
   #failInternal(error) {
     const ctx = this.#ctx;
     this.#ctx = null;
+    this.#runtime = null;
     const message = error?.message ?? String(error);
     ctx?.queue?.dispose(this.#notRunning(message));
     this.#setStatus('failed', message);
@@ -421,6 +438,7 @@ export class EngineProcess extends EventEmitter {
       }
       const ctx = this.#ctx;
       this.#ctx = null;
+      this.#runtime = null;
       this.#setStatus('stopping');
       ctx?.queue?.dispose(this.#notRunning('arrêt en cours'));
       try {
