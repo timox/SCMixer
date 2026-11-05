@@ -32,6 +32,8 @@ server.options.device = "MME : Mappeur de sons Microsoft - Output";
 server.options.numInputBusChannels = 0;
 server.options.numOutputBusChannels = 4;
 
+// Jeton normalement posé par engine.scd (SYNTHDEF_TIMEOUT_SECONDS).
+~mxSynthDefTimeout = 5;
 (root +/+ "sc" +/+ "graph.scd").load;
 
 server.waitForBoot({
@@ -59,6 +61,16 @@ server.waitForBoot({
     try { ~mxEnsureWidth.(3) } { |error| raised = error.errorString.find("Échec serveur").notNil };
     check.(raised, "~mxEnsureWidth n'a pas signalé l'échec du serveur");
     check.(~mxBuiltWidths.includes(3).not, "largeur marquée construite malgré l'échec");
+
+    // Délai de vérification : obligatoire, et une absence de réponse du serveur est une erreur explicite
+    // (serveur fantôme jamais démarré : aucun /n_info ni /fail ne revient).
+    raised = false;
+    try { ~mxSynthDefLoaded.(server, \mx_any, nil) } { |error| raised = error.errorString.find("non défini").notNil };
+    check.(raised, "~mxSynthDefLoaded accepte un délai nil");
+    raised = false;
+    try { ~mxSynthDefLoaded.(Server(\mxghost, NetAddr("127.0.0.1", 57144)), \mx_any, 0.3) } { |error|
+      raised = error.errorString.find("Délai de 0.3 s dépassé").notNil };
+    check.(raised, "absence de réponse du serveur non signalée par une erreur de délai");
 
     finish.("MX-TEST-OK");
   } { |error|

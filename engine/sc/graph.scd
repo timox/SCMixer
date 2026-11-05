@@ -52,7 +52,16 @@
 // Fondu du compresseur de sortie : durée du VarLag de l'écrivain, puis marge avant de libérer
 // l'ancien Synth (Server-Command-Reference /n_free : un nœud non silencieux libéré peut cliquer).
 ~mxFadeSeconds = 0.05;
-~mxFadeMarginSeconds = 0.25;
+// Marge avant libération : 8 périodes matérielles (hardwareBufferSize / sampleRate du serveur, issus de
+// l'horloge TimoxVasio) avec un plancher de 0.1 s. Le `set` du fondu et le `/n_free` partent sans
+// horodatage ; la marge couvre la gigue d'ordonnancement SystemClock et le traitement par blocs. À 256
+// images et 48 kHz (5.3 ms) le plancher s'applique ; à 2048 images la marge vaut 0.34 s.
+~mxFadeMarginPeriods = 8;
+~mxFadeMarginFloorSeconds = 0.1;
+~mxFadeMargin = { |server|
+  var period = (server.options.hardwareBufferSize ? 0) / (server.sampleRate ? server.options.sampleRate ? 48000);
+  max(~mxFadeMarginFloorSeconds, ~mxFadeMarginPeriods * period)
+};
 ~mxInitDone = false;
 ~mxHpModels = (BHiPass: 0, RHPF: 1, BHiPass4: 2);
 ~mxLpModels = (BLowPass: 0, RLPF: 1, BLowPass4: 2, MoogFF: 3);
@@ -114,7 +123,7 @@
 };
 
 // Seul écrivain matériel de chaque sortie ; les processeurs écrivent sur deux bus privés.
-~mxOutputWriterDef = SynthDef(\mx_output_writer, { |inA, inB, out, mix=0, fadeSeconds=0.05, meterId=0|
+~mxOutputWriterDef = SynthDef(\mx_output_writer, { |inA, inB, out, mix=0, fadeSeconds=(~mxFadeSeconds), meterId=0|
   var blend = VarLag.kr(mix, fadeSeconds, warp: \linear);
   var sig = (In.ar(inA, 2) * (1 - blend)) + (In.ar(inB, 2) * blend);
   SendPeakRMS.kr(sig[0], 10, 0.25, '/mx/output-meter', meterId);
@@ -174,7 +183,7 @@
   var found;
   SynthDef(name, graphFunc).add;
   server.sync;
-  found = ~mxSynthDefLoaded.(server, name);
+  found = ~mxSynthDefLoaded.(server, name, ~mxSynthDefTimeout);
   server.sendMsg('/d_free', name);
   server.sync;
   found
@@ -504,8 +513,8 @@
       0.5.wait;
       state[\writer].set(\mix, state[\slot]);
       state[\phase] = \fading;
-      // Durée du fondu de l'écrivain plus une marge de 0.25 s (≥ 40 périodes matérielles de 256 images à 48 kHz).
-      (~mxFadeSeconds + ~mxFadeMarginSeconds).wait;
+      // Durée du fondu de l'écrivain plus la marge dérivée de la période matérielle (~mxFadeMargin).
+      (~mxFadeSeconds + ~mxFadeMargin.(~mxServer)).wait;
       state[\old].free;
       state[\old] = nil;
       state[\phase] = \stable;

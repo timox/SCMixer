@@ -9,7 +9,7 @@ import { CommandQueue } from './command-queue.js';
 import { MeterRelay } from './meter-relay.js';
 import { OscListener } from './osc-listener.js';
 import { ProcessRegistry, resolveScsynthWindows } from './process-registry.js';
-import { DEFAULT_SIZING, assertSessionFitsSizing, computeServerOptions } from './server-options.js';
+import { DEFAULT_SIZING, SYNTHDEF_TIMEOUT_SECONDS, assertSessionFitsSizing, computeServerOptions } from './server-options.js';
 import { TimoxVasioClient } from './timoxvasio-client.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -219,6 +219,7 @@ export class EngineProcess extends EventEmitter {
       __MX_MAX_NODES__: String(options.maxNodes),
       __MX_MEM_SIZE_KB__: String(options.memSize),
       __MX_BLOCK_SIZE__: String(options.blockSize),
+      __MX_SYNTHDEF_TIMEOUT__: String(SYNTHDEF_TIMEOUT_SECONDS),
       __MX_SC_DIR__: fwd(SC_DIR),
       __MX_DEVICE__: AUDIO_DEVICE,
       __MX_SAMPLE_RATE__: String(sampleRate),
@@ -316,6 +317,12 @@ export class EngineProcess extends EventEmitter {
       writeLog(stream, text);
       const m = /PortAudio failed[^\r\n]*|could not initialize audio/.exec(String(text));
       if (m) ctx.audioCause = ctx.audioCause ? `${ctx.audioCause} ; ${m[0]}` : m[0];
+      // Échec annoncé par engine.scd (garde de démarrage, graphe) : la vraie cause remplace l'attente d'un délai.
+      const fail = /MX-ENGINE-FAIL ([^\r\n]*)/.exec(String(text));
+      if (fail && !ctx.engineFail) {
+        ctx.engineFail = fail[1];
+        this.#onFailure(ctx, new Error(`sclang a refusé le démarrage : ${fail[1]}`));
+      }
     };
     const lang = await this.#langFactory({ includePaths, langPort: this.#langPort, scDir: this.#scDir, onOutput });
     ctx.lang = lang;

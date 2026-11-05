@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 export const MAX_CHANNELS = 256;
+/** Maximum de la plage d'attaque (ms) : borne unique du contrat, dont dérive le délai maximal de CompanderD. */
+export const ATTACK_MS_MAX = 100;
 export const SOURCE_STAGES = ['mix', 'input', 'inputCompressor', 'eq', 'hp', 'lp', 'pitch'];
 export const OUTPUT_STAGES = ['mix', 'eq', 'infraHpf', 'sideHpf', 'clipper', 'limiter', 'compressor'];
 export const BANDS = ['low', 'mid', 'high'];
@@ -12,7 +14,7 @@ const name = () => z.string().min(1).max(60);
 export const CompBand = z.strictObject({
   thresholdDb: range(-80, 0),
   ratio: range(1, 16),
-  attackMs: range(1, 100),
+  attackMs: range(1, ATTACK_MS_MAX),
   releaseMs: range(10, 1000),
   makeupDb: range(-24, 24),
   bypass: z.boolean(),
@@ -74,7 +76,7 @@ export const Output = z.strictObject({
     thresholdDb: range(-80, 0),
     slopeBelow: range(0.1, 4),
     slopeAbove: range(0.1, 4),
-    attackMs: range(1, 100),
+    attackMs: range(1, ATTACK_MS_MAX),
     releaseMs: range(10, 1000),
     mul: range(0, 4),
     add: range(-1, 1),

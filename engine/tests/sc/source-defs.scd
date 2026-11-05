@@ -89,6 +89,8 @@ server.options.numInputBusChannels = 0;
 server.options.numOutputBusChannels = 4;
 server.options.ugenPluginsPath = [Platform.resourceDir +/+ "plugins", root +/+ "sc" +/+ "plugins"];
 
+// Jeton normalement posé par engine.scd (SYNTHDEF_TIMEOUT_SECONDS).
+~mxSynthDefTimeout = 5;
 (root +/+ "sc" +/+ "graph.scd").load;
 
 server.waitForBoot({
@@ -112,7 +114,12 @@ server.waitForBoot({
     // CompanderD : maxdelaytime du DelayN fixé à la plage d'attaque maximale (0.1 s), pas à l'argument d'attaque.
     delays = SynthDescLib.global[\mx_output_companderD].def.children.select { |u| u.class == DelayN };
     check.(delays.size == 2, "DelayN du modèle CompanderD : " ++ delays.size);
-    delays.do { |u| check.(u.inputs[1].isNumber and: { u.inputs[1] == 0.1 }, "maxdelaytime de DelayN : " ++ u.inputs[1]) };
+    delays.do { |u| check.(u.inputs[1].isNumber and: { u.inputs[1] == ~mxCompanderDMaxDelay }, "maxdelaytime de DelayN : " ++ u.inputs[1]) };
+    // Marge du fondu : plancher à la période de test (hardwareBufferSize non posé), 8 périodes au-delà.
+    check.(~mxFadeMargin.(server) == ~mxFadeMarginFloorSeconds, "marge de fondu au plancher : " ++ ~mxFadeMargin.(server));
+    check.((~mxFadeMargin.((options: (hardwareBufferSize: 2048), sampleRate: 48000)) - (8 * 2048 / 48000)).abs < 1e-9,
+      "marge de fondu à 2048 images : " ++ ~mxFadeMargin.((options: (hardwareBufferSize: 2048), sampleRate: 48000)));
+    check.(~mxFadeMargin.((options: (hardwareBufferSize: 256), sampleRate: 48000)) == ~mxFadeMarginFloorSeconds, "plancher à 256 images");
 
     // Groupes : sources avant sorties.
     defaultTree = query.(server.defaultGroup.nodeID);

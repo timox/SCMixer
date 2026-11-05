@@ -32,9 +32,15 @@ paths:
     post:
       tags: [Moteur]
       summary: Lit l'horloge audio de TimoxVasio (409 TIMOXVASIO_NOT_READY s'il n'est pas prêt), démarre sclang et scsynth puis restaure la session
+      description: >
+        409 ENGINE_RESTART_REQUIRED si la session persistée dépasse le dimensionnement de scsynth (nombre
+        maximal de sources ou largeur maximale) : le démarrage est refusé avant tout lancement de sclang.
+        Un refus de démarrage annoncé par sclang (ligne MX-ENGINE-FAIL : garde de bus, échec du graphe)
+        renvoie 502 SC_COMMAND_FAILED avec la cause dans le message.
       responses:
         '200': { $ref: '#/components/responses/EngineState' }
         '409': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
   /api/engine/stop:
     post:
       tags: [Moteur]

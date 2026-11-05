@@ -29,7 +29,11 @@ class FakeLang extends EventEmitter {
     this.process = { pid: 7001, spawnfile: 'sclang.exe', spawnargs: ['sclang.exe', '-u', '57131'] };
     this.quitCalled = false;
   }
-  async executeFile(file) { this.calls.push(`file:${path.basename(file)}`); this.bootSource = fs.readFileSync(file, 'utf8'); }
+  async executeFile(file) {
+    this.calls.push(`file:${path.basename(file)}`);
+    this.bootSource = fs.readFileSync(file, 'utf8');
+    if (this.opts.outputOnExecute) this.factoryOptions.onOutput('stdout', this.opts.outputOnExecute);
+  }
   async interpret(code) {
     this.calls.push(code);
     if (code.includes('~mxBootState')) return this.opts.bootState ? this.opts.bootState() : 1;
@@ -132,7 +136,8 @@ test('start fixe les options de scsynth calculées : bus, interconnexions, nœud
   assert.match(src, /numAudioBusChannels = 1024;/);
   assert.match(src, /numWireBufs = 2048;/);
   assert.match(src, /maxNodes = 4096;/);
-  assert.match(src, /memSize = 81920;/);
+  assert.match(src, /memSize = 147456;/);
+  assert.match(src, /~mxSynthDefTimeout = 5;/);
   assert.match(src, /blockSize = 64;/);
   assert.doesNotMatch(src, /numAudioBusChannels = 2048|numWireBufs = 8192|memSize = 262144/);
 });
@@ -147,7 +152,7 @@ test('le dimensionnement choisi est journalisé dans sclang.log à chaque démar
   assert.equal(lines.length, 2);
   assert.match(lines[0], /"numWireBufs":2048/);
   assert.match(lines[0], /"maxNodes":4096/);
-  assert.match(lines[0], /"memSize":81920/);
+  assert.match(lines[0], /"memSize":147456/);
   assert.match(lines[0], /"maxSources":256/);
   await engine.stop();
 });
@@ -174,6 +179,19 @@ test('start refuse, avant tout démarrage de sclang, une session persistée au-d
   await assert.rejects(engine.start(), (e) => e.code === 'ENGINE_RESTART_REQUIRED' && e.status === 409);
   assert.equal(langs.length, 0);
   assert.equal(engine.state().status, 'stopped');
+});
+
+test("start : l'échec annoncé par engine.scd (MX-ENGINE-FAIL) devient la cause de l'ApiError, sans attendre un délai", async () => {
+  const cause = 'Bus.audio alloué avant le boot du serveur (allocateur non reconstruit)';
+  const { engine, dataDir } = setup({ lang: { outputOnExecute: `MX-ENGINE-FAIL ${cause}
+`, bootState: () => 0 } });
+  const started = Date.now();
+  await assert.rejects(engine.start(), (e) => e.code === 'SC_COMMAND_FAILED' && e.status === 502 && e.message.includes(cause)
+    && e.message.includes('sclang a refusé le démarrage'));
+  assert.ok(Date.now() - started < 5000, 'doit échouer immédiatement, pas sur un délai');
+  assert.equal(engine.state().status, 'failed');
+  assert.ok(engine.state().error.includes(cause));
+  assert.match(fs.readFileSync(path.join(dataDir, 'logs', 'sclang.log'), 'utf8'), /MX-ENGINE-FAIL Bus.audio/);
 });
 
 test('mutate pendant restoring : ENGINE_BUSY', async () => {

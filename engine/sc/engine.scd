@@ -4,7 +4,7 @@
  * Le lanceur substitue les jetons __MX_SC_DIR__, __MX_DEVICE__,
  * __MX_SAMPLE_RATE__, __MX_BUFFER__ et __MX_RELAY_PORT__ ainsi que les jetons de
  * dimensionnement __MX_NUM_INPUTS__, __MX_NUM_OUTPUTS__, __MX_NUM_AUDIO_BUSES__,
- * __MX_WIRE_BUFS__, __MX_MAX_NODES__, __MX_MEM_SIZE_KB__ et __MX_BLOCK_SIZE__ (calculés par
+ * __MX_WIRE_BUFS__, __MX_MAX_NODES__, __MX_MEM_SIZE_KB__, __MX_BLOCK_SIZE__ et __MX_SYNTHDEF_TIMEOUT__ (calculés par
  * src/runtime/server-options.js à partir des besoins mesurés) avant l'exécution. Ce fichier
  * ne contient que la configuration du serveur et le démarrage ; le graphe, les SynthDefs
  * et les fonctions ~mx* sont dans graph.scd (sans jeton, donc chargeable par
@@ -17,6 +17,17 @@
  */
 var dir = "__MX_SC_DIR__";
 var options;
+
+// Échec de démarrage : une ligne "MX-ENGINE-FAIL <cause>" est écrite sur la sortie de sclang (capturée par le
+// lanceur, qui l'attache à l'erreur renvoyée par l'API), puis l'erreur est levée.
+~mxBootState = 0;
+~mxFail = { |reason|
+  ~mxBootState = -1;
+  ("MX-ENGINE-FAIL " ++ reason).postln;
+  Error(reason).throw
+};
+// Délai (s) de vérification du chargement d'un SynthDef (jeton calculé par server-options.js).
+~mxSynthDefTimeout = __MX_SYNTHDEF_TIMEOUT__;
 
 // Serveur dédié : UDP 57130 sur la boucle locale (57110 appartient à un autre produit).
 s = Server(\mxEngine, NetAddr("127.0.0.1", 57130), ServerOptions.new);
@@ -41,8 +52,8 @@ options.ugenPluginsPath = [Platform.resourceDir +/+ "plugins", dir +/+ "plugins"
 // Vérification du résultat des setters (un ordre inversé décalerait le premier bus privé).
 if(options.firstPrivateBus != (options.numInputBusChannels + options.numOutputBusChannels)
   or: { options.numAudioBusChannels != __MX_NUM_AUDIO_BUSES__ }) {
-  Error("Options de bus incohérentes : firstPrivateBus=" ++ options.firstPrivateBus
-    ++ " numAudioBusChannels=" ++ options.numAudioBusChannels).throw;
+  ~mxFail.("Options de bus incohérentes : firstPrivateBus=" ++ options.firstPrivateBus
+    ++ " numAudioBusChannels=" ++ options.numAudioBusChannels);
 };
 // Valeurs effectivement appliquées, relues depuis ServerOptions (journal sclang.log à chaque démarrage).
 ("MX-ENGINE-OPTIONS " ++ [\numInputBusChannels, \numOutputBusChannels, \numAudioBusChannels,
@@ -57,7 +68,6 @@ if(options.firstPrivateBus != (options.numInputBusChannels + options.numOutputBu
 ~mxAck = { |reqId, status, message|
   NetAddr("127.0.0.1", ~mxRelayPort).sendMsg('/mx/ack', reqId, status, message)
 };
-~mxBootState = 0;
 
 // Relais OSC vers le service Node (port __MX_RELAY_PORT__). Les réponses SendPeakRMS arrivent à sclang :
 // elles sont retransmises telles quelles (Master et Cue). Création unique par démarrage : les
@@ -91,14 +101,19 @@ ShutDown.add({ ~mxStopRelay.value });
 
 // Garde : aucune allocation de bus audio client n'a eu lieu avant le boot (l'allocateur serait périmé).
 if(s.audioBusAllocator.top != ~mxPreBootAudioTop) {
-  Error("Bus.audio alloué avant le boot du serveur (allocateur non reconstruit)").throw;
+  ~mxFail.("Bus.audio alloué avant le boot du serveur (allocateur non reconstruit)");
 };
 
 s.waitForBoot({
-  ~mxInit.(s);
-  ~mxStartRelay.value;
-  ~mxBootState = 1;
-  "MX-ENGINE-READY".postln;
+  try {
+    ~mxInit.(s);
+    ~mxStartRelay.value;
+    ~mxBootState = 1;
+    "MX-ENGINE-READY".postln;
+  } { |error|
+    ~mxBootState = -1;
+    ("MX-ENGINE-FAIL initialisation du graphe : " ++ error.errorString).postln;
+  };
 }, onFailure: {
   ~mxBootState = -1;
   "MX-ENGINE-FAIL démarrage du serveur impossible".postln;

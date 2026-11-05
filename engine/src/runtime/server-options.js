@@ -1,5 +1,5 @@
 import { ApiError } from '../contract/errors.js';
-import { MAX_CHANNELS } from '../contract/schemas.js';
+import { ATTACK_MS_MAX, MAX_CHANNELS } from '../contract/schemas.js';
 
 /**
  * Dimensionnement de scsynth, calculé à partir des besoins mesurés du moteur (jamais de valeur
@@ -30,6 +30,9 @@ const NUM_OUTPUTS = 4;
 const BLOCK_SIZE = 64; // défaut de ServerOptions.blockSize, non modifié : 64 images par bloc de contrôle
 const FIRST_PRIVATE_BUS = NUM_INPUTS + NUM_OUTPUTS;
 const ENGINE_PRIVATE_BUSES = 12;
+// Nœuds du moteur hors sources : root (1), groupe par défaut (1), groupes sources, bancs et sorties (3),
+// 2 processeurs de sortie et 2 écrivains (4), 2 processeurs de sortie supplémentaires vivants pendant un
+// fondu de compresseur, un par sortie (2), Synth de test de ~mxSynthDefLoaded (1) : 1 + 1 + 3 + 4 + 2 + 1 = 12.
 const ENGINE_NODES = 12;
 const NODES_PER_SOURCE = 8;
 
@@ -47,9 +50,13 @@ const MEMORY_STEP_KB = 8192; // arrondi de memSize au multiple de 8 Mo (défaut 
 // Mémoire temps réel mesurée (octets) à 48 kHz sur scsynth 3.14.1 par saturation de memSize.
 const SYNTH_BYTES_PER_CHANNEL = 16 * 1024; // structures des 7 Synths d'une source de largeur 256 : 3,95 Mo / 256 = 15,4 Ko
 const SYNTH_BYTES_PER_SOURCE = 32 * 1024; // 8 Synths de petite largeur : moins de 4 Ko chacun
-const PITCH_WINDOW_SECONDS = 0.2; // windowSize figé dans la def de pitch (exposé en 8b-2)
+/** windowSize de PitchShift (s). Valeur de ~mxPitchWindowSeconds dans source-defs.scd (test d'égalité) ; exposé en 8b-2. */
+export const PITCH_WINDOW_SECONDS = 0.2;
 const PITCH_OVERHEAD = 1.15; // ajustement mesuré : 48 kHz 136..139 Ko, 96 kHz 273..282 Ko, 192 kHz 546..585 Ko par canal
-const DELAYN_MAX_SECONDS = 0.1; // maxdelaytime de CompanderD (maximum de la plage d'attaque, 100 ms)
+/** maxdelaytime de CompanderD (s) : maximum de la plage d'attaque du contrat. Valeur de ~mxCompanderDMaxDelay dans graph.scd (test d'égalité). */
+export const DELAYN_MAX_SECONDS = ATTACK_MS_MAX / 1000;
+/** Délai (s) d'attente de la réponse de scsynth pour la vérification du chargement d'un SynthDef (jeton __MX_SYNTHDEF_TIMEOUT__). */
+export const SYNTHDEF_TIMEOUT_SECONDS = 5;
 const DELAYN_OVERHEAD = 1.28; // mesuré : 82 Ko pour 2 x 32 Ko de tampon
 const LIMITER_BYTES_PER_48K = 24 * 1024; // mesuré : 19,3 Ko pour deux canaux, dur = 0,01 s
 const OUTPUT_SYNTH_BYTES = 64 * 1024; // structure d'un Synth de sortie
@@ -89,7 +96,10 @@ export function serverNeeds({ maxSourceWidth = DEFAULT_SIZING.maxSourceWidth, ma
   const wireBufs = wireBufsNeeded(maxSourceWidth);
   const nodes = NODES_PER_SOURCE * sources + ENGINE_NODES;
   const wireBufBytes = pow2ceil(wireBufs * WIRE_MARGIN) * BLOCK_SIZE * 4;
-  const memoryBytes = channels * (pitchBytesPerChannel(sampleRate) + SYNTH_BYTES_PER_CHANNEL)
+  // ~mxSynthDefLoaded instancie brièvement chaque def de la largeur construite (la plus lourde : pitch, avec ses
+  // tampons) pendant que les sources existantes vivent : un pic transitoire d'une def de largeur maximale.
+  const probeBytes = maxSourceWidth * (pitchBytesPerChannel(sampleRate) + SYNTH_BYTES_PER_CHANNEL);
+  const memoryBytes = probeBytes + channels * (pitchBytesPerChannel(sampleRate) + SYNTH_BYTES_PER_CHANNEL)
     + sources * SYNTH_BYTES_PER_SOURCE + outputBytes(sampleRate) + wireBufBytes + FIXED_BYTES;
   return { firstPrivateBus: FIRST_PRIVATE_BUS, channels, sources, audioBuses, wireBufs, nodes, memoryBytes };
 }

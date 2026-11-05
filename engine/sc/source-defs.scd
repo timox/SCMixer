@@ -14,6 +14,10 @@
  *   makeupDb -> makeupDb.dbamp ; balance 0..1 -> pan = balance * 2 - 1.
  */
 
+// windowSize de PitchShift (s) : source de vérité côté sclang ; PITCH_WINDOW_SECONDS (server-options.js)
+// en dérive le dimensionnement de memSize, l'égalité est vérifiée par tests/server-options.test.js.
+~mxPitchWindowSeconds = 0.2;
+
 ~mxDefName = { |kind, width| ("mx_" ++ kind ++ "_" ++ width).asSymbol };
 
 // Compression liée : un seul signal de contrôle (maximum des valeurs absolues) pour tous les canaux.
@@ -98,7 +102,7 @@
 
     SynthDef(name.(\pitch), { |bus, pitch=0, controlLag=0.05|
       var sig = In.ar(bus, w);
-      var shifted = PitchShift.ar(sig, 0.2, pitch.lag(controlLag).midiratio, 0, 0.01);
+      var shifted = PitchShift.ar(sig, ~mxPitchWindowSeconds, pitch.lag(controlLag).midiratio, 0, 0.01);
       // PitchShift colore le signal même au rapport 1 : chemin direct à zéro demi-ton.
       ReplaceOut.ar(bus, XFade2.ar(sig, shifted, ((pitch.abs > 0).lag(controlLag) * 2) - 1));
     }),
@@ -150,16 +154,23 @@
 // (scsynth n'écrit que « exception in GraphDef_Recv » sur sa sortie) et /sync ne signale pas cet échec :
 // seule l'existence du nœud créé prouve que le SynthDef est chargé (Server-Command-Reference :
 // /d_recv, /s_new, /n_query ; /s_new d'un SynthDef absent répond /fail). À appeler depuis une Routine.
-~mxSynthDefLoaded = { |server, name, timeout=5|
-  var found = false, cond = Condition.new, nodeId, info, fail;
+// `timeout` (secondes) est obligatoire : ~mxSynthDefTimeout, jeton __MX_SYNTHDEF_TIMEOUT__ d'engine.scd
+// (SYNTHDEF_TIMEOUT_SECONDS dans server-options.js). Sans réponse du serveur dans ce délai, une erreur
+// explicite est levée (ce n'est pas « SynthDef absent »).
+~mxSynthDefLoaded = { |server, name, timeout|
+  var found = false, answered = false, cond = Condition.new, nodeId, info, fail;
+  if(timeout.isNumber.not) { Error("~mxSynthDefLoaded : délai d'attente non défini (~mxSynthDefTimeout)").throw };
   nodeId = server.nextNodeID;
-  info = OSCFunc({ |msg| if(msg[1] == nodeId) { found = true; cond.test = true; cond.signal } }, '/n_info', server.addr);
-  fail = OSCFunc({ |msg| if(msg[1] == '/n_query') { cond.test = true; cond.signal } }, '/fail', server.addr);
+  info = OSCFunc({ |msg| if(msg[1] == nodeId) { found = true; answered = true; cond.test = true; cond.signal } }, '/n_info', server.addr);
+  fail = OSCFunc({ |msg| if(msg[1] == '/n_query') { answered = true; cond.test = true; cond.signal } }, '/fail', server.addr);
   server.sendBundle(nil, ['/s_new', name, nodeId, 1, server.defaultGroup.nodeID], ['/n_query', nodeId], ['/n_free', nodeId]);
   SystemClock.sched(timeout, { cond.test = true; cond.signal; nil });
   cond.wait;
   info.free;
   fail.free;
+  if(answered.not) {
+    Error("Délai de " ++ timeout ++ " s dépassé : aucune réponse de scsynth à la vérification du SynthDef " ++ name).throw;
+  };
   server.sync;
   found
 };
@@ -176,7 +187,7 @@
     defs = ~mxBuildSourceDefs.(w);
     defs.do { |def| def.add };
     ~mxServer.sync;
-    missing = defs.reject { |def| ~mxSynthDefLoaded.(~mxServer, def.name) };
+    missing = defs.reject { |def| ~mxSynthDefLoaded.(~mxServer, def.name, ~mxSynthDefTimeout) };
     if(missing.notEmpty) {
       Error("Échec serveur à la création des SynthDefs de largeur " ++ w ++ " : "
         ++ missing.collect { |def| def.name }.join(", ") ++ " non chargés (voir la sortie de scsynth)").throw;

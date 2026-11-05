@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { computeServerOptions } from '../src/runtime/server-options.js';
+import { computeServerOptions, SYNTHDEF_TIMEOUT_SECONDS } from '../src/runtime/server-options.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const sclang = process.env.SCLANG_PATH || 'C:\\Program Files\\SuperCollider-3.14.1\\sclang.exe';
@@ -79,6 +79,7 @@ function testEngineSource(options) {
     __MX_MAX_NODES__: String(options.maxNodes),
     __MX_MEM_SIZE_KB__: String(options.memSize),
     __MX_BLOCK_SIZE__: String(options.blockSize),
+    __MX_SYNTHDEF_TIMEOUT__: String(SYNTHDEF_TIMEOUT_SECONDS),
   };
   let source = fs.readFileSync(path.resolve(here, '..', 'sc', 'engine.scd'), 'utf8');
   for (const [token, value] of Object.entries(tokens)) {
