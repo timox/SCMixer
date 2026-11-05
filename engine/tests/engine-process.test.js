@@ -30,7 +30,7 @@ class FakeLang extends EventEmitter {
   async executeFile(file) { this.calls.push(`file:${path.basename(file)}`); this.bootSource = fs.readFileSync(file, 'utf8'); }
   async interpret(code) {
     this.calls.push(code);
-    if (code.includes('~mxBootState')) return 1;
+    if (code.includes('~mxBootState')) return this.opts.bootState ? this.opts.bootState() : 1;
     if (code.includes('s.pid')) return [7002, 57130, 'C:\\SC\\scsynth.exe'];
     if (code.includes('~mxModels')) return [this.opts.companderD ?? true, this.opts.faustRMS ?? false];
     const m = /~mxAck\.\((\d+), "ok"/.exec(code);
@@ -71,10 +71,11 @@ function setup(opts = {}) {
       langs.push(lang);
       return lang;
     },
-    resolveScsynth: async () => ({
+    ...(opts.engine ?? {}),
+    resolveScsynth: opts.resolveScsynth ?? (async () => ({
       launcher: { processId: 7002, parentProcessId: 7001, commandLine: 'cmd.exe /c scsynth' },
       server: { processId: 7003, parentProcessId: 7002, commandLine: 'scsynth.exe -u 57130', serverPort: 57130 },
-    }),
+    })),
     isAlive: opts.isAlive ?? (() => false),
     killProcess: opts.killProcess ?? (() => {}),
     watchIntervalMs: opts.watchIntervalMs ?? 0,
@@ -308,4 +309,90 @@ test('arrêt : scsynth récalcitrant terminé seulement si l’identité corresp
   await engine.stop();
   assert.deepEqual(killed, [7003]);
   assert.equal(engine.state().status, 'stopped');
+});
+
+const registryPids = (dataDir) => JSON.parse(fs.readFileSync(path.join(dataDir, 'runtime-processes.json'), 'utf8')).map((e) => e.pid);
+
+test('setAudioProfile pendant une transition : ENGINE_BUSY, profil inchangé', async () => {
+  const { engine, langs, store } = setup({ lang: { holdWhen: () => true }, session: sessionWithSource() });
+  const starting = engine.start();
+  while (engine.state().status !== 'restoring') await wait(5);
+  await assert.rejects(engine.setAudioProfile({ sampleRate: 96000, bufferFrames: 512 }), (e) => e.code === 'ENGINE_BUSY');
+  assert.equal(engine.session().audioProfile.sampleRate, 48000);
+  assert.equal(store.load().audioProfile.sampleRate, 48000);
+  langs[0].release();
+  await starting;
+});
+
+test('échec du démarrage après inscription : sclang et scsynth libérés, registre vide', async () => {
+  const { engine, langs, listener, dataDir } = setup({ lang: { bootState: () => -1 } });
+  await assert.rejects(engine.start(), /pilote audio/);
+  assert.equal(engine.state().status, 'failed');
+  await wait(20);
+  assert.equal(langs[0].quitCalled, true);
+  assert.equal(listener.stopped, 1);
+  assert.deepEqual(registryPids(dataDir), []);
+  const state = await engine.stop();
+  assert.equal(state.status, 'stopped');
+});
+
+test('scsynth non identifiable : erreur explicite avec PID, aucun processus inconnu n est tué', async () => {
+  const killed = [];
+  const { engine, langs, dataDir } = setup({
+    resolveScsynth: async () => { throw new Error('introuvable'); },
+    engine: { resolveAttempts: 1 },
+    killProcess: (pid) => killed.push(pid),
+    isAlive: () => true,
+  });
+  await assert.rejects(engine.start(), (e) => /PID 7002/.test(e.message) && /PID 7001/.test(e.message) && /manuellement/.test(e.message));
+  await wait(20);
+  assert.deepEqual(killed, []);
+  assert.equal(langs[0].quitCalled, true);
+  assert.deepEqual(registryPids(dataDir), []);
+});
+
+test('démarrage périmé : libère ses ressources, ne change jamais l état', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  let first = true;
+  const { engine, langs, listener, dataDir } = setup({
+    lang: { bootState: () => { if (first) { first = false; return gate; } return 1; } },
+  });
+  const states = [];
+  engine.on('state', (s) => states.push(s.status));
+  const starting = engine.start();
+  while (!langs[0] || !langs[0].calls.some((c) => c.includes('~mxBootState'))) await wait(5);
+  langs[0].crash();
+  await assert.rejects(starting);
+  assert.equal(engine.state().status, 'failed');
+  const before = states.length;
+  release(1);
+  await wait(50);
+  assert.equal(engine.state().status, 'failed');
+  assert.equal(states.length, before);
+  assert.equal(langs[0].commands().length, 0);
+  assert.deepEqual(registryPids(dataDir), []);
+  assert.ok(listener.stopped >= 1);
+});
+
+test('sclang qui ne répond pas pendant le démarrage : délai, état failed', async () => {
+  const { engine } = setup({ lang: { bootState: () => new Promise(() => {}) }, engine: { askTimeoutMs: 50 } });
+  await assert.rejects(engine.start(), /n'a pas répondu/);
+  assert.equal(engine.state().status, 'failed');
+});
+
+test('mutate en vol au moment du crash : rejet ENGINE_NOT_RUNNING, aucune validation, fichier inchangé', async () => {
+  const { engine, store, langs } = setup({ lang: { holdWhen: (c) => c.includes('HOLD') } });
+  await engine.start();
+  await engine.mutate((s) => ({ session: s, code: 'noop' }));
+  const before = fs.readFileSync(store.file, 'utf8');
+  const sessions = [];
+  engine.on('session', (e) => sessions.push(e));
+  const p = engine.mutate((s) => ({ session: setOutputStage(s, 'master', 'mix', { volume: 0.1 }), code: 'HOLD' }));
+  await wait(20);
+  langs[0].crash();
+  await assert.rejects(p, (e) => e.code === 'ENGINE_NOT_RUNNING');
+  assert.equal(engine.session().outputs.master.mix.volume, 1);
+  assert.equal(fs.readFileSync(store.file, 'utf8'), before);
+  assert.equal(sessions.length, 0);
 });

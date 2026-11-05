@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ProcessRegistry } from '../src/runtime/process-registry.js';
+import { ProcessRegistry, buildResolveScript } from '../src/runtime/process-registry.js';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'mx-reg-'));
 const read = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'runtime-processes.json'), 'utf8'));
@@ -39,4 +39,11 @@ test('un fichier illisible équivaut à un registre vide', async () => {
   fs.writeFileSync(path.join(dir, 'runtime-processes.json'), '{pas du json');
   const reg = new ProcessRegistry({ dataDir: dir, listProcesses: async () => [{ pid: 1, name: 'scsynth.exe', command: 'x' }] });
   assert.equal((await reg.foreignScsynth()).length, 1);
+});
+
+test('le script PowerShell d identification contient la regex exacte du port', () => {
+  const script = buildResolveScript({ launcherPid: 1, sclangPid: 2, serverPort: 57130, serverExecutable: 'C:\SC\scsynth.exe', device: 'ASIO : TimoxVasio' });
+  assert.ok(script.includes(String.raw`(?:^|\s)-u\s+$serverPort(?:\s|$)`));
+  assert.ok(script.includes('$serverPort = 57130'));
+  assert.ok(script.includes("$audioDevice = 'ASIO : TimoxVasio'"));
 });

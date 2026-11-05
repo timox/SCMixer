@@ -63,7 +63,7 @@ export class ProcessRegistry {
  * Identifie le lanceur cmd.exe et le scsynth.exe réels sous un sclang (copie réduite du contrôle d'identité du hub).
  * Refuse si le lanceur n'est pas un cmd.exe enfant de sclang ou si scsynth ne correspond pas au port, à l'exécutable et au pilote.
  */
-export async function resolveScsynthWindows({ launcherPid, sclangPid, serverPort, serverExecutable, device }) {
+export function buildResolveScript({ launcherPid, sclangPid, serverPort, serverExecutable, device }) {
   const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
   const script = [
     "$ErrorActionPreference = 'Stop'",
@@ -74,10 +74,16 @@ export async function resolveScsynthWindows({ launcherPid, sclangPid, serverPort
     `$audioDevice = ${quote(device)}`,
     '$launcher = Get-CimInstance Win32_Process -Filter "ProcessId = $launcherPid"',
     'if (-not $launcher -or $launcher.Name -ne \'cmd.exe\' -or $launcher.ParentProcessId -ne $sclangPid) { throw "Lanceur Windows inattendu pour scsynth PID $launcherPid." }',
-    '$servers = @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $launcherPid" | Where-Object { $_.Name -eq \'scsynth.exe\' -and $_.CommandLine.Contains($serverExecutable) -and $_.CommandLine -match "(?:^|\s)-u\s+$serverPort(?:\s|$)" -and $_.CommandLine.Contains($audioDevice) } | Select-Object ProcessId, ParentProcessId, CommandLine)',
+    '$servers = @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $launcherPid" | Where-Object { $_.Name -eq \'scsynth.exe\' -and $_.CommandLine.Contains($serverExecutable) -and $_.CommandLine -match "(?:^|\\s)-u\\s+$serverPort(?:\\s|$)" -and $_.CommandLine.Contains($audioDevice) } | Select-Object ProcessId, ParentProcessId, CommandLine)',
     'if ($servers.Count -ne 1) { throw "Un seul scsynth.exe attendu sous le lanceur PID $launcherPid; $($servers.Count) trouvé(s)." }',
     '[PSCustomObject]@{ launcher = [PSCustomObject]@{ ProcessId = $launcher.ProcessId; ParentProcessId = $launcher.ParentProcessId; CommandLine = $launcher.CommandLine }; server = $servers[0] } | ConvertTo-Json -Compress -Depth 3',
   ].join('; ');
+  return script;
+}
+
+export async function resolveScsynthWindows(params) {
+  const { launcherPid, sclangPid, serverPort } = params;
+  const script = buildResolveScript(params);
   const { stdout } = await execFileAsync('pwsh.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], {
     windowsHide: true, timeout: 20_000, maxBuffer: 16 * 1024,
   });

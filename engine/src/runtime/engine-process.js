@@ -89,16 +89,21 @@ if(tree.isNil) { Error("Pas de réponse /g_queryTree").throw };
  * arrêt inattendu de sclang ou de scsynth → failed (session.json inchangé).
  * Événements : `state` (EngineState), `session` ({ session, generation }), `runtime`, `meter`
  * (les deux derniers sont alimentés par le relais de mesures, tâche 7).
+ *
+ * Chaque démarrage possède un contexte (`ctx`) : sclang, récepteur OSC, file, processus
+ * inscrits, surveillance. Un démarrage périmé (abandonné après une panne) libère ce qu'il
+ * a créé et ne modifie jamais l'état.
  */
+class StaleBoot extends Error {}
+
 export class EngineProcess extends EventEmitter {
   #store; #registry; #langFactory; #listenerFactory; #resolveScsynth; #isAlive; #kill; #watchMs;
-  #apiUrl; #langPort; #dataDir;
+  #apiUrl; #langPort; #askTimeoutMs; #resolveAttempts;
   #status = 'stopped'; #error = null; #scsynthPid = null;
   #models = { Compander: true, CompanderD: false, FaustRMS: false };
   #session; #generation = 0;
   #meterIds = new Map(); #nextMeterId = 0;
-  #lang = null; #queue = null; #listener = null; #procs = []; #watcher = null;
-  #abortBoot = null; #cleanup = Promise.resolve(); #transition = false;
+  #ctx = null; #abortBoot = null; #cleanup = Promise.resolve(); #transition = false;
   #mutations = Promise.resolve();
 
   constructor({
@@ -106,12 +111,11 @@ export class EngineProcess extends EventEmitter {
     listenerFactory = () => new OscListener(), resolveScsynth = resolveScsynthWindows,
     isAlive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } },
     killProcess = (pid) => process.kill(pid, 'SIGTERM'),
-    watchIntervalMs = 1000, langPort = DEFAULT_LANG_PORT,
+    watchIntervalMs = 1000, langPort = DEFAULT_LANG_PORT, askTimeoutMs = 30_000, resolveAttempts = 20,
     apiUrl = process.env.MIXETTE_TIMOXVASIO_URL || 'http://127.0.0.1:52525',
   }) {
     super();
     this.#store = store;
-    this.#dataDir = dataDir;
     this.#registry = registry ?? new ProcessRegistry({ dataDir });
     this.#langFactory = langFactory;
     this.#listenerFactory = listenerFactory;
@@ -120,6 +124,8 @@ export class EngineProcess extends EventEmitter {
     this.#kill = killProcess;
     this.#watchMs = watchIntervalMs;
     this.#langPort = langPort;
+    this.#askTimeoutMs = askTimeoutMs;
+    this.#resolveAttempts = resolveAttempts;
     this.#apiUrl = apiUrl;
     this.#session = store.load();
   }
@@ -138,7 +144,7 @@ export class EngineProcess extends EventEmitter {
   session() { return structuredClone(this.#session); }
 
   /** Récepteur OSC de la session moteur en cours (null moteur arrêté) ; sert au relais de mesures. */
-  get oscListener() { return this.#listener; }
+  get oscListener() { return this.#ctx?.listener ?? null; }
 
   /** Source associée à un identifiant de vumètre, ou undefined. */
   resolveSourceId(meterId) {
@@ -195,12 +201,14 @@ export class EngineProcess extends EventEmitter {
         throw busy(`Un scsynth.exe non inscrit par ce moteur est déjà actif (PID ${pids}) ; démarrage refusé.`);
       }
       this.#setStatus('starting');
+      const ctx = { lang: null, listener: null, queue: null, procs: [], watcher: null };
+      this.#ctx = ctx;
       const abort = new Promise((_, reject) => { this.#abortBoot = reject; });
       abort.catch(() => {});
       try {
-        await Promise.race([this.#boot(), abort]);
+        await Promise.race([this.#boot(ctx), abort]);
       } catch (e) {
-        this.#failInternal(e);
+        if (this.#ctx === ctx) this.#failInternal(e);
         throw e;
       } finally {
         this.#abortBoot = null;
@@ -211,56 +219,113 @@ export class EngineProcess extends EventEmitter {
     }
   }
 
-  async #boot() {
+  /** Vérifie, après chaque attente, que ce démarrage est toujours le démarrage courant. */
+  async #alive(ctx) {
+    if (this.#ctx === ctx) return;
+    // Démarrage périmé : libère ce qu'il a créé, sans toucher à l'état.
+    await this.#release(ctx, false).catch(() => {});
+    throw new StaleBoot('Démarrage abandonné');
+  }
+
+  /** Appel sclang avec délai : une réponse qui n'arrive pas fait échouer le démarrage. */
+  async #ask(ctx, code) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`sclang n'a pas répondu en ${this.#askTimeoutMs} ms`)), this.#askTimeoutMs);
+    });
+    try {
+      return await Promise.race([ctx.lang.interpret(code), timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async #boot(ctx) {
     this.#rebuildMeterIds();
-    const listener = this.#listenerFactory();
-    this.#listener = listener;
-    const relayPort = await listener.start();
+    ctx.listener = this.#listenerFactory();
+    const relayPort = await ctx.listener.start();
+    await this.#alive(ctx);
     const includePaths = [path.join(SC_DIR, 'plugins')];
     const lang = await this.#langFactory({ includePaths, langPort: this.#langPort });
-    this.#lang = lang;
-    lang.on('exit', (code) => this.#onLangExit(lang, code));
-    this.#queue = new CommandQueue({ lang, listener });
+    ctx.lang = lang;
+    lang.on('exit', (code) => this.#onLangExit(ctx, code));
+    await this.#alive(ctx);
+    ctx.queue = new CommandQueue({ lang, listener: ctx.listener });
+    const sclang = lang.process;
+    if (!sclang?.pid) throw new Error('PID de sclang introuvable');
+    this.#register(ctx, { role: 'sclang', pid: sclang.pid, command: [sclang.spawnfile, ...(sclang.spawnargs ?? []).slice(1)].join(' ') });
 
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mixette-engine-'));
     try {
       const file = path.join(dir, 'engine.scd');
       fs.writeFileSync(file, this.#bootSource(relayPort), 'utf8');
       await lang.executeFile(fwd(file));
-      await this.#waitReady(lang);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
+    await this.#alive(ctx);
 
-    const [launcherPid, serverPort, serverExecutable] = await lang.interpret('[s.pid, s.addr.port, Server.program.asString]');
-    const sclang = lang.process;
-    if (!Number.isInteger(launcherPid) || serverPort !== SERVER_PORT || !sclang?.pid) {
-      throw new Error('Impossible d\'identifier les processus sclang et scsynth');
+    // Identification et inscription de scsynth dès son apparition, avant l'attente de disponibilité.
+    const [launcherPid, serverPort, serverExecutable] = await this.#waitServerProcess(ctx);
+    let found;
+    let lastError;
+    for (let attempt = 0; attempt < this.#resolveAttempts; attempt += 1) {
+      try {
+        found = await this.#resolveScsynth({
+          launcherPid, sclangPid: sclang.pid, serverPort, serverExecutable, device: AUDIO_DEVICE,
+        });
+        break;
+      } catch (e) {
+        lastError = e;
+        await this.#alive(ctx);
+        await sleep(250);
+      }
     }
-    const found = await this.#resolveScsynth({
-      launcherPid, sclangPid: sclang.pid, serverPort, serverExecutable, device: AUDIO_DEVICE,
-    });
-    this.#procs = [
-      { role: 'sclang', pid: sclang.pid, command: [sclang.spawnfile, ...(sclang.spawnargs ?? []).slice(1)].join(' ') },
-      { role: 'scsynth-launcher', pid: found.launcher.processId, command: found.launcher.commandLine },
-      { role: 'scsynth', pid: found.server.processId, command: found.server.commandLine },
-    ];
-    for (const p of this.#procs) this.#registry.add(p);
+    await this.#alive(ctx);
+    if (!found) {
+      throw new Error(`scsynth n'a pas pu être identifié (lanceur PID ${launcherPid}, sclang PID ${sclang.pid}) : ${lastError?.message ?? 'inconnu'}. `
+        + 'Aucun processus non identifié n\'est arrêté ; vérifier manuellement ces PID.');
+    }
+    this.#register(ctx, { role: 'scsynth-launcher', pid: found.launcher.processId, command: found.launcher.commandLine });
+    this.#register(ctx, { role: 'scsynth', pid: found.server.processId, command: found.server.commandLine });
     this.#scsynthPid = found.server.processId;
+    this.#startWatcher(ctx);
 
-    const [companderD, faustRMS] = await lang.interpret('[~mxModels[\\CompanderD], ~mxModels[\\FaustRMS]]');
+    await this.#waitReady(ctx);
+    const [companderD, faustRMS] = await this.#ask(ctx, '[~mxModels[\\CompanderD], ~mxModels[\\FaustRMS]]');
+    await this.#alive(ctx);
     this.#models = { Compander: true, CompanderD: Boolean(companderD), FaustRMS: Boolean(faustRMS) };
 
     this.#setStatus('restoring');
-    await this.#queue.run(applySessionCode(this.#session, this.#meterIds));
-    this.#startWatcher();
+    await ctx.queue.run(applySessionCode(this.#session, this.#meterIds));
+    await this.#alive(ctx);
     this.#setStatus('running');
   }
 
-  async #waitReady(lang, timeoutMs = 60_000) {
+  #register(ctx, entry) {
+    ctx.procs.push(entry);
+    this.#registry.add(entry);
+  }
+
+  async #waitServerProcess(ctx, timeoutMs = this.#askTimeoutMs) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-      const state = await lang.interpret('~mxBootState');
+      const [pid, port, exe] = await this.#ask(ctx, '[s.pid, s.addr.port, Server.program.asString]');
+      await this.#alive(ctx);
+      if (Number.isInteger(pid)) {
+        if (port !== SERVER_PORT) throw new Error(`Port serveur inattendu : ${port} (attendu ${SERVER_PORT})`);
+        return [pid, port, exe];
+      }
+      await sleep(100);
+    }
+    throw new Error('Le serveur SuperCollider n\'a pas lancé scsynth dans le délai imparti');
+  }
+
+  async #waitReady(ctx, timeoutMs = 60_000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const state = await this.#ask(ctx, '~mxBootState');
+      await this.#alive(ctx);
       if (state === 1) return;
       if (state === -1) throw new Error('Démarrage du serveur SuperCollider impossible (pilote audio indisponible ?)');
       await sleep(100);
@@ -268,40 +333,47 @@ export class EngineProcess extends EventEmitter {
     throw new Error('Le graphe SuperCollider ne s\'est pas initialisé dans le délai imparti');
   }
 
-  #startWatcher() {
+  #startWatcher(ctx) {
     if (!this.#watchMs) return;
     const pid = this.#scsynthPid;
-    this.#watcher = setInterval(() => {
-      if (this.#status === 'running' && !this.#isAlive(pid)) {
-        this.#onFailure(new Error(`scsynth (PID ${pid}) s'est arrêté`));
+    ctx.watcher = setInterval(() => {
+      if (this.#ctx === ctx && ['starting', 'restoring', 'running'].includes(this.#status) && !this.#isAlive(pid)) {
+        this.#onFailure(ctx, new Error(`scsynth (PID ${pid}) s'est arrêté`));
       }
     }, this.#watchMs);
-    this.#watcher.unref();
+    ctx.watcher.unref();
   }
 
-  #onLangExit(lang, code) {
-    if (lang !== this.#lang || this.#status === 'stopping' || this.#status === 'stopped') return;
-    this.#onFailure(new Error(`sclang s'est arrêté (code ${code ?? 'inconnu'})`));
+  #onLangExit(ctx, code) {
+    if (this.#ctx !== ctx || this.#status === 'stopping' || this.#status === 'stopped') return;
+    this.#onFailure(ctx, new Error(`sclang s'est arrêté (code ${code ?? 'inconnu'})`));
   }
 
-  #onFailure(error) {
+  #onFailure(ctx, error) {
+    if (this.#ctx !== ctx) return;
     if (this.#abortBoot) { this.#abortBoot(error); return; }
     if (this.#status === 'running') this.#failInternal(error);
   }
 
+  #notRunning(message) {
+    return new ApiError('ENGINE_NOT_RUNNING', 409, `Le moteur n'est plus disponible : ${message}`);
+  }
+
   /** Passe en failed et libère les ressources ; l'état est publié sans attendre le nettoyage. */
   #failInternal(error) {
-    const queue = this.#queue;
-    queue?.dispose(error);
-    this.#setStatus('failed', error?.message ?? String(error));
+    const ctx = this.#ctx;
+    this.#ctx = null;
+    const message = error?.message ?? String(error);
+    ctx?.queue?.dispose(this.#notRunning(message));
+    this.#setStatus('failed', message);
     this.#scsynthPid = null;
-    this.#cleanup = this.#release(false).catch(() => {});
+    this.#cleanup = ctx ? this.#release(ctx, false).catch(() => {}) : Promise.resolve();
   }
 
   /** Arrête sclang, scsynth et le récepteur, retire les entrées du registre. */
-  async #release(graceful) {
-    const lang = this.#lang; const listener = this.#listener; const procs = this.#procs; const watcher = this.#watcher;
-    this.#lang = null; this.#queue = null; this.#listener = null; this.#procs = []; this.#watcher = null;
+  async #release(ctx, graceful) {
+    const { lang, listener, procs, watcher } = ctx;
+    ctx.lang = null; ctx.queue = null; ctx.listener = null; ctx.procs = []; ctx.watcher = null;
     if (watcher) clearInterval(watcher);
     const scsynth = procs.find((p) => p.role === 'scsynth');
     if (lang && graceful) {
@@ -347,10 +419,12 @@ export class EngineProcess extends EventEmitter {
         this.#setStatus('stopped');
         return this.state();
       }
+      const ctx = this.#ctx;
+      this.#ctx = null;
       this.#setStatus('stopping');
-      this.#queue?.dispose(new Error('Moteur en cours d\'arrêt'));
+      ctx?.queue?.dispose(this.#notRunning('arrêt en cours'));
       try {
-        await this.#release(true);
+        if (ctx) await this.#release(ctx, true);
       } catch (e) {
         this.#scsynthPid = null;
         this.#setStatus('failed', e.message);
@@ -393,6 +467,7 @@ export class EngineProcess extends EventEmitter {
 
   async #applyMutation(fn) {
     this.#assertMutable();
+    const ctx = this.#ctx;
     const meterIds = new Map(this.#meterIds);
     let next = this.#nextMeterId;
     const meterIdFor = (sourceId) => {
@@ -400,7 +475,8 @@ export class EngineProcess extends EventEmitter {
       return meterIds.get(sourceId);
     };
     const { session, code } = fn(structuredClone(this.#session), { meterIdFor });
-    await this.#queue.run(code);
+    await ctx.queue.run(code);
+    if (this.#ctx !== ctx) throw this.#notRunning('arrêt pendant la commande');
     const alive = new Set(session.sources.map((s) => s.id));
     for (const id of [...meterIds.keys()]) if (!alive.has(id)) meterIds.delete(id);
     this.#meterIds = meterIds;
@@ -412,6 +488,9 @@ export class EngineProcess extends EventEmitter {
   /** Valide et enregistre le profil audio ; moteur démarré, redémarre scsynth puis restaure la session. */
   setAudioProfile(profile) {
     const job = this.#mutations.then(async () => {
+      if (this.#transition || ['starting', 'restoring', 'stopping'].includes(this.#status)) {
+        throw busy('Le moteur change d\'état ; profil audio non modifié.');
+      }
       const next = setSessionAudioProfile(this.#session, profile);
       this.#commitSession(next);
       if (this.#status === 'running') {
@@ -427,7 +506,7 @@ export class EngineProcess extends EventEmitter {
   /** Arbre des nœuds du serveur (/g_queryTree). */
   async nodeTree() {
     if (this.#status !== 'running') throw new ApiError('ENGINE_NOT_RUNNING', 409, 'Le moteur n\'est pas démarré.');
-    const payload = await this.#queue.run(NODE_TREE_CODE, { result: true });
+    const payload = await this.#ctx.queue.run(NODE_TREE_CODE, { result: true });
     return decodeServerTree(JSON.parse(payload));
   }
 }

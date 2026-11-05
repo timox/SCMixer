@@ -131,3 +131,13 @@ test('run avec result : la dernière expression est renvoyée dans le message', 
   assert.equal(await q.run('1+1', { result: true }), '[1,2]');
   assert.match(code, /\.asString\)/);
 });
+
+test('throw synchrone de interpret : SC_COMMAND_FAILED ; la commande finit par un saut de ligne avant la fermeture', async () => {
+  const listener = new FakeListener();
+  const q1 = new CommandQueue({ lang: { interpret: () => { throw new Error('sync'); } }, listener });
+  await assert.rejects(q1.run('A'), (e) => e.code === 'SC_COMMAND_FAILED' && /sync/.test(e.message));
+  let code;
+  const q2 = new CommandQueue({ lang: { interpret: async (c) => { code = c; setImmediate(() => listener.ack(reqIdOf(c))); } }, listener });
+  await q2.run('x // commentaire');
+  assert.ok(code.includes('x // commentaire' + String.fromCharCode(10) + '}.value'));
+});

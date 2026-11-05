@@ -47,8 +47,10 @@ export class CommandQueue {
     if (this.#disposed) throw this.#disposed;
     const id = this.#nextId++;
     const body = result
-      ? `var r; r = { ${code} }.value; ~mxAck.(${id}, "ok", r.asString)`
-      : `{ ${code} }.value; ~mxAck.(${id}, "ok", "")`;
+      ? `var r; r = { ${code}
+}.value; ~mxAck.(${id}, "ok", r.asString)`
+      : `{ ${code}
+}.value; ~mxAck.(${id}, "ok", "")`;
     const wrapper = `fork { try { ${body} } { |e| ~mxAck.(${id}, "error", e.errorString) } }`;
     let timer;
     const ack = new Promise((resolve, reject) => {
@@ -57,7 +59,9 @@ export class CommandQueue {
     });
     ack.catch(() => {});
     try {
-      Promise.resolve(this.#lang.interpret(wrapper)).catch((e) => this.#pending?.id === id && this.#pending.reject(fail(`Envoi à sclang impossible : ${e?.message ?? e}`)));
+      let sent;
+      try { sent = Promise.resolve(this.#lang.interpret(wrapper)); } catch (e) { sent = Promise.reject(e); }
+      sent.catch((e) => this.#pending?.id === id && this.#pending.reject(fail(`Envoi à sclang impossible : ${e?.message ?? e}`)));
       return await ack;
     } finally {
       clearTimeout(timer);
