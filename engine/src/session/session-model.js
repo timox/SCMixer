@@ -1,7 +1,7 @@
 import {
-  Session, SourceCreate, SourcePatch, SourceProcessing, CompBand, Output, AudioProfile,
+  Session, SourceCreate, SourcePatch, SourceProcessing, CompBand, Output,
   SOURCE_STAGES, OUTPUT_STAGES, BANDS, MAX_CHANNELS,
-  defaultSourceProcessing, defaultOutput, defaultAudioProfile,
+  defaultSourceProcessing, defaultOutput,
 } from '../contract/schemas.js';
 import { ApiError, codes } from '../contract/errors.js';
 
@@ -20,9 +20,8 @@ const clone = (v) => structuredClone(v);
 
 export function emptySession() {
   return {
-    version: 1,
+    version: 2,
     nextSourceSeq: 1,
-    audioProfile: defaultAudioProfile(),
     sources: [],
     outputs: { master: defaultOutput(), cue: defaultOutput() },
   };
@@ -139,17 +138,9 @@ export function replaceSessionContent(session, content) {
   if (ids.size !== sources.length) throw fail('VALIDATION', 'Identifiants de source en double.');
   validateChannels(sources);
   return {
-    version: 1,
+    version: 2,
     nextSourceSeq: Math.max(session.nextSourceSeq, seq),
-    audioProfile: clone(session.audioProfile),
     sources: clone(sources),
     outputs: clone(outputs),
   };
-}
-
-export function setAudioProfile(session, profile) {
-  const data = parse(AudioProfile, profile, 'Profil audio');
-  const next = clone(session);
-  next.audioProfile = data;
-  return next;
 }

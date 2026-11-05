@@ -6,6 +6,7 @@ export const codes = Object.freeze({
   ENGINE_NOT_RUNNING: 409,
   ENGINE_BUSY: 409,
   MODEL_UNAVAILABLE: 409,
+  TIMOXVASIO_NOT_READY: 409,
   SC_COMMAND_FAILED: 502,
 });
 

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   emptySession, addSource, patchSource, removeSource, setSourceStage, setSourceBand, resetSourceStage,
-  setOutputStage, copyMasterToCue, replaceSessionContent, validateChannels, setAudioProfile,
+  setOutputStage, copyMasterToCue, replaceSessionContent, validateChannels,
 } from '../src/session/session-model.js';
 import { Session, defaultSourceProcessing, defaultOutput } from '../src/contract/schemas.js';
 
@@ -138,16 +138,9 @@ test('replaceSessionContent', () => {
   assert.equal(r.nextSourceSeq, 3);
   const keep = replaceSessionContent(s, { sources: [], outputs: s.outputs, nextSourceSeq: 1 });
   assert.equal(keep.nextSourceSeq, 3);
-  assert.deepEqual(keep.audioProfile, s.audioProfile);
   assert.throws(() => replaceSessionContent(s, { sources: [{ ...s.sources[0], width: 9 }, s.sources[1]], outputs: s.outputs, nextSourceSeq: 3 }), { code: 'CHANNEL_OVERLAP' });
   assert.throws(() => replaceSessionContent(s, { sources: [], outputs: { master: {} }, nextSourceSeq: 3 }), { code: 'VALIDATION' });
   assert.throws(() => replaceSessionContent(s, { sources: [], outputs: s.outputs, nextSourceSeq: 0 }), { code: 'VALIDATION' });
-});
-
-test('setAudioProfile valide', () => {
-  const s = setAudioProfile(emptySession(), { sampleRate: 44100, bufferFrames: 128 });
-  assert.equal(s.audioProfile.sampleRate, 44100);
-  assert.throws(() => setAudioProfile(emptySession(), { sampleRate: 1, bufferFrames: 128 }), { code: 'VALIDATION' });
 });
 
 test('les opérations ne mutent pas l’entrée', () => {
@@ -163,7 +156,6 @@ test('les opérations ne mutent pas l’entrée', () => {
     setOutputStage(s, 'cue', 'mix', { volume: 0.3 });
     copyMasterToCue(s);
     replaceSessionContent(s, { sources: s.sources, outputs: s.outputs, nextSourceSeq: 9 });
-    setAudioProfile(s, { sampleRate: 96000, bufferFrames: 64 });
   });
   assert.deepEqual(defaultOutput(), s.outputs.master);
 });

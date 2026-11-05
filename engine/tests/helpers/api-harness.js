@@ -8,6 +8,9 @@ import { SessionStore } from '../../src/session/session-store.js';
 import { PresetStore } from '../../src/session/preset-store.js';
 import { createServer } from '../../src/api/server.js';
 
+/** Horloge TimoxVasio simulée : aucun appel réseau. */
+export const fakeTimoxVasio = (clock = { sampleRate: 48000, bufferFrames: 2048 }) => ({ audioClock: async () => ({ ...clock }) });
+
 class FakeListener extends EventEmitter {
   async start() { return 45678; }
   stop() {}
@@ -59,6 +62,7 @@ export async function startHarness({ running = true, lang = {} } = {}) {
     isAlive: () => false,
     killProcess: () => {},
     watchIntervalMs: 0,
+    timoxVasio: fakeTimoxVasio(),
   });
   const presets = new PresetStore(dataDir);
   if (running) await engine.start();

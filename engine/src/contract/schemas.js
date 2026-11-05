@@ -82,24 +82,14 @@ export const Output = z.strictObject({
   }),
 });
 
-export const AudioProfile = z.strictObject({
-  sampleRate: z.union([z.literal(44100), z.literal(48000), z.literal(88200), z.literal(96000)]),
-  bufferFrames: z.union([32, 64, 128, 256, 512, 1024, 2048].map((n) => z.literal(n))),
-});
-
 export const Session = z.strictObject({
-  version: z.literal(1),
+  version: z.literal(2),
   nextSourceSeq: z.number().int().min(1),
-  audioProfile: AudioProfile,
   sources: z.array(Source),
   outputs: z.strictObject({ master: Output, cue: Output }),
 });
 
 export const PresetCreate = z.strictObject({ name: name() });
-
-export function defaultAudioProfile() {
-  return { sampleRate: 48000, bufferFrames: 256 };
-}
 
 function defaultCompBand() {
   return { thresholdDb: -20, ratio: 4, attackMs: 10, releaseMs: 100, makeupDb: 0, bypass: true };

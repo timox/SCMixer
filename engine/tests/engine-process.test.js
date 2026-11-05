@@ -8,6 +8,8 @@ import { EngineProcess } from '../src/runtime/engine-process.js';
 import { ProcessRegistry } from '../src/runtime/process-registry.js';
 import { SessionStore } from '../src/session/session-store.js';
 import { addSource, setOutputStage } from '../src/session/session-model.js';
+import { ApiError } from '../src/contract/errors.js';
+import { fakeTimoxVasio } from './helpers/api-harness.js';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -79,6 +81,7 @@ function setup(opts = {}) {
     isAlive: opts.isAlive ?? (() => false),
     killProcess: opts.killProcess ?? (() => {}),
     watchIntervalMs: opts.watchIntervalMs ?? 0,
+    timoxVasio: opts.timoxVasio ?? fakeTimoxVasio(),
   });
   return { engine, store, listener, langs, dataDir, registry };
 }
@@ -112,7 +115,7 @@ test('start remplace les jetons et fixe les ports sclang et scsynth', async () =
   const src = langs[0].bootSource;
   assert.match(src, /ASIO : TimoxVasio/);
   assert.match(src, /sampleRate = 48000;/);
-  assert.match(src, /hardwareBufferSize = 256;/);
+  assert.match(src, /hardwareBufferSize = 2048;/);
   assert.doesNotMatch(src, /__MX_/);
   assert.ok(langs[0].factoryOptions.langPort);
   assert.notEqual(langs[0].factoryOptions.langPort, 57120);
@@ -234,29 +237,6 @@ test('stop : running → stopping → stopped, sclang quitté, registre vidé', 
   assert.equal(engine.state().scsynthPid, null);
 });
 
-test('setAudioProfile moteur running : stop, start avec nouveaux jetons, session restaurée', async () => {
-  const { engine, langs, store } = setup({ session: sessionWithSource() });
-  await engine.start();
-  const states = [];
-  engine.on('state', (s) => states.push(s.status));
-  await engine.setAudioProfile({ sampleRate: 96000, bufferFrames: 512 });
-  assert.deepEqual(states, ['stopping', 'stopped', 'starting', 'restoring', 'running']);
-  assert.equal(store.load().audioProfile.sampleRate, 96000);
-  assert.match(langs[1].bootSource, /sampleRate = 96000;/);
-  assert.match(langs[1].bootSource, /hardwareBufferSize = 512;/);
-  assert.match(langs[1].commands()[0], /~mxAddSource/);
-});
-
-test('setAudioProfile moteur arrêté : enregistre sans démarrer ; profil invalide refusé', async () => {
-  const { engine, langs, store } = setup();
-  await engine.setAudioProfile({ sampleRate: 44100, bufferFrames: 64 });
-  assert.equal(engine.state().status, 'stopped');
-  assert.equal(langs.length, 0);
-  assert.equal(store.load().audioProfile.bufferFrames, 64);
-  await assert.rejects(engine.setAudioProfile({ sampleRate: 1, bufferFrames: 64 }), (e) => e.code === 'VALIDATION');
-  await assert.rejects(engine.setAudioProfile({ sampleRate: 48000, bufferFrames: 64, device: 'x' }), (e) => e.code === 'VALIDATION');
-});
-
 test('scsynth inconnu présent : start refusé sans connexion', async () => {
   const { engine, langs, listener } = setup({
     listProcesses: async () => [{ pid: 4242, name: 'scsynth.exe', command: 'scsynth.exe -u 57110' }],
@@ -313,16 +293,6 @@ test('arrêt : scsynth récalcitrant terminé seulement si l’identité corresp
 
 const registryPids = (dataDir) => JSON.parse(fs.readFileSync(path.join(dataDir, 'runtime-processes.json'), 'utf8')).map((e) => e.pid);
 
-test('setAudioProfile pendant une transition : ENGINE_BUSY, profil inchangé', async () => {
-  const { engine, langs, store } = setup({ lang: { holdWhen: () => true }, session: sessionWithSource() });
-  const starting = engine.start();
-  while (engine.state().status !== 'restoring') await wait(5);
-  await assert.rejects(engine.setAudioProfile({ sampleRate: 96000, bufferFrames: 512 }), (e) => e.code === 'ENGINE_BUSY');
-  assert.equal(engine.session().audioProfile.sampleRate, 48000);
-  assert.equal(store.load().audioProfile.sampleRate, 48000);
-  langs[0].release();
-  await starting;
-});
 
 test('échec du démarrage après inscription : sclang et scsynth libérés, registre vide', async () => {
   const { engine, langs, listener, dataDir } = setup({ lang: { bootState: () => -1 } });
@@ -443,4 +413,40 @@ test('échec de démarrage : ApiError SC_COMMAND_FAILED avec la cause audio lue 
   const log = fs.readFileSync(path.join(dataDir, 'logs', 'sclang.log'), 'utf8');
   assert.match(log, /===== .* démarrage du moteur =====/);
   assert.match(log, /Invalid sample rate/);
+});
+
+test('horloge TimoxVasio : jetons de démarrage et EngineState.audioClock', async () => {
+  const { engine, langs } = setup({ timoxVasio: fakeTimoxVasio({ sampleRate: 96000, bufferFrames: 512 }) });
+  assert.equal(engine.state().audioClock, null);
+  const state = await engine.start();
+  assert.deepEqual(state.audioClock, { sampleRate: 96000, bufferFrames: 512 });
+  assert.match(langs[0].bootSource, /sampleRate = 96000;/);
+  assert.match(langs[0].bootSource, /hardwareBufferSize = 512;/);
+  await engine.stop();
+  assert.equal(engine.state().audioClock, null);
+});
+
+test('horloge relue à chaque démarrage', async () => {
+  let clock = { sampleRate: 48000, bufferFrames: 256 };
+  const { engine, langs } = setup({ timoxVasio: { audioClock: async () => ({ ...clock }) } });
+  await engine.start();
+  await engine.stop();
+  clock = { sampleRate: 44100, bufferFrames: 128 };
+  await engine.start();
+  assert.match(langs[1].bootSource, /sampleRate = 44100;/);
+  assert.deepEqual(engine.state().audioClock, { sampleRate: 44100, bufferFrames: 128 });
+});
+
+test('TimoxVasio non prêt : start refusé, aucun sclang lancé, état stopped', async () => {
+  const failing = { audioClock: async () => { throw new ApiError('TIMOXVASIO_NOT_READY', 409, 'TimoxVasio injoignable : ECONNREFUSED'); } };
+  const { engine, langs, listener } = setup({ timoxVasio: failing });
+  const states = [];
+  engine.on('state', (s) => states.push(s.status));
+  await assert.rejects(engine.start(), (e) => e.code === 'TIMOXVASIO_NOT_READY' && e.status === 409 && /injoignable/.test(e.message));
+  assert.equal(langs.length, 0);
+  assert.equal(listener.started, 0);
+  assert.deepEqual(states, []);
+  const state = engine.state();
+  assert.equal(state.status, 'stopped');
+  assert.equal(state.audioClock, null);
 });

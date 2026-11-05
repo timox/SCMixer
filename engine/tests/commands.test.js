@@ -4,7 +4,7 @@ import {
   toScEvent, addSourceCode, removeSourceCode, setSourceStageCode, setSourceBandCode,
   setOutputStageCode, resetMoogCode, applySessionCode,
 } from '../src/sc/commands.js';
-import { defaultSourceProcessing, defaultOutput, defaultAudioProfile } from '../src/contract/schemas.js';
+import { defaultSourceProcessing, defaultOutput } from '../src/contract/schemas.js';
 
 const source = (id, name) => ({ id, name, firstChannel: 1, width: 2, processing: defaultSourceProcessing() });
 
@@ -64,7 +64,7 @@ test('addSourceCode imbrique le traitement complet sans le nom', () => {
 
 test('applySessionCode : sources puis 14 sorties, sans noms', () => {
   const session = {
-    version: 1, nextSourceSeq: 3, audioProfile: defaultAudioProfile(),
+    version: 2, nextSourceSeq: 3,
     sources: [source('src-1', 'Alpha'), source('src-2', 'Beta')],
     outputs: { master: defaultOutput(), cue: defaultOutput() },
   };

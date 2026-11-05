@@ -4,7 +4,6 @@ import { route } from '../async-route.js';
 export function statePayload(engine, session = engine.session()) {
   return {
     engine: engine.state(),
-    audioProfile: session.audioProfile,
     sources: session.sources,
     outputs: session.outputs,
   };
@@ -18,6 +17,4 @@ export function registerEngineRoutes(api, engine) {
   api.post('/engine/restart', route(async (req, res) => res.json(await engine.restart())));
   api.get('/engine/runtime', route((req, res) => res.json(engine.runtime())));
   api.get('/engine/node-tree', route(async (req, res) => res.json(await engine.nodeTree())));
-  api.get('/engine/audio-profile', route((req, res) => res.json(engine.session().audioProfile)));
-  api.put('/engine/audio-profile', route(async (req, res) => res.json(await engine.setAudioProfile(req.body))));
 }

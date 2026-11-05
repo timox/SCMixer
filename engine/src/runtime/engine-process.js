@@ -4,12 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ApiError } from '../contract/errors.js';
-import { setAudioProfile as setSessionAudioProfile } from '../session/session-model.js';
 import { applySessionCode } from '../sc/commands.js';
 import { CommandQueue } from './command-queue.js';
 import { MeterRelay } from './meter-relay.js';
 import { OscListener } from './osc-listener.js';
 import { ProcessRegistry, resolveScsynthWindows } from './process-registry.js';
+import { TimoxVasioClient } from './timoxvasio-client.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SC_DIR = path.resolve(here, '..', '..', 'sc');
@@ -107,7 +107,7 @@ class StaleBoot extends Error {}
 
 export class EngineProcess extends EventEmitter {
   #store; #registry; #langFactory; #listenerFactory; #resolveScsynth; #isAlive; #kill; #watchMs;
-  #apiUrl; #scDir; #langPort; #logFile; #askTimeoutMs; #resolveAttempts;
+  #apiUrl; #timoxVasio; #audioClock = null; #scDir; #langPort; #logFile; #askTimeoutMs; #resolveAttempts;
   #status = 'stopped'; #error = null; #scsynthPid = null;
   #models = { Compander: true, CompanderD: false, FaustRMS: false };
   #session; #generation = 0;
@@ -122,7 +122,7 @@ export class EngineProcess extends EventEmitter {
     killProcess = (pid) => process.kill(pid, 'SIGTERM'),
     watchIntervalMs = 1000, langPort = DEFAULT_LANG_PORT, askTimeoutMs = 30_000, resolveAttempts = 20,
     apiUrl = process.env.MIXETTE_TIMOXVASIO_URL || 'http://127.0.0.1:52525',
-    scDir = DEFAULT_SC_DIR,
+    scDir = DEFAULT_SC_DIR, timoxVasio = new TimoxVasioClient({ apiUrl }),
   }) {
     super();
     this.#store = store;
@@ -137,6 +137,7 @@ export class EngineProcess extends EventEmitter {
     this.#askTimeoutMs = askTimeoutMs;
     this.#resolveAttempts = resolveAttempts;
     this.#apiUrl = apiUrl;
+    this.#timoxVasio = timoxVasio;
     this.#scDir = scDir;
     this.#logFile = dataDir ? path.join(dataDir, 'logs', 'sclang.log') : null;
     this.#session = store.load();
@@ -148,6 +149,7 @@ export class EngineProcess extends EventEmitter {
       error: this.#error,
       scsynthPid: this.#scsynthPid,
       timoxVasio: { apiUrl: this.#apiUrl },
+      audioClock: this.#audioClock ? { ...this.#audioClock } : null,
       models: { ...this.#models },
     };
   }
@@ -198,7 +200,7 @@ export class EngineProcess extends EventEmitter {
   }
 
   #bootSource(relayPort) {
-    const { sampleRate, bufferFrames } = this.#session.audioProfile;
+    const { sampleRate, bufferFrames } = this.#audioClock;
     const tokens = {
       __MX_SC_DIR__: fwd(SC_DIR),
       __MX_DEVICE__: AUDIO_DEVICE,
@@ -227,6 +229,9 @@ export class EngineProcess extends EventEmitter {
         const pids = foreign.map((p) => p.pid).join(', ');
         throw busy(`Un scsynth.exe non inscrit par ce moteur est déjà actif (PID ${pids}) ; démarrage refusé.`);
       }
+      // Horloge imposée par TimoxVasio, lue à chaque démarrage ; aucune surveillance ensuite.
+      const clock = await this.#timoxVasio.audioClock();
+      this.#audioClock = { sampleRate: clock.sampleRate, bufferFrames: clock.bufferFrames };
       this.#setStatus('starting');
       const ctx = { lang: null, listener: null, queue: null, procs: [], watcher: null };
       this.#ctx = ctx;
@@ -411,6 +416,7 @@ export class EngineProcess extends EventEmitter {
     const ctx = this.#ctx;
     this.#ctx = null;
     this.#runtime = null;
+    this.#audioClock = null;
     const message = error?.message ?? String(error);
     ctx?.queue?.dispose(this.#notRunning(message));
     this.#setStatus('failed', message);
@@ -470,6 +476,7 @@ export class EngineProcess extends EventEmitter {
       const ctx = this.#ctx;
       this.#ctx = null;
       this.#runtime = null;
+      this.#audioClock = null;
       this.#setStatus('stopping');
       ctx?.queue?.dispose(this.#notRunning('arrêt en cours'));
       try {
@@ -532,24 +539,6 @@ export class EngineProcess extends EventEmitter {
     this.#nextMeterId = next;
     this.#commitSession(session);
     return structuredClone(session);
-  }
-
-  /** Valide et enregistre le profil audio ; moteur démarré, redémarre scsynth puis restaure la session. */
-  setAudioProfile(profile) {
-    const job = this.#mutations.then(async () => {
-      if (this.#transition || ['starting', 'restoring', 'stopping'].includes(this.#status)) {
-        throw busy('Le moteur change d\'état ; profil audio non modifié.');
-      }
-      const next = setSessionAudioProfile(this.#session, profile);
-      this.#commitSession(next);
-      if (this.#status === 'running') {
-        await this.stop();
-        await this.start();
-      }
-      return structuredClone(next.audioProfile);
-    });
-    this.#mutations = job.catch(() => {});
-    return job;
   }
 
   /** Arbre des nœuds du serveur (/g_queryTree). */

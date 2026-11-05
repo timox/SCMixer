@@ -24,6 +24,9 @@ export class SessionStore {
     } catch (e) {
       throw unreadable(`JSON invalide : ${e.message}`);
     }
+    if (json?.version === 1) {
+      throw unreadable('session de version 1 (profil audio persisté) ; le contrat est passé à la version 2, le profil audio est désormais lu depuis TimoxVasio. Supprimer ce fichier pour repartir d’une session vide');
+    }
     const r = Session.safeParse(json);
     if (!r.success) {
       const detail = r.error.issues.map((i) => `${i.path.join('.') || '(racine)'} : ${i.message}`).join(' ; ');

@@ -31,7 +31,7 @@ paths:
   /api/engine/start:
     post:
       tags: [Moteur]
-      summary: Démarre sclang et scsynth puis restaure la session
+      summary: Lit l'horloge audio de TimoxVasio (409 TIMOXVASIO_NOT_READY s'il n'est pas prêt), démarre sclang et scsynth puis restaure la session
       responses:
         '200': { $ref: '#/components/responses/EngineState' }
         '409': { $ref: '#/components/responses/Error' }
@@ -68,20 +68,6 @@ paths:
       summary: Arbre des nœuds du serveur (/g_queryTree)
       responses:
         '200': { description: Arbre, content: { application/json: { schema: { $ref: '#/components/schemas/NodeTree' } } } }
-        '409': { $ref: '#/components/responses/Error' }
-  /api/engine/audio-profile:
-    get:
-      tags: [Moteur]
-      summary: Profil audio courant
-      responses:
-        '200': { $ref: '#/components/responses/AudioProfile' }
-    put:
-      tags: [Moteur]
-      summary: Modifie le profil audio ; moteur démarré, scsynth est redémarré puis la session restaurée
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AudioProfile' } } } }
-      responses:
-        '200': { $ref: '#/components/responses/AudioProfile' }
-        '400': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
 
   /api/sources:
@@ -286,9 +272,6 @@ components:
     EngineState:
       description: État du moteur
       content: { application/json: { schema: { $ref: '#/components/schemas/EngineState' } } }
-    AudioProfile:
-      description: Profil audio
-      content: { application/json: { schema: { $ref: '#/components/schemas/AudioProfile' } } }
     Source:
       description: Source confirmée
       content: { application/json: { schema: { $ref: '#/components/schemas/Source' } } }
@@ -306,18 +289,17 @@ components:
           properties:
             code:
               type: string
-              enum: [VALIDATION, NOT_FOUND, CHANNEL_OVERLAP, CHANNEL_LIMIT, ENGINE_NOT_RUNNING, ENGINE_BUSY, MODEL_UNAVAILABLE, SC_COMMAND_FAILED, INTERNAL]
+              enum: [VALIDATION, NOT_FOUND, CHANNEL_OVERLAP, CHANNEL_LIMIT, ENGINE_NOT_RUNNING, ENGINE_BUSY, MODEL_UNAVAILABLE, TIMOXVASIO_NOT_READY, SC_COMMAND_FAILED, INTERNAL]
               description: >
                 VALIDATION 400, NOT_FOUND 404, CHANNEL_OVERLAP 409, CHANNEL_LIMIT 400,
-                ENGINE_NOT_RUNNING 409, ENGINE_BUSY 409, MODEL_UNAVAILABLE 409,
+                ENGINE_NOT_RUNNING 409, ENGINE_BUSY 409, MODEL_UNAVAILABLE 409, TIMOXVASIO_NOT_READY 409,
                 SC_COMMAND_FAILED 502, INTERNAL 500.
             message: { type: string }
     State:
       type: object
-      required: [engine, audioProfile, sources, outputs]
+      required: [engine, sources, outputs]
       properties:
         engine: { $ref: '#/components/schemas/EngineState' }
-        audioProfile: { $ref: '#/components/schemas/AudioProfile' }
         sources: { type: array, items: { $ref: '#/components/schemas/Source' } }
         outputs:
           type: object
@@ -327,7 +309,7 @@ components:
             cue: { $ref: '#/components/schemas/Output' }
     EngineState:
       type: object
-      required: [status, error, scsynthPid, timoxVasio, models]
+      required: [status, error, scsynthPid, timoxVasio, audioClock, models]
       properties:
         status: { type: string, enum: [stopped, starting, restoring, running, stopping, failed] }
         error: { type: [string, 'null'] }
@@ -336,6 +318,18 @@ components:
           type: object
           required: [apiUrl]
           properties: { apiUrl: { type: string } }
+        audioClock:
+          description: >
+            Fréquence et tampon matériel imposés par TimoxVasio (GET /api/v1/state), lus au démarrage
+            et appliqués à scsynth ; null moteur arrêté. Aucune surveillance : un changement de l'horloge
+            TimoxVasio en cours d'exécution n'entraîne aucune action ; redémarrer le moteur pour la relire.
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [sampleRate, bufferFrames]
+              properties:
+                sampleRate: { type: integer, minimum: 1 }
+                bufferFrames: { type: integer, minimum: 1 }
         models:
           type: object
           required: [Compander, CompanderD, FaustRMS]
@@ -375,13 +369,6 @@ components:
               kind: { type: string, enum: [group, synth] }
               synthDef: { type: string }
               controls: { type: object, additionalProperties: true }
-    AudioProfile:
-      type: object
-      additionalProperties: false
-      required: [sampleRate, bufferFrames]
-      properties:
-        sampleRate: { type: integer, enum: [44100, 48000, 88200, 96000] }
-        bufferFrames: { type: integer, enum: [32, 64, 128, 256, 512, 1024, 2048] }
     SourceCreate:
       type: object
       additionalProperties: false

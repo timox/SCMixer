@@ -23,8 +23,9 @@ test('cycle de vie : start, stop, restart renvoient EngineState', async (t) => {
 test('GET /api/state', async (t) => {
   const h = await startHarness({ running: false }); t.after(() => h.close());
   const { body } = await h.call('GET', '/api/state');
-  assert.deepEqual(Object.keys(body).sort(), ['audioProfile', 'engine', 'outputs', 'sources']);
+  assert.deepEqual(Object.keys(body).sort(), ['engine', 'outputs', 'sources']);
   assert.equal(body.engine.status, 'stopped');
+  assert.equal(body.engine.audioClock, null);
 });
 
 test('runtime null et node-tree', async (t) => {
@@ -39,16 +40,20 @@ test('runtime null et node-tree', async (t) => {
   assert.deepEqual(tree.body, { rootId: 0, nodes: [] });
 });
 
-test('profil audio : lecture, écriture, champ device refusé', async (t) => {
+test('horloge audio imposée par TimoxVasio : lue dans /api/engine et /api/state', async (t) => {
   const h = await startHarness({ running: false }); t.after(() => h.close());
-  assert.deepEqual((await h.call('GET', '/api/engine/audio-profile')).body, { sampleRate: 48000, bufferFrames: 256 });
-  const ok = await h.call('PUT', '/api/engine/audio-profile', { sampleRate: 96000, bufferFrames: 128 });
-  assert.equal(ok.status, 200);
-  assert.deepEqual(ok.body, { sampleRate: 96000, bufferFrames: 128 });
-  const bad = await h.call('PUT', '/api/engine/audio-profile', { sampleRate: 48000, bufferFrames: 256, device: 'x' });
-  assert.equal(bad.status, 400);
-  assert.equal(bad.body.error.code, 'VALIDATION');
-  assert.equal((await h.call('PUT', '/api/engine/audio-profile', { sampleRate: 1, bufferFrames: 256 })).status, 400);
+  assert.equal((await h.call('GET', '/api/engine')).body.audioClock, null);
+  const started = await h.call('POST', '/api/engine/start');
+  assert.deepEqual(started.body.audioClock, { sampleRate: 48000, bufferFrames: 2048 });
+  assert.deepEqual((await h.call('GET', '/api/state')).body.engine.audioClock, { sampleRate: 48000, bufferFrames: 2048 });
+});
+
+test('ancien contrat profil audio : GET et PUT /api/engine/audio-profile répondent 404', async (t) => {
+  const h = await startHarness({ running: false }); t.after(() => h.close());
+  const get = await h.call('GET', '/api/engine/audio-profile');
+  assert.equal(get.status, 404);
+  assert.equal(get.body.error.code, 'NOT_FOUND');
+  assert.equal((await h.call('PUT', '/api/engine/audio-profile', { sampleRate: 48000, bufferFrames: 256 })).status, 404);
 });
 
 test('WebSocket : stateChanged à la connexion et après mutation, engineStateChanged, meters', async (t) => {
