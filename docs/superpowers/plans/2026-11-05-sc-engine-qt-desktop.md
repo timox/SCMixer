@@ -208,3 +208,30 @@ Le module Qt WebSockets est absent de `C:\Qt\6.12.0\mingw_64` (relevé du 5 nove
   À chaque étape, comparer l'affichage à `GET /api/state`. Prendre une capture par onglet dans `desktop/docs/captures/`.
 - [ ] **Step 4 :** tout arrêter (uniquement les PID inscrits) ; consigner dans `desktop/README.md` la date, les PID et les résultats.
 - [ ] **Step 5 : commit** `docs(desktop): record end-to-end verification`
+
+### Task 9 : installateur Qt Installer Framework
+
+Ajout demandé par l'utilisateur. Spec section 12.
+
+**Prérequis :** Qt Installer Framework installé via `C:\Qt\MaintenanceTool.exe` (`C:\Qt\Tools\QtInstallerFramework\<version>\bin\binarycreator.exe`). Absent → s'arrêter et le signaler.
+
+**Files :**
+- Create : `installer/config/config.xml`, `installer/packages/fr.mixette.desktop/meta/package.xml`, `installscript.qs` ; `installer/packages/fr.mixette.engine/…` ; `installer/packages/fr.mixette.supercollider/…`
+- Create : `installer/build-installer.ps1`, `installer/README.md`
+- Modify : `engine/src/main.js` (option `--sc-dir <dossier>` ; défaut `C:\Program Files\SuperCollider-3.14.1` en développement) ; `desktop/start-desktop.cmd` → lanceur installé `Mixette.cmd`
+
+**Interfaces :**
+- Consumes : `engine.cmd` (plan moteur, tâche 10), le binaire `desktop` (tâche 8), l'option `--sc-dir` du service moteur.
+- Produces :
+  - `build-installer.ps1` construit `desktop` en Release, puis exécute `windeployqt` sur `mixette-desktop.exe`.
+  - Il copie `engine/` avec ses dépendances de production (`npm ci --omit=dev`).
+  - Il copie de `C:\Program Files\SuperCollider-3.14.1` uniquement ce qu'il faut à scsynth et sclang : les exécutables, les DLL du dossier, `SCClassLibrary`, `plugins`, `COPYING`. Le tout va dans `packages/fr.mixette.supercollider/data/supercollider/`.
+  - Il appelle `binarycreator` → `dist/Mixette-SC-Setup.exe`.
+  - `installscript.qs` vérifie `node --version` et la présence de TimoxVasio (clé de registre ASIO du pilote ; la valeur exacte est à relever dans `../asio/INSTALL.md`). Un prérequis absent → message explicite et arrêt.
+  - Il crée le raccourci « Mixette SC » vers `Mixette.cmd`, qui démarre le service moteur avec `--sc-dir "<install>\supercollider"` et inscrit son PID, puis l'application Qt.
+
+- [ ] **Step 1 :** test de `main.js --sc-dir` (dossier inexistant → arrêt avec un message ; dossier valide → chemins sclang, scsynth et plugins dérivés) ; `npm test` — ÉCHEC, puis implémentation et SUCCÈS.
+- [ ] **Step 2 :** écrire les paquets IFW et `build-installer.ps1`, puis exécuter le script. Attendu : `dist/Mixette-SC-Setup.exe` créé, et taille consignée.
+- [ ] **Step 3 :** installer dans un dossier de test (`C:\temp\mixette-sc-test`), lancer le raccourci et vérifier que le service démarre avec le SC embarqué : `GET /api/engine` → `stopped`. Puis `start`, si l'ancien produit est arrêté. Désinstaller : le dossier disparaît, `%LOCALAPPDATA%\Mixette\sc-engine` reste.
+- [ ] **Step 4 :** consigner dans `installer/README.md` les commandes, la taille de l'installateur et les résultats.
+- [ ] **Step 5 : commit** `feat(installer): add Qt Installer Framework package with embedded SuperCollider`

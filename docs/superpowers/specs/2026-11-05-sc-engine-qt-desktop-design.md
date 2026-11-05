@@ -44,7 +44,8 @@ L'objectif fonctionnel est de reconstruire dans l'interface native tous les rég
 - Gestion des routes TimoxVasio par le moteur SC. L'API SC ne crée, ne modifie et n'applique aucune route TimoxVasio.
 - Contrôleurs MIDI (K3 ou autres), horloge MIDI, mode de performance, pilotage Mixxx/Renoise, éditeur de workflow.
 - Sorties supplémentaires au-delà de Master et Cue.
-- Distribution par installateur (le chantier Electron du 21 octobre ne s'applique pas à ce produit).
+- Le chantier Electron du 21 octobre ne s'applique pas à ce produit ; l'installation est décrite en section 12.
+- Installation de Node.js et de TimoxVasio par l'installateur : ce sont des prérequis vérifiés.
 - Pilotes ASIO autres que TimoxVasio.
 - DCompressor : absent de l'interface web actuelle, il n'entre pas dans la parité.
 - Retrait de l'ancien produit (chantier ultérieur).
@@ -231,3 +232,20 @@ Un nouveau fichier `openapi.yaml` décrit uniquement le moteur SC. Ressources pr
 - Mécanisme de génération des SynthDefs par largeur.
 - Format et emplacement exacts du fichier de session et des presets (JSON versionné, dans le répertoire de données du moteur).
 - Port d'écoute de l'API (loopback uniquement), sous réserve qu'il soit publié et non réutilisé s'il est occupé par un processus inconnu.
+
+## 12. Installateur Windows
+
+Ajout demandé par l'utilisateur le 5 novembre 2026.
+
+| Sujet | Décision |
+|---|---|
+| Outil | Qt Installer Framework |
+| Contenu | Application Qt (`desktop/`), service moteur (`engine/`, avec ses dépendances `node_modules` de production), SuperCollider 3.14.1 embarqué |
+| SuperCollider | Embarqué dans un sous-dossier dédié de l'installation (`supercollider\`) : version figée, sans interférence avec une autre installation de SC |
+| Prérequis vérifiés, non installés | Node.js (même version majeure que celle utilisée en développement) et le pilote TimoxVasio. Leur absence arrête l'installation avec un message explicite |
+
+- SuperCollider est placé dans son propre sous-dossier, car sa distribution contient ses propres DLL Qt 6. Elles ne doivent pas se trouver dans le dossier de l'application Qt. Choix de l'intégrateur.
+- Le service moteur utilise le sclang, le scsynth et les plugins du sous-dossier embarqué. Le chemin est résolu par rapport au dossier d'installation ; l'interface ne le connaît pas.
+- Les données utilisateur (`session.json`, presets, registre runtime) restent dans `%LOCALAPPDATA%\Mixette\sc-engine\`. La désinstallation ne les supprime pas.
+- Le fichier `COPYING` de SuperCollider est installé avec le sous-dossier embarqué.
+- L'installateur crée un raccourci qui lance le service moteur puis l'application Qt, par un lanceur unique. Ce lanceur applique les règles de PID d'AGENTS.md.
