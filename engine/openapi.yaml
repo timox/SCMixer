@@ -235,6 +235,9 @@ paths:
     get:
       tags: [Sorties]
       summary: Étages ordonnés avec modèle demandé et modèle chargé (null si indisponible ou sans modèle)
+      description: >
+        Les étages sont listés dans l'ordre de traversée du signal : infraHpf, sideHpf, eq,
+        mix (volume), clipper, limiter, compressor. Le compresseur est le dernier étage.
       responses:
         '200':
           description: Graphe de traitement
@@ -547,7 +550,7 @@ components:
       type: object
       required: [stage, enabled, requestedModel, loadedModel]
       properties:
-        stage: { type: string, enum: [infraHpf, sideHpf, eq, compressor, clipper, limiter, mix] }
+        stage: { type: string, enum: [infraHpf, sideHpf, eq, mix, clipper, limiter, compressor] }
         enabled: { type: boolean }
         requestedModel: { type: [string, 'null'] }
         loadedModel: { type: [string, 'null'] }
