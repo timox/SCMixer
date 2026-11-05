@@ -112,6 +112,12 @@ paths:
     get:
       tags: [Moteur]
       summary: Arbre des nœuds du serveur (/g_queryTree)
+      parameters:
+        - name: controls
+          in: query
+          required: false
+          description: "true : /g_queryTree avec drapeau 1, chaque Synth porte ses contrôles (nom et valeur courante) ; false par défaut."
+          schema: { type: string, enum: ['true', 'false'] }
       responses:
         '200': { description: Arbre, content: { application/json: { schema: { $ref: '#/components/schemas/NodeTree' } } } }
         '409': { $ref: '#/components/responses/Error' }

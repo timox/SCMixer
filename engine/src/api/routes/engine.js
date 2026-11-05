@@ -1,4 +1,5 @@
 import { route } from '../async-route.js';
+import { ApiError } from '../../contract/errors.js';
 
 /** Charge utile de GET /api/state et de l'événement stateChanged. */
 export function statePayload(engine, session = engine.session()) {
@@ -16,5 +17,11 @@ export function registerEngineRoutes(api, engine) {
   api.post('/engine/stop', route(async (req, res) => res.json(await engine.stop())));
   api.post('/engine/restart', route(async (req, res) => res.json(await engine.restart())));
   api.get('/engine/runtime', route((req, res) => res.json(engine.runtime())));
-  api.get('/engine/node-tree', route(async (req, res) => res.json(await engine.nodeTree())));
+  api.get('/engine/node-tree', route(async (req, res) => {
+    const { controls } = req.query;
+    if (controls !== undefined && controls !== 'true' && controls !== 'false') {
+      throw new ApiError('VALIDATION', 400, 'Paramètre controls invalide : true ou false attendu.');
+    }
+    res.json(await engine.nodeTree({ controls: controls === 'true' }));
+  }));
 }

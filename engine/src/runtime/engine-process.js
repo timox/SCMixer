@@ -83,9 +83,10 @@ export function decodeServerTree(args) {
   return { rootId, nodes };
 }
 
-const NODE_TREE_CODE = `var tree, cond = Condition.new, resp;
+/** Requête /g_queryTree ; `flag` 1 ajoute les valeurs des contrôles de chaque Synth (Server-Command-Reference). */
+const nodeTreeCode = (flag) => `var tree, cond = Condition.new, resp;
 resp = OSCFunc({ |msg| tree = msg; cond.test = true; cond.signal }, '/g_queryTree.reply', ~mxServer.addr).oneShot;
-~mxServer.sendMsg('/g_queryTree', 0, 0);
+~mxServer.sendMsg('/g_queryTree', 0, ${flag});
 SystemClock.sched(5, { cond.test = true; cond.signal; nil });
 cond.wait;
 resp.free;
@@ -581,10 +582,10 @@ export class EngineProcess extends EventEmitter {
     return this.#ctx.queue.run(code, { result: true });
   }
 
-  /** Arbre des nœuds du serveur (/g_queryTree). */
-  async nodeTree() {
+  /** Arbre des nœuds du serveur (/g_queryTree) ; avec `controls`, valeurs des contrôles de chaque Synth. */
+  async nodeTree({ controls = false } = {}) {
     if (this.#status !== 'running') throw new ApiError('ENGINE_NOT_RUNNING', 409, 'Le moteur n\'est pas démarré.');
-    const payload = await this.#ctx.queue.run(NODE_TREE_CODE, { result: true });
+    const payload = await this.#ctx.queue.run(nodeTreeCode(controls ? 1 : 0), { result: true });
     return decodeServerTree(JSON.parse(payload));
   }
 }

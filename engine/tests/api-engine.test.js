@@ -38,6 +38,14 @@ test('runtime null et node-tree', async (t) => {
   const tree = await h.call('GET', '/api/engine/node-tree');
   assert.equal(tree.status, 200);
   assert.deepEqual(tree.body, { rootId: 0, nodes: [] });
+  assert.match(h.langs[0].commands().at(-1), /'\/g_queryTree', 0, 0\)/);
+  assert.equal((await h.call('GET', '/api/engine/node-tree?controls=true')).status, 200);
+  assert.match(h.langs[0].commands().at(-1), /'\/g_queryTree', 0, 1\)/);
+  assert.equal((await h.call('GET', '/api/engine/node-tree?controls=false')).status, 200);
+  assert.match(h.langs[0].commands().at(-1), /'\/g_queryTree', 0, 0\)/);
+  const bad = await h.call('GET', '/api/engine/node-tree?controls=oui');
+  assert.equal(bad.status, 400);
+  assert.equal(bad.body.error.code, 'VALIDATION');
 });
 
 test('horloge audio imposée par TimoxVasio : lue dans /api/engine et /api/state', async (t) => {
