@@ -61,22 +61,23 @@ test('contenu invalide sur disque : exclu de list, get leve', withDir((dir) => {
 test('compteur en retard apres crash simule : pas d ecrasement', withDir((dir) => {
   const store = new PresetStore(dir);
   const p1 = store.create('A', sess());
-  const file5 = path.join(dir, 'presets', 'preset-5.json');
-  fs.writeFileSync(file5, JSON.stringify({ ...p1, id: 'preset-5', name: 'Crash' }));
-  const before = fs.readFileSync(file5);
+  const file12 = path.join(dir, 'presets', 'preset-12.json');
+  fs.writeFileSync(file12, JSON.stringify({ ...p1, id: 'preset-12', name: 'Crash' }));
+  const before = fs.readFileSync(file12);
   const p = store.create('B', sess());
-  assert.equal(p.id, 'preset-6');
-  assert.ok(before.equals(fs.readFileSync(file5)));
+  assert.equal(p.id, 'preset-13');
+  assert.ok(before.equals(fs.readFileSync(file12)));
 }));
 
 test('sequence.json supprime avec presets existants : pas d ecrasement', withDir((dir) => {
   const store = new PresetStore(dir);
   const p1 = store.create('A', sess());
+  fs.renameSync(path.join(dir, 'presets', 'preset-1.json'), path.join(dir, 'presets', 'preset-12.json'));
+  fs.writeFileSync(path.join(dir, 'presets', 'preset-12.json'), JSON.stringify({ ...p1, id: 'preset-12' }));
   fs.rmSync(path.join(dir, 'presets', 'sequence.json'));
   const p2 = store.create('B', sess());
-  assert.equal(p2.id, 'preset-2');
-  assert.equal(store.get('preset-1').name, 'A');
-  assert.equal(p1.id, 'preset-1');
+  assert.equal(p2.id, 'preset-13');
+  assert.equal(store.get('preset-12').name, 'A');
 }));
 
 test('contenu de session invalide a la creation : VALIDATION, rien ecrit', withDir((dir) => {

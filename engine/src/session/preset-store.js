@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 const fail = (code, message) => new ApiError(code, codes[code], message);
 const ID = /^preset-[1-9]\d*$/;
+const FILE = /^(preset-([1-9]\d*))\.json$/;
 
 const PresetFile = z.strictObject({
   version: z.literal(1),
@@ -59,7 +60,7 @@ export class PresetStore {
     if (!fs.existsSync(this.dir)) return [];
     const out = [];
     for (const f of fs.readdirSync(this.dir)) {
-      const m = /^(preset-[1-9]\d*)\.json$/.exec(f);
+      const m = FILE.exec(f);
       if (!m) continue;
       try {
         const { id, name, createdAt } = this.read(m[1]);
@@ -84,8 +85,8 @@ export class PresetStore {
     if (!fs.existsSync(this.dir)) return 0;
     let max = 0;
     for (const f of fs.readdirSync(this.dir)) {
-      const m = /^preset-([1-9]d*).json$/.exec(f);
-      if (m) max = Math.max(max, Number(m[1]));
+      const m = FILE.exec(f);
+      if (m) max = Math.max(max, Number(m[2]));
     }
     return max;
   }
