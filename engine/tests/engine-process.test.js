@@ -425,3 +425,22 @@ test('scDir est transmis à la fabrique sclang', async () => {
   await engine.start();
   assert.equal(langs[0].factoryOptions.scDir, 'D:\SC');
 });
+
+test('échec de démarrage : ApiError SC_COMMAND_FAILED avec la cause audio lue dans la sortie sclang', async () => {
+  let alive = true;
+  const { engine, langs, dataDir } = setup({
+    isAlive: () => alive, watchIntervalMs: 10,
+    lang: { bootState: () => new Promise(() => {}) },
+    engine: { askTimeoutMs: 2000 },
+  });
+  const started = engine.start();
+  await wait(50);
+  langs[0].factoryOptions.onOutput('stdout', "SC_PortAudioDriver: PortAudio failed at Pa_OpenStream with error: 'Invalid sample rate'\ncould not initialize audio.\n");
+  alive = false;
+  await assert.rejects(started, (e) => e.code === 'SC_COMMAND_FAILED' && e.status === 502
+    && /s'est arrêté/.test(e.message) && /Invalid sample rate/.test(e.message));
+  assert.match(engine.state().error, /Invalid sample rate/);
+  const log = fs.readFileSync(path.join(dataDir, 'logs', 'sclang.log'), 'utf8');
+  assert.match(log, /===== .* démarrage du moteur =====/);
+  assert.match(log, /Invalid sample rate/);
+});

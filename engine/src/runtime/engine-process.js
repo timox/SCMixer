@@ -27,11 +27,17 @@ const busy = (message) => new ApiError('ENGINE_BUSY', 409, message);
 export const DEFAULT_SC_DIR = 'C:\\Program Files\\SuperCollider-3.14.1';
 
 /** Démarre sclang via supercolliderjs (chargé à la demande : absent des tests). */
-export async function defaultLangFactory({ includePaths, langPort, scDir = DEFAULT_SC_DIR }) {
+export async function defaultLangFactory({ includePaths, langPort, scDir = DEFAULT_SC_DIR, onOutput = () => {} }) {
   const { default: sc } = await import('supercolliderjs');
   const sclang = process.env.SCLANG_PATH
     || (process.platform === 'win32' ? path.join(scDir, 'sclang.exe') : 'sclang');
-  return sc.lang.boot({ sclang, conf: { includePaths }, stdin: false, echo: false, langPort });
+  // Instance créée avant boot() pour journaliser aussi la sortie du démarrage (compilation, erreurs).
+  const lang = new sc.lang.default({ sclang, conf: { includePaths }, stdin: false, echo: false, langPort });
+  lang.on('stdout', (text) => onOutput('stdout', text));
+  lang.on('stderr', (text) => onOutput('stderr', text));
+  lang.on('error', (err) => onOutput('error', JSON.stringify(err)));
+  await lang.boot();
+  return lang;
 }
 
 /** Décodage d'une réponse /g_queryTree aplatie (copie réduite de hub/sc/query-tree.js). */
@@ -101,7 +107,7 @@ class StaleBoot extends Error {}
 
 export class EngineProcess extends EventEmitter {
   #store; #registry; #langFactory; #listenerFactory; #resolveScsynth; #isAlive; #kill; #watchMs;
-  #apiUrl; #scDir; #langPort; #askTimeoutMs; #resolveAttempts;
+  #apiUrl; #scDir; #langPort; #logFile; #askTimeoutMs; #resolveAttempts;
   #status = 'stopped'; #error = null; #scsynthPid = null;
   #models = { Compander: true, CompanderD: false, FaustRMS: false };
   #session; #generation = 0;
@@ -132,6 +138,7 @@ export class EngineProcess extends EventEmitter {
     this.#resolveAttempts = resolveAttempts;
     this.#apiUrl = apiUrl;
     this.#scDir = scDir;
+    this.#logFile = dataDir ? path.join(dataDir, 'logs', 'sclang.log') : null;
     this.#session = store.load();
   }
 
@@ -178,6 +185,18 @@ export class EngineProcess extends EventEmitter {
     this.emit('session', { session: structuredClone(session), generation: this.#generation });
   }
 
+  /** Ouvre un nouveau bloc horodaté de `<dataDir>/logs/sclang.log` et renvoie l'écriveur de sortie sclang. */
+  #openLog() {
+    if (!this.#logFile) return () => {};
+    const write = (text) => {
+      try { fs.appendFileSync(this.#logFile, text); } catch { /* le journal ne doit jamais faire échouer le moteur */ }
+    };
+    try { fs.mkdirSync(path.dirname(this.#logFile), { recursive: true }); } catch { /* idem */ }
+    write(`\n===== ${new Date().toISOString()} démarrage du moteur =====\n`);
+    const line = (text) => String(text).replace(/\n?$/, '\n');
+    return (stream, text) => write(stream === 'stdout' ? line(text) : `[${stream}] ${line(text)}`);
+  }
+
   #bootSource(relayPort) {
     const { sampleRate, bufferFrames } = this.#session.audioProfile;
     const tokens = {
@@ -217,7 +236,8 @@ export class EngineProcess extends EventEmitter {
         await Promise.race([this.#boot(ctx), abort]);
       } catch (e) {
         if (this.#ctx === ctx) this.#failInternal(e);
-        throw e;
+        if (e instanceof ApiError || e instanceof StaleBoot) throw e;
+        throw new ApiError('SC_COMMAND_FAILED', 502, `Démarrage du moteur impossible : ${e?.message ?? e}`);
       } finally {
         this.#abortBoot = null;
       }
@@ -266,7 +286,13 @@ export class EngineProcess extends EventEmitter {
     const relayPort = await ctx.listener.start();
     await this.#alive(ctx);
     const includePaths = [path.join(SC_DIR, 'plugins')];
-    const lang = await this.#langFactory({ includePaths, langPort: this.#langPort, scDir: this.#scDir });
+    const writeLog = this.#openLog();
+    const onOutput = (stream, text) => {
+      writeLog(stream, text);
+      const m = /PortAudio failed[^\r\n]*|could not initialize audio/.exec(String(text));
+      if (m) ctx.audioCause = ctx.audioCause ? `${ctx.audioCause} ; ${m[0]}` : m[0];
+    };
+    const lang = await this.#langFactory({ includePaths, langPort: this.#langPort, scDir: this.#scDir, onOutput });
     ctx.lang = lang;
     lang.on('exit', (code) => this.#onLangExit(ctx, code));
     await this.#alive(ctx);
@@ -371,6 +397,7 @@ export class EngineProcess extends EventEmitter {
 
   #onFailure(ctx, error) {
     if (this.#ctx !== ctx) return;
+    if (ctx.audioCause) error = new Error(`${error.message} (cause audio : ${ctx.audioCause}, voir logs/sclang.log)`);
     if (this.#abortBoot) { this.#abortBoot(error); return; }
     if (this.#status === 'running') this.#failInternal(error);
   }
