@@ -633,3 +633,92 @@
   };
   true
 };
+
+// === BANCS DE MESURE : fonctions (SynthDefs : ~mxBenchDefs) ===
+// Appelées par la file de commandes Node (Routine : .wait et server.sync autorisés). Chaque fonction
+// renvoie une chaîne décodée par src/api/routes/benches.js. Les bus des bancs sont alloués par
+// l'allocateur à la demande (marge de numAudioBusChannels : src/runtime/server-options.js) et libérés
+// à la fin du banc.
+
+// Banc compresseur : signal interne (100 Hz, 1 kHz, 8 kHz) traité par \mx_dyn_2 sur un bus privé par
+// cas, mesuré par \mx_bench_dynamics_meter. `cases` : drapeaux de contournement [low, mid, high]
+// (0 = bande compressée), dans l'ordre des cas de l'API. Réglages des bandes : défauts de la SynthDef.
+// Rien n'atteint Master ni Cue. Retour : « complete|peak,rms|… » ou « partial|… » (cellule vide = cas
+// sans mesure reçue), amplitudes linéaires.
+~mxCompressorBenchRun = { |seconds, cases|
+  var server = ~mxServer, busses = List.new, synths = List.new;
+  var results = Array.newClear(cases.size), resp, cleanup;
+  cleanup = {
+    resp !? { resp.free };
+    synths.do { |synth| synth.free };
+    busses.do { |bus| bus.free };
+  };
+  try {
+    ~mxEnsureWidth.(2);
+    resp = OSCFunc({ |msg|
+      var id = msg[2].asInteger;
+      if(id >= 0 and: { id < cases.size }) { results[id] = [msg[3], msg[4]] };
+    }, '/mx/dynamics-bench', server.addr);
+    cases.do { |bypass, i|
+      var bus = Bus.audio(server, 2);
+      busses.add(bus);
+      synths.add(Synth.tail(~mxBenchGroup, \mx_bench_dynamics_source, [\out, bus.index]));
+      synths.add(Synth.tail(~mxBenchGroup, ~mxDefName.(\dyn, 2), [\bus, bus.index,
+        \lowBypass, bypass[0], \midBypass, bypass[1], \highBypass, bypass[2]]));
+      synths.add(Synth.tail(~mxBenchGroup, \mx_bench_dynamics_meter, [\in, bus.index, \caseId, i]));
+    };
+    seconds.wait;
+    cleanup.value;
+  } { |error|
+    cleanup.value;
+    error.throw;
+  };
+  ([if(results.every(_.notNil)) { "complete" } { "partial" }]
+    ++ results.collect { |r| if(r.isNil) { "" } { r[0].asString ++ "," ++ r[1].asString } }).join("|")
+};
+
+// Banc EQ : bruit rose traité par \mx_eqlab_legacy ou \mx_eqlab_threeband, puis \mx_lab_monitor qui
+// remplace Master (sorties matérielles 0/1) en fin de ~mxOutputGroup, après les écrivains de sortie.
+// Retour : « stopped », « running|méthode|low|mid|high » ou « refused|BENCH_RUNNING|BENCH_NOT_RUNNING ».
+~mxEqBench = nil;
+~mxEqBenchDefs = (legacyStack: \mx_eqlab_legacy, threeBand: \mx_eqlab_threeband);
+~mxEqBenchState = {
+  var b = ~mxEqBench;
+  if(b.isNil) { "stopped" } { ["running", b[\method], b[\low], b[\mid], b[\high]].collect(_.asString).join("|") }
+};
+~mxEqBenchStart = { |method, low, mid, high|
+  var server = ~mxServer, inBus, outBus, noise, processor, monitor;
+  if(~mxEqBench.notNil) { "refused|BENCH_RUNNING" } {
+    inBus = Bus.audio(server, 2);
+    outBus = Bus.audio(server, 2);
+    noise = Synth.tail(~mxBenchGroup, \mx_eqlab_noise, [\out, inBus.index]);
+    processor = Synth.tail(~mxBenchGroup, ~mxEqBenchDefs[method],
+      [\in, inBus.index, \out, outBus.index, \low, low, \mid, mid, \high, high]);
+    monitor = Synth.tail(~mxOutputGroup, \mx_lab_monitor, [\in, outBus.index, \out, 0]);
+    ~mxEqBench = (method: method, low: low, mid: mid, high: high,
+      noise: noise, processor: processor, monitor: monitor, busses: [inBus, outBus]);
+    ~mxEqBenchState.value
+  }
+};
+~mxEqBenchSet = { |method, low, mid, high|
+  var b = ~mxEqBench;
+  if(b.isNil) { "refused|BENCH_NOT_RUNNING" } {
+    if(b[\method] != method) {
+      b[\processor] = Synth.replace(b[\processor], ~mxEqBenchDefs[method],
+        [\in, b[\busses][0].index, \out, b[\busses][1].index, \low, low, \mid, mid, \high, high]);
+    } {
+      b[\processor].set(\low, low, \mid, mid, \high, high);
+    };
+    b[\method] = method; b[\low] = low; b[\mid] = mid; b[\high] = high;
+    ~mxEqBenchState.value
+  }
+};
+~mxEqBenchStop = {
+  var b = ~mxEqBench;
+  if(b.notNil) {
+    [b[\monitor], b[\processor], b[\noise]].do { |synth| synth.free };
+    b[\busses].do { |bus| bus.free };
+    ~mxEqBench = nil;
+  };
+  "stopped"
+};

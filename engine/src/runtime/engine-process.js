@@ -575,6 +575,12 @@ export class EngineProcess extends EventEmitter {
     return structuredClone(session);
   }
 
+  /** Commande de mesure (bancs) : ne modifie pas la session ; sérialisée avec les autres commandes sclang. */
+  async diagnostic(code) {
+    if (this.#status !== 'running') throw new ApiError('ENGINE_NOT_RUNNING', 409, "Le moteur n'est pas démarré.");
+    return this.#ctx.queue.run(code, { result: true });
+  }
+
   /** Arbre des nœuds du serveur (/g_queryTree). */
   async nodeTree() {
     if (this.#status !== 'running') throw new ApiError('ENGINE_NOT_RUNNING', 409, 'Le moteur n\'est pas démarré.');

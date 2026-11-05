@@ -37,7 +37,7 @@ class FakeLang extends EventEmitter {
     if (m) {
       setImmediate(() => this.listener.emit('message', {
         address: '/mx/ack',
-        args: [Number(m[1]), 'ok', code.includes('g_queryTree') ? '[0,0,0]' : ''],
+        args: [Number(m[1]), 'ok', this.opts.reply?.(code) ?? (code.includes('g_queryTree') ? '[0,0,0]' : '')],
       }));
     }
     return undefined;

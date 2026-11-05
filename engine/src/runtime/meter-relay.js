@@ -2,7 +2,7 @@ const FLOOR_DB = -120;
 const OUTPUTS = [['master', 'left'], ['master', 'right'], ['cue', 'left'], ['cue', 'right']];
 
 /** Amplitude linéaire vers dBFS ; 0, -Infinity, NaN et valeurs non finies donnent le plancher. */
-function toDb(value) {
+export function toDb(value) {
   const n = Number(value);
   if (!Number.isFinite(n) || n <= 0) return FLOOR_DB;
   return Math.max(FLOOR_DB, 20 * Math.log10(n));

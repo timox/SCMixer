@@ -5,6 +5,8 @@ import { registerEngineRoutes, statePayload } from './routes/engine.js';
 import { registerSourceRoutes } from './routes/sources.js';
 import { registerOutputRoutes } from './routes/outputs.js';
 import { registerParameterRoutes } from './routes/parameters.js';
+import { registerPresetRoutes } from './routes/presets.js';
+import { registerBenchRoutes } from './routes/benches.js';
 
 const notFound = (req) => new ApiError('NOT_FOUND', 404, `Route inconnue : ${req.method} ${req.path}.`);
 
@@ -21,6 +23,8 @@ export function createServer({ engine, presets }) {
   registerSourceRoutes(api, engine);
   registerOutputRoutes(api, engine);
   registerParameterRoutes(api);
+  registerPresetRoutes(api, engine, presets);
+  registerBenchRoutes(api, engine);
   app.use('/api', api);
 
   app.use((req, res, next) => next(notFound(req)));

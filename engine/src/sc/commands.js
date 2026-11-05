@@ -1,4 +1,4 @@
-import { SOURCE_STAGES, OUTPUT_STAGES, BAND_GROUPS } from '../contract/schemas.js';
+import { SOURCE_STAGES, OUTPUT_STAGES, BAND_GROUPS, EQ_BENCH_METHODS } from '../contract/schemas.js';
 import { sourceControls, outputControls } from '../contract/controls.js';
 
 const OUTPUTS = ['master', 'cue'];
@@ -111,6 +111,46 @@ export function applySessionCode(session, meterIds) {
     for (const stage of OUTPUT_STAGES) {
       statements.push(setOutputStageCode(output, stage, session.outputs[output][stage]));
     }
+  }
+  return statements.join('; ');
+}
+
+/**
+ * Banc compresseur : exécution de `seconds` sur signal interne ; `cases` donne, par cas, les bandes compressées
+ * (transmises à sclang en drapeaux de contournement 0/1). Renvoie « statut|peak,rms|… » (graph.scd).
+ */
+export function compressorBenchCode(seconds, cases) {
+  const list = cases.map(({ compressed }) => `[${['low', 'mid', 'high'].map((b) => (compressed[b] ? 0 : 1)).join(', ')}]`);
+  return `~mxCompressorBenchRun.(${number(seconds)}, [${list.join(', ')}])`;
+}
+
+function eqBenchArgs({ method, parameters }) {
+  return `${oneOf(EQ_BENCH_METHODS, method, 'Méthode de banc EQ')}, ${number(parameters.low)}, ${number(parameters.mid)}, ${number(parameters.high)}`;
+}
+
+/** Banc EQ : chaque fonction renvoie l'état « stopped » ou « running|méthode|low|mid|high », ou « refused|CODE ». */
+export function eqBenchStartCode(bench) {
+  return `~mxEqBenchStart.(${eqBenchArgs(bench)})`;
+}
+
+export function eqBenchSetCode(bench) {
+  return `~mxEqBenchSet.(${eqBenchArgs(bench)})`;
+}
+
+export const EQ_BENCH_STOP_CODE = '~mxEqBenchStop.()';
+export const EQ_BENCH_STATE_CODE = '~mxEqBenchState.()';
+
+/** Application d'un preset en un seul passage : retraits (fondu sortant), remplacements (fondu enchaîné), ajouts, puis sorties. */
+export function applyPresetCode(current, next, meterIdFor) {
+  const kept = new Set(next.sources.map((s) => s.id));
+  const existing = new Set(current.sources.map((s) => s.id));
+  const statements = current.sources.filter((s) => !kept.has(s.id)).map((s) => removeSourceCode(s.id));
+  for (const source of next.sources) {
+    const meterId = meterIdFor(source.id);
+    statements.push(existing.has(source.id) ? replaceSourceCode(source, meterId) : addSourceCode(source, meterId));
+  }
+  for (const output of OUTPUTS) {
+    for (const stage of OUTPUT_STAGES) statements.push(setOutputStageCode(output, stage, next.outputs[output][stage]));
   }
   return statements.join('; ');
 }

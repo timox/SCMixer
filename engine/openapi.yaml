@@ -293,6 +293,93 @@ paths:
           content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/GraphStage' } } } }
         '404': { $ref: '#/components/responses/Error' }
 
+  /api/presets:
+    get:
+      tags: [Presets]
+      summary: Liste des presets (identifiant, nom, date de création), triés par identifiant
+      responses:
+        '200': { description: Presets, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/PresetSummary' } } } } }
+    post:
+      tags: [Presets]
+      summary: Enregistre la session courante (sources, réglages, Master, Cue) ; moteur arrêté ou démarré
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PresetCreate' } } }
+      responses:
+        '201': { description: Preset créé, content: { application/json: { schema: { $ref: '#/components/schemas/PresetSummary' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+  /api/presets/{id}:
+    parameters: [ { $ref: '#/components/parameters/PresetId' } ]
+    delete:
+      tags: [Presets]
+      summary: Supprime un preset (son identifiant n'est jamais réutilisé)
+      responses:
+        '204': { description: Supprimé }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/presets/{id}/apply:
+    parameters: [ { $ref: '#/components/parameters/PresetId' } ]
+    post:
+      tags: [Presets]
+      summary: Remplace toute la session par le contenu du preset, en une seule mutation
+      description: >
+        Contenu validé avant tout code sclang (canaux, identifiants, modèles disponibles) : un preset invalide
+        est refusé en bloc, session et fichier inchangés. Sources absentes du preset : retrait en fondu ;
+        sources conservées : remplacement en fondu enchaîné (~mxReplaceSource) ; sources nouvelles : ajout en
+        fondu ; puis tous les étages de Master et Cue. nextSourceSeq ne recule jamais. Moteur démarré requis.
+      responses:
+        '200': { description: État confirmé, content: { application/json: { schema: { $ref: '#/components/schemas/State' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+  /api/benches/compressor/run:
+    post:
+      tags: [Bancs]
+      summary: Banc du compresseur trois bandes (3 s, signal interne, jamais vers Master ni Cue)
+      description: >
+        Signal interne 100 Hz + 1 kHz + 8 kHz traité par la SynthDef de compression trois bandes de largeur 2,
+        réglages par défaut des bandes, dans cinq cas (aucune bande, grave, médium, aigu, toutes) ; RMS et crête
+        mesurés sur bus privés. Corps vide. Moteur démarré requis ; la requête reste ouverte 3 s.
+      responses:
+        '200': { description: Résultats, content: { application/json: { schema: { $ref: '#/components/schemas/CompressorBenchResult' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+  /api/benches/eq:
+    get:
+      tags: [Bancs]
+      summary: État du banc EQ, relu dans sclang (arrêté si le moteur est arrêté)
+      responses:
+        '200': { description: État, content: { application/json: { schema: { $ref: '#/components/schemas/EqBenchState' } } } }
+    put:
+      tags: [Bancs]
+      summary: Change la méthode ou les bandes du banc EQ démarré (409 BENCH_NOT_RUNNING sinon)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/EqBench' } } }
+      responses:
+        '200': { description: État, content: { application/json: { schema: { $ref: '#/components/schemas/EqBenchState' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/benches/eq/start:
+    post:
+      tags: [Bancs]
+      summary: Démarre le banc EQ (bruit rose traité qui remplace Master sur les sorties 1/2) ; 409 BENCH_RUNNING s'il est déjà démarré
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/EqBench' } } }
+      responses:
+        '200': { description: État, content: { application/json: { schema: { $ref: '#/components/schemas/EqBenchState' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/benches/eq/stop:
+    post:
+      tags: [Bancs]
+      summary: Arrête le banc EQ et rend Master (sans effet s'il est arrêté) ; corps vide
+      responses:
+        '200': { description: État, content: { application/json: { schema: { $ref: '#/components/schemas/EqBenchState' } } } }
+        '409': { $ref: '#/components/responses/Error' }
+
 x-websocket:
   path: /api/ws
   description: >
@@ -323,6 +410,12 @@ components:
       required: true
       description: Identifiant de la forme src-<n>
       schema: { type: string, pattern: '^src-[0-9]+$' }
+    PresetId:
+      name: id
+      in: path
+      required: true
+      description: Identifiant de la forme preset-<n>
+      schema: { type: string, pattern: '^preset-[1-9][0-9]*$' }
     Output:
       name: output
       in: path
@@ -342,6 +435,66 @@ components:
       description: Sortie confirmée
       content: { application/json: { schema: { $ref: '#/components/schemas/Output' } } }
   schemas:
+    PresetCreate:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 60 }
+    PresetSummary:
+      type: object
+      required: [id, name, createdAt]
+      properties:
+        id: { type: string, pattern: '^preset-[1-9][0-9]*$' }
+        name: { type: string }
+        createdAt: { type: string, format: date-time }
+    EqBench:
+      type: object
+      additionalProperties: false
+      required: [method, parameters]
+      properties:
+        method: { type: string, enum: [legacyStack, threeBand], description: "legacyStack : ancien empilement de multiplicateurs scalaires ; threeBand : plateau grave 80 Hz, cloche 1 kHz, plateau aigu 8 kHz, ±12 dB, appliqués deux fois (source puis sortie)." }
+        parameters: { $ref: '#/components/schemas/EqBenchParameters' }
+    EqBenchParameters:
+      type: object
+      additionalProperties: false
+      required: [low, mid, high]
+      properties:
+        low: { type: number, minimum: 0, maximum: 1 }
+        mid: { type: number, minimum: 0, maximum: 1 }
+        high: { type: number, minimum: 0, maximum: 1 }
+    EqBenchState:
+      type: object
+      required: [running, method, parameters]
+      properties:
+        running: { type: boolean }
+        method: { type: [string, 'null'], enum: [legacyStack, threeBand, null] }
+        parameters:
+          oneOf:
+            - { type: 'null' }
+            - { $ref: '#/components/schemas/EqBenchParameters' }
+    CompressorBenchResult:
+      type: object
+      required: [status, seconds, cases]
+      properties:
+        status: { type: string, enum: [complete, partial], description: "partial : au moins un cas sans mesure reçue." }
+        seconds: { type: number }
+        cases:
+          type: array
+          items:
+            type: object
+            required: [case, compressed, peakDb, rmsDb]
+            properties:
+              case: { type: string, enum: [none, low, mid, high, all] }
+              compressed:
+                type: object
+                required: [low, mid, high]
+                properties:
+                  low: { type: boolean }
+                  mid: { type: boolean }
+                  high: { type: boolean }
+              peakDb: { type: [number, 'null'], description: "Crête en dBFS (plancher -120), null sans mesure." }
+              rmsDb: { type: [number, 'null'], description: "RMS en dBFS (plancher -120), null sans mesure." }
     ParameterCatalog:
       type: object
       required: [source, output]
@@ -414,10 +567,10 @@ components:
           properties:
             code:
               type: string
-              enum: [VALIDATION, NOT_FOUND, CHANNEL_OVERLAP, CHANNEL_LIMIT, ENGINE_NOT_RUNNING, ENGINE_BUSY, ENGINE_RESTART_REQUIRED, MODEL_UNAVAILABLE, TIMOXVASIO_NOT_READY, SC_COMMAND_FAILED, INTERNAL]
+              enum: [VALIDATION, NOT_FOUND, CHANNEL_OVERLAP, CHANNEL_LIMIT, ENGINE_NOT_RUNNING, ENGINE_BUSY, ENGINE_RESTART_REQUIRED, MODEL_UNAVAILABLE, TIMOXVASIO_NOT_READY, BENCH_RUNNING, BENCH_NOT_RUNNING, SC_COMMAND_FAILED, INTERNAL]
               description: >
                 VALIDATION 400, NOT_FOUND 404, CHANNEL_OVERLAP 409, CHANNEL_LIMIT 400,
-                ENGINE_NOT_RUNNING 409, ENGINE_BUSY 409, ENGINE_RESTART_REQUIRED 409, MODEL_UNAVAILABLE 409, TIMOXVASIO_NOT_READY 409,
+                ENGINE_NOT_RUNNING 409, ENGINE_BUSY 409, ENGINE_RESTART_REQUIRED 409, MODEL_UNAVAILABLE 409, TIMOXVASIO_NOT_READY 409, BENCH_RUNNING 409, BENCH_NOT_RUNNING 409,
                 SC_COMMAND_FAILED 502, INTERNAL 500.
             message: { type: string }
     State:

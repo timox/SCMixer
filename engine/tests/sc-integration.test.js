@@ -75,6 +75,13 @@ test('modèles : FaustRMS indisponible si scsynth ne charge pas le plug-in ; éc
   assert.ok(verdict.includes('MX-TEST-OK'), `verdict absent ou en échec : ${verdict.join(' | ')}\n${output.slice(-4000)}`);
 });
 
+test('bancs : compresseur (cinq cas, compression mesurée, libération) et cycle du banc EQ', { timeout: TIMEOUT_MS + 10000 }, async () => {
+  const { output, timedOut } = await runSclang(path.resolve(here, 'sc', 'benches.scd'));
+  const verdict = output.split(/\r?\n/).filter((line) => line.startsWith('MX-TEST-'));
+  assert.equal(timedOut, false, `sclang n'a pas terminé en ${TIMEOUT_MS} ms\n${output.slice(-4000)}`);
+  assert.ok(verdict.includes('MX-TEST-OK'), `verdict absent ou en échec : ${verdict.join(' | ')}\n${output.slice(-4000)}`);
+});
+
 /**
  * Copie d'engine.scd avec tous les jetons substitués, pour un serveur de test.
  * Port UDP 57130 -> 57143, sortie MME sans entrée matérielle (numInputBusChannels = 0 : l'ouverture

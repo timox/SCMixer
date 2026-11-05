@@ -7,7 +7,8 @@ import { ApiError, codes } from '../contract/errors.js';
 
 const fail = (code, message) => new ApiError(code, codes[code], message);
 
-function parse(schema, value, what) {
+/** Validation stricte d'un corps ou d'un contenu : 400 VALIDATION avec le détail des écarts. */
+export function parse(schema, value, what) {
   const r = schema.safeParse(value);
   if (!r.success) {
     const detail = r.error.issues.map((i) => `${i.path.join('.') || '(racine)'} : ${i.message}`).join(' ; ');
@@ -143,4 +144,14 @@ export function replaceSessionContent(session, content) {
     sources: clone(sources),
     outputs: clone(outputs),
   };
+}
+
+/**
+ * Contenu d'un preset appliqué à la session : remplace sources et sorties. nextSourceSeq ne recule
+ * jamais (identifiants jamais réutilisés) : maximum de la valeur courante et du suivant du preset.
+ */
+export function applyPreset(session, content) {
+  const seqs = (content?.sources ?? []).map((s) => Number(/^src-(\d+)$/.exec(s.id)?.[1] ?? 0));
+  const nextSourceSeq = Math.max(1, ...seqs.map((n) => n + 1));
+  return replaceSessionContent(session, { ...content, nextSourceSeq });
 }
