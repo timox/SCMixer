@@ -55,6 +55,13 @@ paths:
       summary: État complet publié par stateChanged
       responses:
         '200': { description: État, content: { application/json: { schema: { $ref: '#/components/schemas/State' } } } }
+  /api/parameters:
+    get:
+      tags: [Moteur]
+      summary: Catalogue des paramètres (plages, défauts, unités, libellés), moteur arrêté ou démarré
+      description: "Bornes, options et défauts tirés des schémas du contrat ; libellés et unités tenus dans src/contract/descriptors.js. Aucune valeur n'est recopiée côté client. appliesTo masque un champ quand la condition (largeur, modèle) n'est pas remplie."
+      responses:
+        '200': { description: Catalogue, content: { application/json: { schema: { $ref: '#/components/schemas/ParameterCatalog' } } } }
   /api/engine:
     get:
       tags: [Moteur]
@@ -335,6 +342,68 @@ components:
       description: Sortie confirmée
       content: { application/json: { schema: { $ref: '#/components/schemas/Output' } } }
   schemas:
+    ParameterCatalog:
+      type: object
+      required: [source, output]
+      properties:
+        source:
+          type: object
+          required: [mix, input, inputCompressor, eq, hp, lp, pitch, bandCompressor]
+          properties:
+            mix: { $ref: '#/components/schemas/ParameterStage' }
+            input: { $ref: '#/components/schemas/ParameterStage' }
+            inputCompressor: { $ref: '#/components/schemas/ParameterStage' }
+            eq: { $ref: '#/components/schemas/ParameterStage' }
+            hp: { $ref: '#/components/schemas/ParameterStage' }
+            lp: { $ref: '#/components/schemas/ParameterStage' }
+            pitch: { $ref: '#/components/schemas/ParameterStage' }
+            bandCompressor:
+              type: object
+              required: [low, mid, high, crossover]
+              properties:
+                low: { $ref: '#/components/schemas/ParameterStage' }
+                mid: { $ref: '#/components/schemas/ParameterStage' }
+                high: { $ref: '#/components/schemas/ParameterStage' }
+                crossover: { $ref: '#/components/schemas/ParameterStage' }
+        output:
+          type: object
+          description: Un ParameterStage par étage de sortie (mix, eq, infraHpf, sideHpf, clipper, limiter, compressor).
+          additionalProperties: { $ref: '#/components/schemas/ParameterStage' }
+    ParameterStage:
+      type: object
+      required: [fields]
+      properties:
+        fields:
+          type: array
+          description: Champs dans l'ordre du schéma.
+          items: { $ref: '#/components/schemas/ParameterField' }
+    ParameterField:
+      type: object
+      required: [key, type, default, label, description, scale]
+      properties:
+        key: { type: string }
+        type: { type: string, enum: [number, integer, boolean, enum] }
+        default: {}
+        label: { type: string }
+        description: { type: string }
+        unit: { type: string }
+        scale: { type: string, enum: [linear, log] }
+        min: { type: number }
+        max: { type: number }
+        step: { type: integer }
+        options: { type: array, items: { type: string } }
+        appliesTo:
+          type: object
+          description: "width {min, max} et/ou model [valeurs] : le champ n'est applicable que si toutes les conditions présentes sont remplies."
+          properties:
+            width:
+              type: object
+              properties:
+                min: { type: integer }
+                max: { type: integer }
+            model:
+              type: array
+              items: { type: string }
     Error:
       type: object
       required: [error]
