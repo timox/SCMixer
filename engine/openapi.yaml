@@ -81,6 +81,14 @@ paths:
     post:
       tags: [Sources]
       summary: Crée une source avec le traitement par défaut
+      description: >
+        Les options de scsynth (bus audio, tampons d'interconnexion, nœuds, mémoire) sont calculées au
+        démarrage du moteur pour un dimensionnement donné (nombre maximal de sources, largeur maximale)
+        et ne peuvent plus croître ensuite. Une création au-delà de ce dimensionnement est refusée par
+        409 ENGINE_RESTART_REQUIRED, état inchangé. La première source d'une largeur donnée construit
+        les SynthDefs de cette largeur dans sclang ; la requête reste ouverte pendant la construction
+        (environ 9 s mesurées pour la largeur 256, 0,84 s pour 64), la file de commandes sclang
+        attendant jusqu'à 120 s l'acquittement avant 502 SC_COMMAND_FAILED.
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SourceCreate' } } } }
       responses:
         '201': { $ref: '#/components/responses/Source' }
@@ -96,7 +104,7 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
     patch:
       tags: [Sources]
-      summary: Modifie le nom ou les canaux ; un changement de canaux recrée la source dans le moteur
+      summary: Modifie le nom ou les canaux ; un changement de canaux recrée la source dans le moteur ; au-delà du dimensionnement de scsynth, 409 ENGINE_RESTART_REQUIRED
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SourcePatch' } } } }
       responses:
         '200': { $ref: '#/components/responses/Source' }
@@ -289,10 +297,10 @@ components:
           properties:
             code:
               type: string
-              enum: [VALIDATION, NOT_FOUND, CHANNEL_OVERLAP, CHANNEL_LIMIT, ENGINE_NOT_RUNNING, ENGINE_BUSY, MODEL_UNAVAILABLE, TIMOXVASIO_NOT_READY, SC_COMMAND_FAILED, INTERNAL]
+              enum: [VALIDATION, NOT_FOUND, CHANNEL_OVERLAP, CHANNEL_LIMIT, ENGINE_NOT_RUNNING, ENGINE_BUSY, ENGINE_RESTART_REQUIRED, MODEL_UNAVAILABLE, TIMOXVASIO_NOT_READY, SC_COMMAND_FAILED, INTERNAL]
               description: >
                 VALIDATION 400, NOT_FOUND 404, CHANNEL_OVERLAP 409, CHANNEL_LIMIT 400,
-                ENGINE_NOT_RUNNING 409, ENGINE_BUSY 409, MODEL_UNAVAILABLE 409, TIMOXVASIO_NOT_READY 409,
+                ENGINE_NOT_RUNNING 409, ENGINE_BUSY 409, ENGINE_RESTART_REQUIRED 409, MODEL_UNAVAILABLE 409, TIMOXVASIO_NOT_READY 409,
                 SC_COMMAND_FAILED 502, INTERNAL 500.
             message: { type: string }
     State:

@@ -94,13 +94,25 @@ server.options.ugenPluginsPath = [Platform.resourceDir +/+ "plugins", root +/+ "
 server.waitForBoot({
   try {
     var neutral = [\in, \eqdirect, \hp, \lp, \pitch, \dyn, \mix];
-    var errors, tasks, groupsBefore, groupsAfter, defaultTree, sourcesTree, outputTree, outputDefs, ids1, ids3, removedGroup, raised;
+    var errors, tasks, groupsBefore, groupsAfter, defaultTree, sourcesTree, outputTree, outputDefs, ids1, ids3, removedGroup, raised, delays;
     ("MX-TEST-SCSYNTH-PID " ++ server.pid).postln;
 
     ~mxInit.(server, 256);
     check.(~mxModels == (Compander: true, CompanderD: true, FaustRMS: true), "modèles de compresseur " ++ ~mxModels);
     ~mxSetOutputStage.(\master, \mix, (volume: 0));
     ~mxSetOutputStage.(\cue, \mix, (volume: 0));
+
+    // Bus : le premier bus privé alloué est celui des options (contrat : 260 avec 256 entrées et 4 sorties).
+    check.(~mxMasterBus.index == server.options.firstPrivateBus, "premier bus privé " ++ ~mxMasterBus.index);
+    check.(~mxCueBus.index == (~mxMasterBus.index + 2), "bus cue " ++ ~mxCueBus.index);
+    // ~mxInit n'est pas ré-exécutable (groupes et bus dupliqués).
+    raised = false;
+    try { ~mxInit.(server, 256) } { |error| raised = error.errorString.find("déjà exécuté").notNil };
+    check.(raised, "~mxInit ré-exécuté sans erreur");
+    // CompanderD : maxdelaytime du DelayN fixé à la plage d'attaque maximale (0.1 s), pas à l'argument d'attaque.
+    delays = SynthDescLib.global[\mx_output_companderD].def.children.select { |u| u.class == DelayN };
+    check.(delays.size == 2, "DelayN du modèle CompanderD : " ++ delays.size);
+    delays.do { |u| check.(u.inputs[1].isNumber and: { u.inputs[1] == 0.1 }, "maxdelaytime de DelayN : " ++ u.inputs[1]) };
 
     // Groupes : sources avant sorties.
     defaultTree = query.(server.defaultGroup.nodeID);
@@ -165,6 +177,9 @@ server.waitForBoot({
     outputDefs = query.(~mxOutputGroup.nodeID)[\children].collect { |c| c[\def] }.asArray.sort;
     check.(outputDefs == ["mx_output_companderD", "mx_output_faustRMS", "mx_output_writer", "mx_output_writer"],
       "bascule de compresseur inattendue " ++ outputDefs);
+    // Une attaque de 100 ms après la création du Synth reste valide pour CompanderD.
+    ~mxSetOutputStage.(\master, \compressor, (model: \CompanderD, thresholdDb: -20, slopeBelow: 1, slopeAbove: 0.25,
+      attackMs: 100, releaseMs: 100, mul: 1, add: 0, bypass: 0));
     ~mxSetOutputStage.(\cue, \eq, (low: 0.6, mid: 0.5, high: 0.4));
     ~mxSetOutputStage.(\cue, \infraHpf, (enabled: 1, hz: 30));
     ~mxSetOutputStage.(\cue, \sideHpf, (enabled: 1, hz: 120));

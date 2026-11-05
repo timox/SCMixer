@@ -102,7 +102,8 @@ test('PATCH : nom seul sans recréation, largeur recrée la source ; DELETE 204'
   const wide = await h.call('PATCH', '/api/sources/src-1', { width: 4 });
   assert.equal(wide.body.width, 4);
   const code = h.langs[0].commands().at(-1);
-  assert.match(code, /~mxRemoveSource\.\("src-1"\); ~mxAddSource\.\("src-1", 0, 1, 4,/);
+  // Les SynthDefs de la nouvelle largeur sont construits avant le retrait : la source n'est absente que le temps du bundle.
+  assert.match(code, /{ ~mxEnsureWidth\.\(4\); ~mxRemoveSource\.\("src-1"\); ~mxAddSource\.\("src-1", 0, 1, 4,/);
   assert.equal((await h.call('PATCH', '/api/sources/src-1', {})).status, 400);
   const del = await h.call('DELETE', '/api/sources/src-1');
   assert.equal(del.status, 204);
@@ -115,4 +116,19 @@ test('identifiant numérique ou inconnu : 404', async (t) => {
   assert.equal((await h.call('PUT', '/api/sources/0/processing/eq', eq)).status, 404);
   assert.equal((await h.call('GET', '/api/sources/0')).status, 404);
   assert.equal((await h.call('DELETE', '/api/sources/src-9')).body.error.code, 'NOT_FOUND');
+});
+
+test('dimensionnement dépassé : 409 ENGINE_RESTART_REQUIRED, source non créée', async (t) => {
+  const h = await startHarness({ engineOptions: { sizing: { maxSourceWidth: 2, maxSources: 1 } } }); t.after(() => h.close());
+  const wide = await h.call('POST', '/api/sources', { name: 'A', firstChannel: 1, width: 3 });
+  assert.equal(wide.status, 409);
+  assert.equal(wide.body.error.code, 'ENGINE_RESTART_REQUIRED');
+  assert.equal((await h.call('POST', '/api/sources', { name: 'A', firstChannel: 1, width: 2 })).status, 201);
+  const many = await h.call('POST', '/api/sources', { name: 'B', firstChannel: 3, width: 1 });
+  assert.equal(many.status, 409);
+  assert.equal(many.body.error.code, 'ENGINE_RESTART_REQUIRED');
+  const grow = await h.call('PATCH', '/api/sources/src-1', { width: 3 });
+  assert.equal(grow.status, 409);
+  assert.equal(grow.body.error.code, 'ENGINE_RESTART_REQUIRED');
+  assert.deepEqual((await h.call('GET', '/api/sources')).body.map((s) => [s.id, s.width]), [['src-1', 2]]);
 });

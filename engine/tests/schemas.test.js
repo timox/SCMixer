@@ -51,7 +51,7 @@ test('session, création, patch, preset', () => {
 test('ApiError et codes', () => {
   assert.deepEqual(codes, {
     VALIDATION: 400, NOT_FOUND: 404, CHANNEL_OVERLAP: 409, CHANNEL_LIMIT: 400, ENGINE_NOT_RUNNING: 409,
-    ENGINE_BUSY: 409, MODEL_UNAVAILABLE: 409, TIMOXVASIO_NOT_READY: 409, SC_COMMAND_FAILED: 502,
+    ENGINE_BUSY: 409, ENGINE_RESTART_REQUIRED: 409, MODEL_UNAVAILABLE: 409, TIMOXVASIO_NOT_READY: 409, SC_COMMAND_FAILED: 502,
   });
   const e = new ApiError('NOT_FOUND', 404, 'Source introuvable.');
   assert.ok(e instanceof Error);

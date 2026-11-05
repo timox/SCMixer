@@ -144,13 +144,43 @@
   ]
 };
 
+
+// Vérifie côté serveur qu'un SynthDef est chargé : /s_new, /n_query et /n_free dans un seul bundle sans
+// horodatage (le Synth n'exécute aucun bloc). /d_recv et /d_load échouent sans réponse /fail
+// (scsynth n'écrit que « exception in GraphDef_Recv » sur sa sortie) et /sync ne signale pas cet échec :
+// seule l'existence du nœud créé prouve que le SynthDef est chargé (Server-Command-Reference :
+// /d_recv, /s_new, /n_query ; /s_new d'un SynthDef absent répond /fail). À appeler depuis une Routine.
+~mxSynthDefLoaded = { |server, name, timeout=5|
+  var found = false, cond = Condition.new, nodeId, info, fail;
+  nodeId = server.nextNodeID;
+  info = OSCFunc({ |msg| if(msg[1] == nodeId) { found = true; cond.test = true; cond.signal } }, '/n_info', server.addr);
+  fail = OSCFunc({ |msg| if(msg[1] == '/n_query') { cond.test = true; cond.signal } }, '/fail', server.addr);
+  server.sendBundle(nil, ['/s_new', name, nodeId, 1, server.defaultGroup.nodeID], ['/n_query', nodeId], ['/n_free', nodeId]);
+  SystemClock.sched(timeout, { cond.test = true; cond.signal; nil });
+  cond.wait;
+  info.free;
+  fail.free;
+  server.sync;
+  found
+};
+
 ~mxEnsureWidth = { |w|
+  var defs, missing;
   if(w.isInteger.not or: { w < 1 } or: { w > 256 }) { Error("Largeur invalide : " ++ w).throw };
   if(~mxBuiltWidths.includes(w)) {
     false
   } {
-    ~mxBuildSourceDefs.(w).do { |def| def.add };
+    // Construction (bloque sclang : environ 9 s pour w = 256, mesuré) puis /d_recv ou /d_load,
+    // asynchrones : /sync (Server-Command-Reference) attend leur fin. Le chargement est ensuite
+    // vérifié côté serveur ; une largeur n'est marquée construite que si tous ses SynthDefs existent.
+    defs = ~mxBuildSourceDefs.(w);
+    defs.do { |def| def.add };
     ~mxServer.sync;
+    missing = defs.reject { |def| ~mxSynthDefLoaded.(~mxServer, def.name) };
+    if(missing.notEmpty) {
+      Error("Échec serveur à la création des SynthDefs de largeur " ++ w ++ " : "
+        ++ missing.collect { |def| def.name }.join(", ") ++ " non chargés (voir la sortie de scsynth)").throw;
+    };
     ~mxBuiltWidths.add(w);
     true
   }

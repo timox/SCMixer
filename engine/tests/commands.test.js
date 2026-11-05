@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   toScEvent, addSourceCode, removeSourceCode, setSourceStageCode, setSourceBandCode,
-  setOutputStageCode, resetMoogCode, applySessionCode,
+  setOutputStageCode, resetMoogCode, applySessionCode, ensureWidthCode,
 } from '../src/sc/commands.js';
 import { defaultSourceProcessing, defaultOutput } from '../src/contract/schemas.js';
 
@@ -74,4 +74,11 @@ test('applySessionCode : sources puis 14 sorties, sans noms', () => {
   assert.ok(code.indexOf('"src-1"') < code.indexOf('"src-2"'));
   assert.ok(!/Alpha|Beta/.test(code));
   assert.throws(() => applySessionCode(session, new Map([['src-1', 0]])));
+});
+
+test('ensureWidthCode : largeur entière de 1 à 256 uniquement', () => {
+  assert.equal(ensureWidthCode(4), '~mxEnsureWidth.(4)');
+  assert.throws(() => ensureWidthCode(0));
+  assert.throws(() => ensureWidthCode(257));
+  assert.throws(() => ensureWidthCode(1.5));
 });

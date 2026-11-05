@@ -123,6 +123,59 @@ test('start remplace les jetons et fixe les ports sclang et scsynth', async () =
   assert.ok(langs[0].factoryOptions.includePaths.some((p) => p.replaceAll('\\', '/').endsWith('sc/plugins')));
 });
 
+test('start fixe les options de scsynth calculées : bus, interconnexions, nœuds, mémoire', async () => {
+  const { engine, langs } = setup();
+  await engine.start();
+  const src = langs[0].bootSource;
+  assert.match(src, /numInputBusChannels = 256;/);
+  assert.match(src, /numOutputBusChannels = 4;/);
+  assert.match(src, /numAudioBusChannels = 1024;/);
+  assert.match(src, /numWireBufs = 2048;/);
+  assert.match(src, /maxNodes = 4096;/);
+  assert.match(src, /memSize = 81920;/);
+  assert.match(src, /blockSize = 64;/);
+  assert.doesNotMatch(src, /numAudioBusChannels = 2048|numWireBufs = 8192|memSize = 262144/);
+});
+
+test('le dimensionnement choisi est journalisé dans sclang.log à chaque démarrage', async () => {
+  const { engine, dataDir } = setup();
+  await engine.start();
+  await engine.stop();
+  await engine.start();
+  const log = fs.readFileSync(path.join(dataDir, 'logs', 'sclang.log'), 'utf8');
+  const lines = log.split('\n').filter((l) => l.includes('MX-SIZING'));
+  assert.equal(lines.length, 2);
+  assert.match(lines[0], /"numWireBufs":2048/);
+  assert.match(lines[0], /"maxNodes":4096/);
+  assert.match(lines[0], /"memSize":81920/);
+  assert.match(lines[0], /"maxSources":256/);
+  await engine.stop();
+});
+
+test('mutation au-delà du dimensionnement : ENGINE_RESTART_REQUIRED 409, aucune commande, session inchangée', async () => {
+  const { engine, langs } = setup({ engine: { sizing: { maxSourceWidth: 2, maxSources: 1 } } });
+  await engine.start();
+  const before = engine.session();
+  const commands = langs[0].commands().length;
+  await assert.rejects(engine.mutate((s) => ({ session: addSource(s, { name: 'A', firstChannel: 1, width: 3 }).session, code: 'x' })),
+    (e) => e.code === 'ENGINE_RESTART_REQUIRED' && e.status === 409 && /largeur/i.test(e.message));
+  assert.deepEqual(engine.session(), before);
+  assert.equal(langs[0].commands().length, commands);
+  await engine.mutate((s) => ({ session: addSource(s, { name: 'A', firstChannel: 1, width: 2 }).session, code: 'nil' }));
+  await assert.rejects(engine.mutate((s) => ({ session: addSource(s, { name: 'B', firstChannel: 3, width: 1 }).session, code: 'x' })),
+    (e) => e.code === 'ENGINE_RESTART_REQUIRED' && /sources/i.test(e.message));
+  assert.equal(engine.session().sources.length, 1);
+  assert.equal(langs[0].commands().filter((c) => c.includes('{ x')).length, 0);
+  await engine.stop();
+});
+
+test('start refuse, avant tout démarrage de sclang, une session persistée au-delà du dimensionnement', async () => {
+  const { engine, langs } = setup({ session: sessionWithSource(), engine: { sizing: { maxSourceWidth: 1, maxSources: 1 } } });
+  await assert.rejects(engine.start(), (e) => e.code === 'ENGINE_RESTART_REQUIRED' && e.status === 409);
+  assert.equal(langs.length, 0);
+  assert.equal(engine.state().status, 'stopped');
+});
+
 test('mutate pendant restoring : ENGINE_BUSY', async () => {
   const { engine, langs } = setup({ lang: { holdWhen: () => true }, session: sessionWithSource() });
   const starting = engine.start();

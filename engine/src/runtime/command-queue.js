@@ -6,6 +6,13 @@ const fail = (message) => new ApiError('SC_COMMAND_FAILED', 502, message);
  * File de commandes sclang strictement sérielle. Chaque commande est envoyée
  * dans un fork { try { ... } } qui répond par '/mx/ack' (reqId, statut, message) ;
  * la suivante ne part qu'après cet acquittement.
+ *
+ * Délai d'acquittement (120 s par défaut) : la commande la plus longue est la construction des
+ * SynthDefs de largeur 256 par ~mxEnsureWidth (9,15 s mesurés côté sclang, 0,84 s pour 64), pendant
+ * laquelle l'interpréteur sclang est bloqué (relais des vumètres et routine /mx/runtime suspendus).
+ * La marge est d'un facteur 13. La requête HTTP correspondante (création ou déplacement d'une source
+ * de cette largeur) reste ouverte pendant la construction, puis répond ; au-delà du délai, 502
+ * SC_COMMAND_FAILED. La file sérialise ces constructions : aucune ne s'intercale avec une autre commande.
  */
 export class CommandQueue {
   #lang;

@@ -44,7 +44,7 @@ class FakeLang extends EventEmitter {
 }
 
 /** Serveur d'API sur port 0 avec faux sclang ; ne démarre jamais SuperCollider. */
-export async function startHarness({ running = true, lang = {} } = {}) {
+export async function startHarness({ running = true, lang = {}, engineOptions = {} } = {}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mx-api-'));
   const store = new SessionStore(dataDir);
   const listener = new FakeListener();
@@ -63,6 +63,7 @@ export async function startHarness({ running = true, lang = {} } = {}) {
     killProcess: () => {},
     watchIntervalMs: 0,
     timoxVasio: fakeTimoxVasio(),
+    ...engineOptions,
   });
   const presets = new PresetStore(dataDir);
   if (running) await engine.start();

@@ -48,6 +48,11 @@ export function addSourceCode(source, meterId) {
   return `~mxAddSource.(${sourceId(source.id)}, ${meterId}, ${number(source.firstChannel)}, ${number(source.width)}, ${toScEvent(source.processing)})`;
 }
 
+export function ensureWidthCode(width) {
+  if (!Number.isInteger(width) || width < 1 || width > 256) throw new Error(`Largeur invalide : ${width}`);
+  return `~mxEnsureWidth.(${width})`;
+}
+
 export function removeSourceCode(id) {
   return `~mxRemoveSource.(${sourceId(id)})`;
 }

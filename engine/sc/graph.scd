@@ -45,6 +45,15 @@
 (thisProcess.nowExecutingPath.dirname +/+ "source-defs.scd").load;
 
 ~mxControlLag = 0.05;
+// Délai maximal du DelayN du modèle CompanderD : maximum de la plage d'attaque du contrat
+// (attackMs 1..100, soit 0.1 s). Constante de SynthDef : la taille du tampon est fixée à la
+// création (DelayN.schelp : maxdelaytime « used to initialize the delay buffer size »).
+~mxCompanderDMaxDelay = 0.1;
+// Fondu du compresseur de sortie : durée du VarLag de l'écrivain, puis marge avant de libérer
+// l'ancien Synth (Server-Command-Reference /n_free : un nœud non silencieux libéré peut cliquer).
+~mxFadeSeconds = 0.05;
+~mxFadeMarginSeconds = 0.25;
+~mxInitDone = false;
 ~mxHpModels = (BHiPass: 0, RHPF: 1, BHiPass4: 2);
 ~mxLpModels = (BLowPass: 0, RLPF: 1, BLowPass4: 2, MoogFF: 3);
 ~mxCompressorDefs = (Compander: \mx_output_compander, CompanderD: \mx_output_companderD,
@@ -157,27 +166,62 @@
   ]
 };
 
+// Sonde côté serveur d'un UGen : ajoute un SynthDef puis vérifie son chargement par ~mxSynthDefLoaded
+// (source-defs.scd). /d_recv échoue côté scsynth si un UGen (plug-in) n'est pas chargé, sans /fail :
+// Server-Architecture (les plug-ins sont chargés par scsynth), Server-Command-Reference (/d_recv, /s_new).
+// À appeler depuis une Routine.
+~mxProbeSynthDef = { |server, name, graphFunc|
+  var found;
+  SynthDef(name, graphFunc).add;
+  server.sync;
+  found = ~mxSynthDefLoaded.(server, name);
+  server.sendMsg('/d_free', name);
+  server.sync;
+  found
+};
+
 ~mxInit = { |server, inputChannels|
-  var models;
+  var models, faustLoaded;
+  if(~mxInitDone == true) { Error("~mxInit déjà exécuté : groupes et bus déjà créés").throw };
+  // Contrat de bus : sorties matérielles 0..3 (master 0/1, cue 2/3), entrées 4..259, premier bus
+  // privé 260 (ServerOptions : les entrées suivent les sorties ; numAudioBusChannels les inclut).
+  if(server.serverRunning.not) { Error("~mxInit : serveur non démarré").throw };
+  if(server.options.numOutputBusChannels != 4) { Error("~mxInit : 4 sorties matérielles attendues").throw };
+  if(server.options.firstPrivateBus != (server.options.numInputBusChannels + server.options.numOutputBusChannels)) {
+    Error("~mxInit : premier bus privé incohérent : " ++ server.options.firstPrivateBus).throw;
+  };
+  // Allocateur reconstruit au boot et encore vierge : aucun Bus.audio n'a été alloué avant.
+  if(server.audioBusAllocator.top != server.options.firstPrivateBus) {
+    Error("~mxInit : allocateur de bus audio non vierge (top=" ++ server.audioBusAllocator.top ++ ")").throw;
+  };
   ~mxServer = server;
   // Borne des canaux d'entrée acceptés par ~mxAddSource ; par défaut, les entrées du serveur.
   ~mxInputChannels = inputChannels ?? { server.options.numInputBusChannels };
   ~mxSources = Dictionary.new;
   ~mxBuiltWidths = Set.new;
 
-  // Disponibilité des modèles de compresseur de sortie.
-  models = (Compander: true, CompanderD: \CompanderD.asClass.notNil,
-    FaustRMS: \MixetteFaustRMS.asClass.notNil);
+  // Disponibilité des modèles de compresseur de sortie. Compander et DelayN sont des UGens du
+  // jeu standard de scsynth : Compander et CompanderD (construit ici avec un DelayN à délai maximal fixe)
+  // sont toujours disponibles. FaustRMS exige la classe sclang ET le chargement effectif du plug-in
+  // .scx par scsynth, vérifié par une sonde côté serveur.
+  faustLoaded = \MixetteFaustRMS.asClass.notNil and: {
+    ~mxProbeSynthDef.(server, \mx_probe_faustRMS, {
+      \MixetteFaustRMS.asClass.ar(DC.ar(0), DC.ar(0), -20, 1, 0.25, 10, 100)
+    })
+  };
+  models = (Compander: true, CompanderD: true, FaustRMS: faustLoaded);
   ~mxModels = models;
 
   ~mxOutputDef.(\mx_output_compander, { |sig, threshold, below, above, attack, release, mul, add|
     Compander.ar(sig, sig, threshold.dbamp, below, above, attack / 1000, release / 1000, mul, add)
   }).add;
-  if(models[\CompanderD]) {
-    ~mxOutputDef.(\mx_output_companderD, { |sig, threshold, below, above, attack, release, mul, add|
-      \CompanderD.asClass.ar(sig, threshold.dbamp, below, above, attack / 1000, release / 1000, mul, add)
-    }).add;
-  };
+  // Équivalent de CompanderD.ar (Compander.sc : DelayN.ar(in, clampTime, clampTime) en entrée de traitement,
+  // signal direct en contrôle) mais avec un maxdelaytime fixe (~mxCompanderDMaxDelay) : une attaque
+  // modifiée après la création du Synth reste valide.
+  ~mxOutputDef.(\mx_output_companderD, { |sig, threshold, below, above, attack, release, mul, add|
+    Compander.ar(DelayN.ar(sig, ~mxCompanderDMaxDelay, (attack / 1000).min(~mxCompanderDMaxDelay)), sig,
+      threshold.dbamp, below, above, attack / 1000, release / 1000).madd(mul, add)
+  }).add;
   if(models[\FaustRMS]) {
     ~mxOutputDef.(\mx_output_faustRMS, { |sig, threshold, below, above, attack, release, mul, add|
       \MixetteFaustRMS.asClass.ar(sig[0], sig[1], threshold, below, above, attack, release) * mul + add
@@ -193,6 +237,10 @@
   ~mxOutputGroup = Group.after(~mxBenchGroup);
   ~mxMasterBus = Bus.audio(server, 2);
   ~mxCueBus = Bus.audio(server, 2);
+  if(~mxMasterBus.index != server.options.firstPrivateBus) {
+    Error("~mxInit : le premier bus privé devrait être " ++ server.options.firstPrivateBus
+      ++ ", obtenu " ++ ~mxMasterBus.index).throw;
+  };
 
   ~mxOutputs = IdentityDictionary.new;
   [\master, \cue].do { |name, index|
@@ -212,9 +260,10 @@
     var output = ~mxOutputs[name];
     output[\writer] = Synth.tail(~mxOutputGroup, \mx_output_writer, [
       \inA, output[\slots][0].index, \inB, output[\slots][1].index,
-      \out, index * 2, \meterId, index * 2]);
+      \out, index * 2, \meterId, index * 2, \fadeSeconds, ~mxFadeSeconds]);
   };
   server.sync;
+  ~mxInitDone = true;
   true
 };
 
@@ -313,18 +362,22 @@
     }.flatten;
     ~mxEnsureWidth.(width);
 
-    group = Group.tail(~mxSourcesGroup);
     bus = Bus.audio(server, width);
     nodes = IdentityDictionary.new;
-    nodes[\input] = Synth.tail(group, ~mxDefName.(\in, width), [\bus, bus.index,
-      \firstChannel, firstChannel, \meterId, meterId] ++ args[\input] ++ args[\inputCompressor]);
-    nodes[\eq] = Synth.tail(group, ~mxDefName.(~mxEqKind.(proc[\eq]), width), [\bus, bus.index] ++ args[\eq]);
-    nodes[\hp] = Synth.tail(group, ~mxDefName.(~mxHpKind.(proc[\hp]), width), [\bus, bus.index] ++ args[\hp]);
-    nodes[\lp] = Synth.tail(group, ~mxDefName.(~mxLpKind.(proc[\lp]), width), [\bus, bus.index] ++ args[\lp]);
-    nodes[\pitch] = Synth.tail(group, ~mxDefName.(\pitch, width), [\bus, bus.index] ++ args[\pitch]);
-    nodes[\dyn] = Synth.tail(group, ~mxDefName.(\dyn, width), [\bus, bus.index] ++ args[\bandCompressor]);
-    nodes[\mix] = Synth.tail(group, ~mxDefName.(\mix, width), [\bus, bus.index,
-      \out, ~mxMasterBus.index, \cueOut, ~mxCueBus.index] ++ args[\mix]);
+    // Groupe et 7 Synths dans un seul bundle sans horodatage (Bundled-Messages : les messages d'un
+    // bundle sont exécutés ensemble) : le serveur ne voit jamais une chaîne partielle.
+    server.makeBundle(nil, {
+      group = Group.tail(~mxSourcesGroup);
+      nodes[\input] = Synth.tail(group, ~mxDefName.(\in, width), [\bus, bus.index,
+        \firstChannel, firstChannel, \meterId, meterId] ++ args[\input] ++ args[\inputCompressor]);
+      nodes[\eq] = Synth.tail(group, ~mxDefName.(~mxEqKind.(proc[\eq]), width), [\bus, bus.index] ++ args[\eq]);
+      nodes[\hp] = Synth.tail(group, ~mxDefName.(~mxHpKind.(proc[\hp]), width), [\bus, bus.index] ++ args[\hp]);
+      nodes[\lp] = Synth.tail(group, ~mxDefName.(~mxLpKind.(proc[\lp]), width), [\bus, bus.index] ++ args[\lp]);
+      nodes[\pitch] = Synth.tail(group, ~mxDefName.(\pitch, width), [\bus, bus.index] ++ args[\pitch]);
+      nodes[\dyn] = Synth.tail(group, ~mxDefName.(\dyn, width), [\bus, bus.index] ++ args[\bandCompressor]);
+      nodes[\mix] = Synth.tail(group, ~mxDefName.(\mix, width), [\bus, bus.index,
+        \out, ~mxMasterBus.index, \cueOut, ~mxCueBus.index] ++ args[\mix]);
+    });
 
     source = (id: id, meterId: meterId, firstChannel: firstChannel, width: width,
       group: group, bus: bus, nodes: nodes,
@@ -451,7 +504,8 @@
       0.5.wait;
       state[\writer].set(\mix, state[\slot]);
       state[\phase] = \fading;
-      0.06.wait;
+      // Durée du fondu de l'écrivain plus une marge de 0.25 s (≥ 40 périodes matérielles de 256 images à 48 kHz).
+      (~mxFadeSeconds + ~mxFadeMarginSeconds).wait;
       state[\old].free;
       state[\old] = nil;
       state[\phase] = \stable;

@@ -2,30 +2,53 @@
  * Point d'entrée du moteur SuperCollider.
  *
  * Le lanceur substitue les jetons __MX_SC_DIR__, __MX_DEVICE__,
- * __MX_SAMPLE_RATE__, __MX_BUFFER__ et __MX_RELAY_PORT__ avant l'exécution. Ce fichier ne contient
- * que la configuration du serveur et le démarrage ; le graphe, les SynthDefs
+ * __MX_SAMPLE_RATE__, __MX_BUFFER__ et __MX_RELAY_PORT__ ainsi que les jetons de
+ * dimensionnement __MX_NUM_INPUTS__, __MX_NUM_OUTPUTS__, __MX_NUM_AUDIO_BUSES__,
+ * __MX_WIRE_BUFS__, __MX_MAX_NODES__, __MX_MEM_SIZE_KB__ et __MX_BLOCK_SIZE__ (calculés par
+ * src/runtime/server-options.js à partir des besoins mesurés) avant l'exécution. Ce fichier
+ * ne contient que la configuration du serveur et le démarrage ; le graphe, les SynthDefs
  * et les fonctions ~mx* sont dans graph.scd (sans jeton, donc chargeable par
  * les tests contre leur propre serveur) et source-defs.scd.
  *
  * Le dossier plugins/ doit figurer dans les includePaths de sclang pour que la
  * classe MixetteFaustRMS soit compilée ; scsynth y charge le plug-in .scx.
- * Sans elle, le modèle FaustRMS est signalé indisponible dans ~mxModels.
+ * Sans elle, ou si scsynth ne charge pas le plug-in, le modèle FaustRMS est signalé
+ * indisponible dans ~mxModels (sonde côté serveur dans ~mxInit).
  */
 var dir = "__MX_SC_DIR__";
+var options;
 
 // Serveur dédié : UDP 57130 sur la boucle locale (57110 appartient à un autre produit).
 s = Server(\mxEngine, NetAddr("127.0.0.1", 57130), ServerOptions.new);
 Server.default = s;
-s.options.device = "__MX_DEVICE__";
-s.options.sampleRate = __MX_SAMPLE_RATE__;
-s.options.hardwareBufferSize = __MX_BUFFER__;
-s.options.numInputBusChannels = 256;
-s.options.numOutputBusChannels = 4;
-// Marge pour des sources jusqu'à 256 canaux : bus privés, tampons d'interconnexion, mémoire de PitchShift.
-s.options.numAudioBusChannels = 2048;
-s.options.numWireBufs = 8192;
-s.options.memSize = 262144;
-s.options.ugenPluginsPath = [Platform.resourceDir +/+ "plugins", dir +/+ "plugins"];
+// Aucun Bus.audio avant le boot : l'allocateur client n'est reconstruit qu'à la connexion au serveur
+// (Server.sc, clientID_ -> newAllocators) ; avant cela le premier bus alloué serait l'indice 4 (entrée matérielle).
+~mxPreBootAudioTop = s.audioBusAllocator.top;
+options = s.options;
+options.device = "__MX_DEVICE__";
+options.sampleRate = __MX_SAMPLE_RATE__;
+options.hardwareBufferSize = __MX_BUFFER__;
+options.blockSize = __MX_BLOCK_SIZE__;
+// Ordre significatif (ServerOptions : numInputBusChannels_ / numOutputBusChannels_ recalculent
+// numAudioBusChannels à partir du nombre de bus privés) : entrées, sorties, puis total des bus audio.
+options.numInputBusChannels = __MX_NUM_INPUTS__;
+options.numOutputBusChannels = __MX_NUM_OUTPUTS__;
+options.numAudioBusChannels = __MX_NUM_AUDIO_BUSES__;
+options.numWireBufs = __MX_WIRE_BUFS__;
+options.maxNodes = __MX_MAX_NODES__;
+options.memSize = __MX_MEM_SIZE_KB__;
+options.ugenPluginsPath = [Platform.resourceDir +/+ "plugins", dir +/+ "plugins"];
+// Vérification du résultat des setters (un ordre inversé décalerait le premier bus privé).
+if(options.firstPrivateBus != (options.numInputBusChannels + options.numOutputBusChannels)
+  or: { options.numAudioBusChannels != __MX_NUM_AUDIO_BUSES__ }) {
+  Error("Options de bus incohérentes : firstPrivateBus=" ++ options.firstPrivateBus
+    ++ " numAudioBusChannels=" ++ options.numAudioBusChannels).throw;
+};
+// Valeurs effectivement appliquées, relues depuis ServerOptions (journal sclang.log à chaque démarrage).
+("MX-ENGINE-OPTIONS " ++ [\numInputBusChannels, \numOutputBusChannels, \numAudioBusChannels,
+  \firstPrivateBus, \numWireBufs, \maxNodes, \memSize, \blockSize, \hardwareBufferSize, \sampleRate].collect { |key|
+  key ++ "=" ++ options.perform(key)
+}.join(" ")).postln;
 
 (dir +/+ "graph.scd").load;
 
@@ -65,6 +88,11 @@ s.options.ugenPluginsPath = [Platform.resourceDir +/+ "plugins", dir +/+ "plugin
   }).play(SystemClock);
 };
 ShutDown.add({ ~mxStopRelay.value });
+
+// Garde : aucune allocation de bus audio client n'a eu lieu avant le boot (l'allocateur serait périmé).
+if(s.audioBusAllocator.top != ~mxPreBootAudioTop) {
+  Error("Bus.audio alloué avant le boot du serveur (allocateur non reconstruit)").throw;
+};
 
 s.waitForBoot({
   ~mxInit.(s);

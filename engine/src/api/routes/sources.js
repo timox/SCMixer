@@ -5,7 +5,7 @@ import {
   addSource, patchSource, removeSource, setSourceStage, setSourceBand, resetSourceStage,
 } from '../../session/session-model.js';
 import {
-  addSourceCode, removeSourceCode, setSourceStageCode, setSourceBandCode, resetMoogCode,
+  addSourceCode, ensureWidthCode, removeSourceCode, setSourceStageCode, setSourceBandCode, resetMoogCode,
 } from '../../sc/commands.js';
 
 /** Instruction sclang sans effet : une mutation de métadonnées ne touche pas le graphe audio. */
@@ -45,7 +45,8 @@ export function registerSourceRoutes(api, engine) {
       const next = patchSource(current, id, req.body);
       const after = find(next, id);
       const moved = before.firstChannel !== after.firstChannel || before.width !== after.width;
-      const code = moved ? `${removeSourceCode(id)}; ${addSourceCode(after, meterIdFor(id))}` : NO_OP;
+      // Construction des SynthDefs de la nouvelle largeur d'abord (jusqu'à environ 9 s pour 256) : la source n'est absente que le temps du bundle.
+      const code = moved ? `${ensureWidthCode(after.width)}; ${removeSourceCode(id)}; ${addSourceCode(after, meterIdFor(id))}` : NO_OP;
       return { session: next, code };
     });
     res.json(sourceOf(session, id));

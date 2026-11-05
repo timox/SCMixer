@@ -9,6 +9,7 @@ import { CommandQueue } from './command-queue.js';
 import { MeterRelay } from './meter-relay.js';
 import { OscListener } from './osc-listener.js';
 import { ProcessRegistry, resolveScsynthWindows } from './process-registry.js';
+import { DEFAULT_SIZING, assertSessionFitsSizing, computeServerOptions } from './server-options.js';
 import { TimoxVasioClient } from './timoxvasio-client.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -107,7 +108,7 @@ class StaleBoot extends Error {}
 
 export class EngineProcess extends EventEmitter {
   #store; #registry; #langFactory; #listenerFactory; #resolveScsynth; #isAlive; #kill; #watchMs;
-  #apiUrl; #timoxVasio; #audioClock = null; #scDir; #langPort; #logFile; #askTimeoutMs; #resolveAttempts;
+  #apiUrl; #timoxVasio; #audioClock = null; #scDir; #langPort; #logFile; #askTimeoutMs; #resolveAttempts; #sizing;
   #status = 'stopped'; #error = null; #scsynthPid = null;
   #models = { Compander: true, CompanderD: false, FaustRMS: false };
   #session; #generation = 0;
@@ -123,8 +124,11 @@ export class EngineProcess extends EventEmitter {
     watchIntervalMs = 1000, langPort = DEFAULT_LANG_PORT, askTimeoutMs = 30_000, resolveAttempts = 20,
     apiUrl = process.env.MIXETTE_TIMOXVASIO_URL || 'http://127.0.0.1:52525',
     scDir = DEFAULT_SC_DIR, timoxVasio = new TimoxVasioClient({ apiUrl }),
+    sizing = DEFAULT_SIZING,
   }) {
     super();
+    this.#sizing = Object.freeze({ maxSourceWidth: sizing.maxSourceWidth, maxSources: sizing.maxSources });
+    computeServerOptions(this.#sizing); // valide le dimensionnement dès la construction
     this.#store = store;
     this.#registry = registry ?? new ProcessRegistry({ dataDir });
     this.#langFactory = langFactory;
@@ -199,9 +203,22 @@ export class EngineProcess extends EventEmitter {
     return (stream, text) => write(stream === 'stdout' ? line(text) : `[${stream}] ${line(text)}`);
   }
 
+  /** Options de scsynth calculées pour le dimensionnement et la fréquence d'échantillonnage du démarrage. */
+  #serverOptions() {
+    return computeServerOptions({ ...this.#sizing, sampleRate: this.#audioClock.sampleRate });
+  }
+
   #bootSource(relayPort) {
     const { sampleRate, bufferFrames } = this.#audioClock;
+    const options = this.#serverOptions();
     const tokens = {
+      __MX_NUM_INPUTS__: String(options.numInputBusChannels),
+      __MX_NUM_OUTPUTS__: String(options.numOutputBusChannels),
+      __MX_NUM_AUDIO_BUSES__: String(options.numAudioBusChannels),
+      __MX_WIRE_BUFS__: String(options.numWireBufs),
+      __MX_MAX_NODES__: String(options.maxNodes),
+      __MX_MEM_SIZE_KB__: String(options.memSize),
+      __MX_BLOCK_SIZE__: String(options.blockSize),
       __MX_SC_DIR__: fwd(SC_DIR),
       __MX_DEVICE__: AUDIO_DEVICE,
       __MX_SAMPLE_RATE__: String(sampleRate),
@@ -223,6 +240,8 @@ export class EngineProcess extends EventEmitter {
     }
     this.#transition = true;
     try {
+      // Une session persistée au-delà du dimensionnement ne peut pas être restaurée : refus avant tout démarrage.
+      assertSessionFitsSizing(this.#session, this.#sizing);
       await this.#cleanup;
       const foreign = await this.#registry.foreignScsynth();
       if (foreign.length > 0) {
@@ -292,6 +311,7 @@ export class EngineProcess extends EventEmitter {
     await this.#alive(ctx);
     const includePaths = [path.join(SC_DIR, 'plugins')];
     const writeLog = this.#openLog();
+    writeLog('stdout', `MX-SIZING ${JSON.stringify({ ...this.#sizing, sampleRate: this.#audioClock.sampleRate, ...this.#serverOptions() })}`);
     const onOutput = (stream, text) => {
       writeLog(stream, text);
       const m = /PortAudio failed[^\r\n]*|could not initialize audio/.exec(String(text));
@@ -531,6 +551,8 @@ export class EngineProcess extends EventEmitter {
       return meterIds.get(sourceId);
     };
     const { session, code } = fn(structuredClone(this.#session), { meterIdFor });
+    // Les options de scsynth sont figées au boot : une mutation au-delà du dimensionnement est refusée.
+    assertSessionFitsSizing(session, this.#sizing);
     await ctx.queue.run(code);
     if (this.#ctx !== ctx) throw this.#notRunning('arrêt pendant la commande');
     const alive = new Set(session.sources.map((s) => s.id));
