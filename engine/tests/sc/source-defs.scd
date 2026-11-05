@@ -94,10 +94,10 @@ server.options.ugenPluginsPath = [Platform.resourceDir +/+ "plugins", root +/+ "
 server.waitForBoot({
   try {
     var neutral = [\in, \eqdirect, \hp, \lp, \pitch, \dyn, \mix];
-    var defaultTree, sourcesTree, outputTree, outputDefs, ids1, ids3, removedGroup, raised;
+    var errors, tasks, groupsBefore, groupsAfter, defaultTree, sourcesTree, outputTree, outputDefs, ids1, ids3, removedGroup, raised;
     ("MX-TEST-SCSYNTH-PID " ++ server.pid).postln;
 
-    ~mxInit.(server);
+    ~mxInit.(server, 256);
     check.(~mxModels == (Compander: true, CompanderD: true, FaustRMS: true), "modèles de compresseur " ++ ~mxModels);
     ~mxSetOutputStage.(\master, \mix, (volume: 0));
     ~mxSetOutputStage.(\cue, \mix, (volume: 0));
@@ -194,6 +194,37 @@ server.waitForBoot({
     raised = false;
     try { ~mxNodeIds.("src-3") } { raised = true };
     check.(raised, "~mxNodeIds accepte une source retirée");
+
+    // Réservation d'id : deux ajouts concurrents du même id, largeur 7 pas encore construite.
+    groupsBefore = query.(~mxSourcesGroup.nodeID)[\children].size;
+    errors = List.new;
+    tasks = 2.collect { |n|
+      Routine({
+        try { ~mxAddSource.("src-race", 9, 1, 7, defaultProc.()) } { |error| errors.add(error.errorString) };
+      }).play(SystemClock)
+    };
+    0.02.wait;
+    // Pendant la construction, l'id est réservé : retrait et réglage échouent explicitement.
+    raised = false;
+    try { ~mxRemoveSource.("src-race") } { |error| raised = error.errorString.find("en cours de création").notNil };
+    check.(raised, "~mxRemoveSource accepté sur une source en cours de création");
+    raised = false;
+    try { ~mxSetSourceStage.("src-race", \pitch, (semitones: 1)) } { |error| raised = error.errorString.find("en cours de création").notNil };
+    check.(raised, "~mxSetSourceStage accepté sur une source en cours de création");
+    while { ~mxSources["src-race"].notNil and: { ~mxSources["src-race"][\pending] == true } } { 0.05.wait };
+    server.sync;
+    check.(errors.size == 1, "deuxième ~mxAddSource concurrent : " ++ errors.size ++ " erreur(s) au lieu de 1");
+    check.(errors[0].find("en cours de création").notNil, "erreur inattendue " ++ errors[0]);
+    groupsAfter = query.(~mxSourcesGroup.nodeID)[\children].size;
+    check.(groupsAfter == (groupsBefore + 1), "groupes de src-race : " ++ (groupsAfter - groupsBefore) ++ " au lieu de 1");
+    expectChain.("src-race", 7, neutral);
+    ~mxRemoveSource.("src-race");
+
+    // Canaux au-delà de la borne d'entrée : refus explicite, sans réservation résiduelle.
+    raised = false;
+    try { ~mxAddSource.("src-wide", 10, 250, 10, defaultProc.()) } { |error| raised = error.errorString.find("au-delà").notNil };
+    check.(raised, "~mxAddSource accepte des canaux au-delà des entrées");
+    check.(~mxSources["src-wide"].isNil, "réservation résiduelle après refus");
 
     finish.("MX-TEST-OK");
   } { |error|

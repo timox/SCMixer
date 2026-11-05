@@ -13,8 +13,16 @@
  * ~mxEnsureWidth, ~mxAddSource) appellent server.sync : les appeler depuis une
  * Routine. Les autres fonctions envoient leurs messages sans attente.
  *
+ * Création en cours : ~mxAddSource réserve l'identifiant (marqueur `pending`)
+ * avant toute attente. Pendant la réservation, un second ~mxAddSource du même
+ * id, ~mxRemoveSource, ~mxSetSourceStage, ~mxResetMoog et ~mxNodeIds lèvent
+ * une erreur explicite (pas d'attente). Si la création échoue, la réservation
+ * est libérée et l'erreur est relancée.
+ *
  * Fonctions produites (arguments dans l'ordre) :
- *   ~mxInit.(server)
+ *   ~mxInit.(server, inputChannels)             -> inputChannels : borne de
+ *                                                 firstChannel + width - 1 (défaut :
+ *                                                 server.options.numInputBusChannels)
  *   ~mxEnsureWidth.(width)                      -> true si construite, false si déjà présente
  *   ~mxAddSource.(id, meterId, firstChannel, width, proc)   -> ~mxNodeIds.(id)
  *   ~mxRemoveSource.(id)
@@ -149,9 +157,11 @@
   ]
 };
 
-~mxInit = { |server|
+~mxInit = { |server, inputChannels|
   var models;
   ~mxServer = server;
+  // Borne des canaux d'entrée acceptés par ~mxAddSource ; par défaut, les entrées du serveur.
+  ~mxInputChannels = inputChannels ?? { server.options.numInputBusChannels };
   ~mxSources = Dictionary.new;
   ~mxBuiltWidths = Set.new;
 
@@ -213,6 +223,7 @@
 ~mxSource = { |id|
   var source = ~mxSources[id];
   if(source.isNil) { Error("Source inconnue : " ++ id).throw };
+  if(source[\pending] == true) { Error("Source en cours de création : " ++ id).throw };
   source
 };
 
@@ -278,36 +289,55 @@
 ~mxAddSource = { |id, meterId, firstChannel, width, proc|
   var server = ~mxServer;
   var source, group, bus, nodes, args, bands;
-  if(~mxSources[id].notNil) { Error("Source déjà présente : " ++ id).throw };
-  ~mxEnsureWidth.(width);
-  // Valide toutes les valeurs avant de créer le moindre nœud.
-  args = IdentityDictionary.new;
-  [\mix, \input, \inputCompressor, \eq, \hp, \lp, \pitch].do { |stage|
-    args[stage] = ~mxSourceStageArgs.(stage, ~mxRequire.(proc, [stage])[0]);
+  if(~mxSources[id].notNil) {
+    if(~mxSources[id][\pending] == true) { Error("Source en cours de création : " ++ id).throw };
+    Error("Source déjà présente : " ++ id).throw;
   };
-  bands = ~mxRequire.(proc, [\bandCompressor])[0];
-  args[\bandCompressor] = [\low, \mid, \high].collect { |band|
-    ~mxCompArgs.(band.asString, ~mxRequire.(bands, [band])[0])
-  }.flatten;
+  if(firstChannel.isInteger.not or: { firstChannel < 1 }) { Error("Premier canal invalide : " ++ firstChannel).throw };
+  if(width.isInteger.not or: { width < 1 }) { Error("Largeur invalide : " ++ width).throw };
+  if(firstChannel + width - 1 > ~mxInputChannels) {
+    Error("Canaux " ++ firstChannel ++ ".." ++ (firstChannel + width - 1)
+      ++ " au-delà des " ++ ~mxInputChannels ++ " entrées").throw;
+  };
+  // Réservation avant toute attente (server.sync) : aucune autre commande ne peut prendre cet id.
+  ~mxSources[id] = (id: id, pending: true);
+  try {
+    // Valide toutes les valeurs avant de créer le moindre nœud.
+    args = IdentityDictionary.new;
+    [\mix, \input, \inputCompressor, \eq, \hp, \lp, \pitch].do { |stage|
+      args[stage] = ~mxSourceStageArgs.(stage, ~mxRequire.(proc, [stage])[0]);
+    };
+    bands = ~mxRequire.(proc, [\bandCompressor])[0];
+    args[\bandCompressor] = [\low, \mid, \high].collect { |band|
+      ~mxCompArgs.(band.asString, ~mxRequire.(bands, [band])[0])
+    }.flatten;
+    ~mxEnsureWidth.(width);
 
-  group = Group.tail(~mxSourcesGroup);
-  bus = Bus.audio(server, width);
-  nodes = IdentityDictionary.new;
-  nodes[\input] = Synth.tail(group, ~mxDefName.(\in, width), [\bus, bus.index,
-    \firstChannel, firstChannel, \meterId, meterId] ++ args[\input] ++ args[\inputCompressor]);
-  nodes[\eq] = Synth.tail(group, ~mxDefName.(~mxEqKind.(proc[\eq]), width), [\bus, bus.index] ++ args[\eq]);
-  nodes[\hp] = Synth.tail(group, ~mxDefName.(~mxHpKind.(proc[\hp]), width), [\bus, bus.index] ++ args[\hp]);
-  nodes[\lp] = Synth.tail(group, ~mxDefName.(~mxLpKind.(proc[\lp]), width), [\bus, bus.index] ++ args[\lp]);
-  nodes[\pitch] = Synth.tail(group, ~mxDefName.(\pitch, width), [\bus, bus.index] ++ args[\pitch]);
-  nodes[\dyn] = Synth.tail(group, ~mxDefName.(\dyn, width), [\bus, bus.index] ++ args[\bandCompressor]);
-  nodes[\mix] = Synth.tail(group, ~mxDefName.(\mix, width), [\bus, bus.index,
-    \out, ~mxMasterBus.index, \cueOut, ~mxCueBus.index] ++ args[\mix]);
+    group = Group.tail(~mxSourcesGroup);
+    bus = Bus.audio(server, width);
+    nodes = IdentityDictionary.new;
+    nodes[\input] = Synth.tail(group, ~mxDefName.(\in, width), [\bus, bus.index,
+      \firstChannel, firstChannel, \meterId, meterId] ++ args[\input] ++ args[\inputCompressor]);
+    nodes[\eq] = Synth.tail(group, ~mxDefName.(~mxEqKind.(proc[\eq]), width), [\bus, bus.index] ++ args[\eq]);
+    nodes[\hp] = Synth.tail(group, ~mxDefName.(~mxHpKind.(proc[\hp]), width), [\bus, bus.index] ++ args[\hp]);
+    nodes[\lp] = Synth.tail(group, ~mxDefName.(~mxLpKind.(proc[\lp]), width), [\bus, bus.index] ++ args[\lp]);
+    nodes[\pitch] = Synth.tail(group, ~mxDefName.(\pitch, width), [\bus, bus.index] ++ args[\pitch]);
+    nodes[\dyn] = Synth.tail(group, ~mxDefName.(\dyn, width), [\bus, bus.index] ++ args[\bandCompressor]);
+    nodes[\mix] = Synth.tail(group, ~mxDefName.(\mix, width), [\bus, bus.index,
+      \out, ~mxMasterBus.index, \cueOut, ~mxCueBus.index] ++ args[\mix]);
 
-  source = (id: id, meterId: meterId, firstChannel: firstChannel, width: width,
-    group: group, bus: bus, nodes: nodes,
-    kinds: (eq: ~mxEqKind.(proc[\eq]), hp: ~mxHpKind.(proc[\hp]), lp: ~mxLpKind.(proc[\lp])));
-  ~mxSources[id] = source;
-  server.sync;
+    source = (id: id, meterId: meterId, firstChannel: firstChannel, width: width,
+      group: group, bus: bus, nodes: nodes,
+      kinds: (eq: ~mxEqKind.(proc[\eq]), hp: ~mxHpKind.(proc[\hp]), lp: ~mxLpKind.(proc[\lp])));
+    ~mxSources[id] = source;
+    server.sync;
+  } { |error|
+    // Échec après réservation : libère l'id et ce qui a déjà été alloué.
+    if(group.notNil) { group.free };
+    if(bus.notNil) { bus.free };
+    ~mxSources.removeAt(id);
+    error.throw;
+  };
   ~mxNodeIds.(id)
 };
 
