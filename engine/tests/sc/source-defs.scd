@@ -98,7 +98,7 @@ server.options.ugenPluginsPath = [Platform.resourceDir +/+ "plugins", root +/+ "
 server.waitForBoot({
   try {
     var neutral = [\in, \eqdirect, \hpBHiPass, \lpBLowPass, \pitch, \dyn, \mix];
-    var errors, tasks, groupsBefore, groupsAfter, defaultTree, sourcesTree, outputTree, outputDefs, ids1, ids3, removedGroup, raised, delays, node, oldPitch;
+    var errors, tasks, groupsBefore, groupsAfter, defaultTree, sourcesTree, outputTree, outputDefs, ids1, ids3, removedGroup, raised, delays, node, oldPitch, probe, sampler, samples, peakBus, steadyA, steadyB, peak, tolerance, getBus;
     ("MX-TEST-SCSYNTH-PID " ++ server.pid).postln;
 
     ~mxInit.(server, 256);
@@ -277,6 +277,59 @@ server.waitForBoot({
     sourcesTree = query.(~mxSourcesGroup.nodeID);
     check.(sourcesTree[\children].collect { |c| c[\id] }.includes(removedGroup).not, "groupe de src-3 toujours présent");
     check.(sourcesTree[\children].size == 2, "nombre de groupes de sources inattendu");
+
+    // Déplacement (PATCH de largeur 2 -> 3, même firstChannel) : fondu enchaîné en amplitude linéaire complémentaire.
+    // Signal corrélé : un DC de 0.5 sur les canaux d'entrée 100..102 (bus 103..105 sur ce serveur sans entrée). Une sonde,
+    // placée entre les sources et les sorties, mémorise le maximum de la voie gauche du bus Master. Le maximum pendant le
+    // déplacement ne doit pas dépasser le plus grand des deux régimes établis de plus de 0.5 dB (tolérance) ; sans fondu
+    // d'entrée les deux chaînes se sommeraient (+6 dB).
+    getBus = { |bus|
+      var value, cond = Condition.new;
+      bus.get({ |v| value = v; cond.test = true; cond.signal });
+      SystemClock.sched(3, { cond.test = true; cond.signal; nil });
+      cond.wait;
+      check.(value.notNil, "pas de réponse /c_get");
+      value
+    };
+    SynthDef(\mx_test_dc, { |bus| Out.ar(bus, DC.ar(0.5) ! 3) }).add;
+    SynthDef(\mx_test_peak, { |bus, out| Out.kr(out, RunningMax.kr(A2K.kr(In.ar(bus, 1).abs), \reset.tr(0))) }).add;
+    server.sync;
+    peakBus = Bus.control(server, 1);
+    Synth.head(~mxSourcesGroup, \mx_test_dc, [\bus, 4 + 99]);
+    probe = Synth.head(~mxBenchGroup, \mx_test_peak, [\bus, ~mxMasterBus.index, \out, peakBus.index]);
+    ~mxAddSource.("xf", 20, 100, 2, defaultProc.());
+    server.sync;
+    0.5.wait;
+    probe.set(\reset, 1);
+    0.3.wait;
+    steadyA = getBus.(peakBus);
+    check.(steadyA > 0.1, "régime établi largeur 2 trop faible : " ++ steadyA);
+    node = ~mxSources["xf"][\nodes];
+    // Échantillonneur : réinitialise la sonde puis lit le maximum à chaque tour, pendant tout le déplacement.
+    samples = List.new;
+    sampler = Routine({ loop { probe.set(\reset, 1); 0.002.wait; samples.add(getBus.(peakBus)) } }).play(SystemClock);
+    0.05.wait;
+    ~mxEnsureWidth.(3);
+    ~mxRemoveSource.("xf");
+    ~mxAddSource.("xf", 21, 100, 3, defaultProc.());
+    server.sync;
+    // Un seul vumètre par identifiant : celui de l'ancienne chaîne est coupé (meterId -1).
+    check.(getControl.(node[\input], \meterId) == -1, "vumètre de l'ancienne chaîne non coupé");
+    check.(getControl.(~mxSources["xf"][\nodes][\input], \meterId) == 21, "vumètre de la nouvelle chaîne");
+    0.6.wait;
+    sampler.stop;
+    peak = samples.maxItem;
+    probe.set(\reset, 1);
+    0.3.wait;
+    steadyB = getBus.(peakBus);
+    check.(steadyB > 0.1, "régime établi largeur 3 trop faible : " ++ steadyB);
+    tolerance = 10 ** (0.5 / 20);
+    ("MX-TEST-CROSSFADE steady " ++ steadyA ++ " -> " ++ steadyB ++ " peak " ++ peak ++ " samples " ++ samples.size).postln;
+    check.(peak <= (max(steadyA, steadyB) * tolerance), "crête du déplacement " ++ peak ++ " au-dessus de " ++ (max(steadyA, steadyB) * tolerance));
+    // Creux toléré : au plus 6 dB sous le plus petit des deux régimes (envoi de fadeGate 1 après la construction).
+    check.(samples.minItem >= (min(steadyA, steadyB) * 0.5), "creux du déplacement " ++ samples.minItem);
+    ~mxRemoveSource.("xf");
+    (~mxRemoveRamp.(server) + ~mxFadeMargin.(server) + 0.4).wait;
 
     // Réservation d'id : deux ajouts concurrents du même id, largeur 7 pas encore construite.
     groupsBefore = query.(~mxSourcesGroup.nodeID)[\children].size;

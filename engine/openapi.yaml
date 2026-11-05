@@ -31,8 +31,12 @@ info:
 
     Arguments fixés à la création du UGen (pitch.windowSize, limiter.durMs) : PitchShift.schelp et
     Limiter.schelp précisent qu'ils ne peuvent pas être modulés ; leur changement recrée le Synth
-    (opération de structure traitée par sclang). Tous les autres changements de valeur sont des
+    (opération de structure traitée par sclang). VarLag.warp et VarLag.curvature du fondu de sortie sont fixés à la construction du SynthDef (rampe linéaire) : Filter.sc évalue warp dans sclang pour choisir l'implémentation, il ne peut donc pas être un contrôle. Tous les autres changements de valeur sont des
     réglages de contrôles.
+
+    Vumètres : replyRate (10 Hz) et peakLag (0.25 s) de SendPeakRMS sont des propriétés de mesure fixes, pas des paramètres de traitement (décision du contrôleur) ; le nom de commande et l'identifiant de réponse sont internes.
+
+    Déplacement d'une source (PATCH de firstChannel ou width) : la nouvelle chaîne entre en fondu (0 vers 1) pendant que l'ancienne sort (1 vers 0), sur la même durée, en amplitude linéaire complémentaire (somme des gains égale à 1 : gain unitaire pour un matériau corrélé). Le vumètre de l'ancienne chaîne est coupé pendant le chevauchement.
 
     Retrait d'une source (DELETE, changement de largeur ou de canaux, remplacement d'un preset) : le
     niveau de l'étage mix descend à zéro en au moins une période matérielle avant la libération du
@@ -526,7 +530,7 @@ components:
         controlLag: { type: number, minimum: 0, maximum: 2, default: 0, description: "Temps de lissage en secondes des contrôles continus de l'étage (Lag.kr, Lag.schelp : lagTime). 0 = application immédiate (défaut : aucun lissage, décision du 05/11)." }
     SourceEq:
       type: object
-      description: "EQ trois bandes de source : BLowShelf, BPeakEQ, BHiShelf. Contrôles de la SynthDef mx_eq_<largeur> : champ seul. Exactement neutre (low = mid = high = 0.5, mul = 1, add = 0) : SynthDef mx_eqdirect_<largeur> sans UGen d'égalisation."
+      description: "EQ trois bandes de source : BLowShelf, BPeakEQ, BHiShelf. Contrôles de la SynthDef mx_eq_<largeur> : champ seul. Exactement neutre (low = mid = high = 0.5, mul = 1, add = 0) : SynthDef mx_eqdirect_<largeur> sans UGen d'égalisation. Entrer dans cet état ou en sortir recrée le Synth de l'étage : le changement est immédiat et ne passe pas par controlLag (sans effet au défaut 0)."
       additionalProperties: false
       required: [low, mid, high, rangeDb, lowFreq, lowRs, lowMul, lowAdd, midFreq, midRq, midMul, midAdd, highFreq, highRs, highMul, highAdd, controlLag]
       properties:

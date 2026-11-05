@@ -168,11 +168,11 @@ export const DOCUMENTED_ARGS = {
 
 /** Arguments documentés volontairement non exposés, avec la justification écrite. */
 export const EXCLUSIONS = [
-  ['VarLag', 'curvature', 'Rampe linéaire de l\'écrivain de sortie : forme (warp linéaire) et amplitude complémentaires (1 - blend, blend) du fondu entre deux compresseurs ; modifier curvature, warp, start, mul ou add rompt le gain unitaire du mélange (VarLag.schelp : curvature n\'agit que si warp vaut 5).'],
-  ['VarLag', 'warp', 'Voir curvature : la forme linéaire (warp) garantit la complémentarité du fondu entre les deux compresseurs.'],
-  ['VarLag', 'start', 'Valeur initiale du fondu de sortie = position courante de l\'écrivain ; non paramétrable sans discontinuité.'],
-  ['VarLag', 'mul', 'Voir curvature : mul et add appliqués à la rampe de mélange changeraient le gain du fondu.'],
-  ['VarLag', 'add', 'Voir curvature : add décalerait la rampe de mélange et romprait la complémentarité du fondu.'],
+  ['VarLag', 'warp', 'Fixé à la construction du SynthDef : VarLag.new1 (Filter.sc) évalue `Env.shapeNames[warp]` et `curve != 1` dans sclang pour choisir entre le UGen VarLag (linéaire) et un EnvGen dont le niveau initial est `in` ; une valeur de contrôle (UGen) ne peut pas être évaluée à ce stade et un EnvGen à niveau initial `in` supprimerait la rampe (VarLag.schelp : warp « determines the shape », Env.shapeNumber requis pour piloter de l\'extérieur sans garantie de rampe). Rampe linéaire retenue, exposée par fadeSeconds.'],
+  ['VarLag', 'curvature', 'N\'agit que si warp vaut 5 (VarLag.schelp : « Control curvature if warp input is 5 ») ; warp étant fixé linéaire, curvature est sans effet.'],
+  ['VarLag', 'start', 'Valeur initiale de la rampe de fondu de sortie : par défaut celle de l\'entrée (VarLag.schelp : « If not specified, same as the input signal »), donc la position courante de l\'écrivain ; une autre valeur provoquerait un saut au démarrage de l\'écrivain.'],
+  ['VarLag', 'mul', 'mul appliqué à la rampe de mélange changerait le poids du second signal sans changer celui du premier : la somme des poids cesserait de valoir 1 (1 - blend, blend). Le fondu complémentaire n\'a de sens qu\'avec mul = 1.'],
+  ['VarLag', 'add', 'add décalerait les deux poids dans le même sens : même raison que mul, la somme des poids ne vaudrait plus 1.'],
   ['Lag', 'mul', 'Lag lisse un contrôle : mul/add appliqués au contrôle lissé dupliqueraient le paramètre lui-même (Lag.schelp : « Output will be multiplied by this value »).'],
   ['Lag', 'add', 'Voir mul : add appliqué au contrôle lissé dupliquerait le paramètre lui-même.'],
 ];

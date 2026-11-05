@@ -24,7 +24,7 @@
  *                                                 firstChannel + width - 1 (défaut :
  *                                                 server.options.numInputBusChannels)
  *   ~mxEnsureWidth.(width)                      -> true si construite, false si déjà présente
- *   ~mxAddSource.(id, meterId, firstChannel, width, proc)   -> ~mxNodeIds.(id)
+ *   ~mxAddSource.(id, meterId, firstChannel, width, proc)   -> ~mxNodeIds.(id)  (entrée en fondu, voir plus bas)
  *   ~mxRemoveSource.(id)                        -> fondu à zéro puis /n_free différé (voir plus bas)
  *   ~mxSetSourceStage.(id, stage, controls)
  *   ~mxSetOutputStage.(output, stage, controls)
@@ -63,7 +63,16 @@
  *   \mix passe donc à zéro (fadeGate 0, VarLag linéaire de fadeSeconds) avant la libération :
  *   fadeSeconds = max(~mxFadeSeconds, 2 périodes matérielles) ; la libération du groupe et du bus a lieu
  *   fadeSeconds + ~mxFadeMargin plus tard (SystemClock, sans horodatage). L'identifiant de la source est
- *   libre immédiatement ; le bus reste réservé jusqu'à la libération.
+ *   libre immédiatement ; le bus reste réservé jusqu'à la libération. Le vumètre de l'ancienne chaîne est coupé
+ *   (meterId -1 : le relais ignore les identifiants inconnus), pour qu'un seul vumètre réponde sous un identifiant.
+ *   Entrée en fondu : toute chaîne naît à fadeGate 0 (défaut de la SynthDef) puis ~mxAddSource envoie fadeGate 1 après la
+ *   construction (server.sync) ; le niveau monte de 0 à 1 en fadeSeconds = ~mxRemoveRamp. Mesuré : un fadeGate 1 envoyé dans
+ *   le bundle de création ne produit pas de montée (la chaîne arrive à pleine amplitude), d'où l'envoi après la construction ;
+ *   il en résulte un creux de quelques millisecondes (au plus 3 dB mesurés) pendant un déplacement, jamais une surcharge. Déplacement (PATCH de largeur ou de canaux : retrait puis ~mxAddSource) :
+ *   la nouvelle chaîne monte à 1 avec la même durée que l'ancienne descend à 0. Loi : amplitude linéaire
+ *   complémentaire (g_ancien + g_nouveau = 1 à chaque instant, VarLag linéaire de même durée) : pour un matériau
+ *   corrélé (même canal d'entrée) la somme garde le gain unitaire, alors que la loi à puissance égale donnerait
+ *   jusqu'à +3 dB. Un matériau décorrélé baisse au plus de 3 dB au milieu du fondu.
  *
  * Vumètres (SendPeakRMS) : '/mx/source-meter' avec le meterId de la source,
  * un couple crête/RMS par canal ; '/mx/output-meter' avec les ID 0/1 (Master
@@ -207,6 +216,9 @@
 // Seul écrivain matériel de chaque sortie ; les processeurs écrivent sur deux bus privés. La durée du fondu
 // est le champ compressor.fadeSeconds (contrôle compressorFadeSeconds).
 ~mxOutputWriterDef = SynthDef(\mx_output_writer, { |inA, inB, out, mix=0, meterId=0|
+  // warp et curvature sont fixés à la construction (Filter.sc, VarLag.new1 : `curve = Env.shapeNames[warp] ? warp; if(curve != 1)`
+  // choisit à la compilation du SynthDef entre le UGen VarLag, linéaire, et un EnvGen dont le niveau initial est `in`) : warp
+  // ne peut pas être un contrôle, et curvature n'agit que pour warp 5 (VarLag.schelp). Rampe linéaire.
   var blend = VarLag.kr(mix, ~mxCtl.(\compressor, \fadeSeconds, ~mxFadeSeconds), warp: \linear);
   var sig = (In.ar(inA, 2) * (1 - blend)) + (In.ar(inB, 2) * blend);
   SendPeakRMS.kr(sig[0], 10, 0.25, '/mx/output-meter', meterId);
@@ -440,7 +452,8 @@
       nodes[\pitch] = Synth.tail(group, ~mxDefName.(\pitch, width), [\bus, bus.index] ++ args[\pitch]);
       nodes[\dyn] = Synth.tail(group, ~mxDefName.(\dyn, width), [\bus, bus.index] ++ args[\dyn]);
       nodes[\mix] = Synth.tail(group, ~mxDefName.(\mix, width), [\bus, bus.index,
-        \out, ~mxMasterBus.index, \cueOut, ~mxCueBus.index] ++ args[\mix]);
+        \out, ~mxMasterBus.index, \cueOut, ~mxCueBus.index] ++ args[\mix]
+        ++ [\fadeSeconds, ~mxRemoveRamp.(server)]);
     });
 
     source = (id: id, meterId: meterId, firstChannel: firstChannel, width: width,
@@ -448,6 +461,8 @@
       pitchWindow: proc[\pitch][\windowSize]);
     ~mxSources[id] = source;
     server.sync;
+    // Entrée en fondu : la chaîne est construite à fadeGate 0, la montée à 1 part ici (après la construction).
+    nodes[\mix].set(\fadeGate, 1);
   } { |error|
     // Échec après réservation : libère l'id et ce qui a déjà été alloué.
     if(group.notNil) { group.free };
@@ -463,6 +478,8 @@
   var source = ~mxSource.(id);
   var ramp = ~mxRemoveRamp.(~mxServer);
   source[\nodes][\mix].set(\fadeSeconds, ramp, \fadeGate, 0);
+  // Un seul vumètre par identifiant pendant le chevauchement d'un déplacement.
+  source[\nodes][\input].set(\meterId, -1);
   ~mxSources.removeAt(id);
   SystemClock.sched(ramp + ~mxFadeMargin.(~mxServer), {
     source[\group].free;

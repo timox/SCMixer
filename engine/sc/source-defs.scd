@@ -166,8 +166,9 @@
       ReplaceOut.ar(bus, Select.ar(allBypassed, [processed.sum, sig]));
     }),
 
-    // Retrait : fadeGate 0 ramène le niveau à zéro en fadeSeconds (VarLag linéaire) avant /n_free (graph.scd).
-    SynthDef(name.(\mix), { |bus, out, cueOut, fadeGate=1, fadeSeconds=0.05|
+    // Entrée et retrait : fadeGate 0 au départ (défaut), 1 envoyé par ~mxAddSource ; fadeGate 0 au retrait ; VarLag linéaire de
+    // fadeSeconds, avant /n_free (graph.scd).
+    SynthDef(name.(\mix), { |bus, out, cueOut, fadeGate=0, fadeSeconds=0.05|
       var input = In.ar(bus, w);
       var lg = { |field, default| ~mxLg.(nil, field, default) };
       var volume = lg.(\volume, 1);

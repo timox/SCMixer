@@ -35,19 +35,24 @@ function runSclang(file) {
 
 /** Introspection sclang unique pour tout le fichier (sans serveur). */
 let introspection;
+const negatives = new Map();
 const defs = async () => {
   introspection ??= runSclang(path.join(here, 'sc', 'controls.scd')).then((out) => {
     assert.match(out, /MX-TEST-OK/, out.slice(-3000));
     const byDef = new Map();
-    const entry = (name) => { if (!byDef.has(name)) byDef.set(name, { controls: new Map(), unused: new Set(), consts: [] }); return byDef.get(name); };
+    const entry = (name) => { if (!byDef.has(name)) byDef.set(name, { controls: new Map(), unused: new Set(), consts: [], hidden: [] }); return byDef.get(name); };
     for (const m of out.matchAll(/^MX-CTL (\S+) (\S+) (\S+) (\S+)/gm)) entry(m[1]).controls.set(m[2], { value: Number(m[3]), rate: m[4] });
     for (const m of out.matchAll(/^MX-UNUSED (\S+) (\S+)/gm)) entry(m[1]).unused.add(m[2]);
     for (const m of out.matchAll(/^MX-CONST (\S+) (\S+) (\d+) (\S+)/gm)) entry(m[1]).consts.push({ ugen: m[2], index: Number(m[3]), value: Number(m[4]) });
+    for (const m of out.matchAll(/^MX-HIDDEN (\S+) (\S+) (\d+) (\S+)/gm)) entry(m[1]).hidden.push({ op: m[2], index: Number(m[3]), value: Number(m[4]) });
+    // Cas négatifs volontaires : retirés des SynthDefs du moteur, vérifiés à part.
+    for (const name of ['mx_hidden_bad', 'mx_hidden_bad_add']) { negatives.set(name, byDef.get(name)); byDef.delete(name); }
     return byDef;
   });
   return introspection;
 };
 
+const WRITER_FIELDS = ['compressorFadeSeconds'];
 const num = (v) => (typeof v === 'boolean' ? Number(v) : v);
 
 /** Contrôles de câblage et internes (pas des paramètres : bus, identifiants, retrait de source). */
@@ -129,15 +134,15 @@ for (const model of ['Compander', 'CompanderD', 'FaustRMS']) {
     const def = (await defs()).get(`mx_output_${model === 'FaustRMS' ? 'faustRMS' : model === 'CompanderD' ? 'companderD' : 'compander'}`);
     assert.ok(def, 'SynthDef de sortie absente');
     const list = OUTPUT_GROUPS.flatMap((g) => Object.entries(outputControls(g, outputDefaults[g]))
-      .filter(([key]) => key !== 'model' && key !== 'compressorFadeSeconds').map(([key, value]) => [key, num(value)]));
+      .filter(([key]) => key !== 'model' && !WRITER_FIELDS.includes(key)).map(([key, value]) => [key, num(value)]));
     assert.deepEqual([...def.controls.keys()].sort(), [...list.map(([n]) => n), ...WIRING.output].sort());
     for (const [name, value] of list) assert.ok(Math.abs(def.controls.get(name).value - value) < 1e-9, `${name} : ${def.controls.get(name).value} / ${value}`);
   });
 }
 
-test('écrivain de sortie : la durée du fondu est le contrôle compressorFadeSeconds (défaut du contrat)', async () => {
+test('écrivain de sortie : time du VarLag est un contrôle (défaut du contrat), warp et curvature exclus par écrit', async () => {
   const def = (await defs()).get('mx_output_writer');
-  assert.deepEqual([...def.controls.keys()].sort(), [...WIRING.writer, 'compressorFadeSeconds'].sort());
+  assert.deepEqual([...def.controls.keys()].sort(), [...WIRING.writer, ...WRITER_FIELDS].sort());
   assert.equal(def.controls.get('compressorFadeSeconds').value, outputDefaults.compressor.fadeSeconds);
 });
 
@@ -155,8 +160,9 @@ test('aucun paramètre caché : tout contrôle déclaré est branché, hors cas 
 });
 
 test('aucune constante figée en position d\'argument d\'un UGen audité', async () => {
-  const domainConstants = (c, name) => (c.ugen === 'LinExp' && (c.index === 1 || c.index === 2)) // domaine 0..1 du contrat
-    || (c.ugen === 'VarLag' && c.index >= 2) // curvature, warp, start du fondu (EXCLUSIONS)
+  const domainConstants = (c, name) => (c.ugen === 'SendPeakRMS') // propriétés de mesure fixes (décision du contrôleur : 10 Hz, 0.25 s, nom de commande)
+    || (c.ugen === 'LinExp' && (c.index === 1 || c.index === 2)) // domaine 0..1 du contrat
+    || (c.ugen === 'VarLag' && c.index >= 2) // curvature, warp, start : EXCLUSIONS (rampe linéaire fixe, fixée à la construction)
     || (c.ugen === 'DelayN' && c.index === 1) // maxdelaytime de CompanderD : borne du contrat (attackMs)
     || (c.ugen === 'Pan2' && c.index === 2) // level interne de Splay (largeur >= 3), vérifié ci-dessous
     || (c.ugen === 'Clip' && c.index >= 1 && /^mx_(hp|lp|mix_)/.test(name)); // bornage 0..1 du domaine de linexp (hp, lp) et de levelComp de Splay (mix) ; jamais en sortie
@@ -166,6 +172,18 @@ test('aucune constante figée en position d\'argument d\'un UGen audité', async
     const pan = def.consts.filter((c) => c.ugen === 'Pan2');
     if (pan.length > 0) assert.ok(/^mx_mix_(3|[4-9]\d*)$/.test(name), `${name} : Pan2.level constant hors Splay`);
   }
+});
+
+test('aucun multiplicateur ni décalage caché appliqué à la sortie d\'un filtre, Compander, PitchShift ou lecture (MulAdd, BinaryOpUGen)', async () => {
+  for (const [name, def] of await defs()) assert.deepEqual(def.hidden, [], `${name} : constante numérique combinée à la sortie d'un UGen à mul/add`);
+});
+
+test('cas négatif : un * 0.8 ou un décalage 0.1 caché fait échouer l\'audit', async () => {
+  await defs();
+  const mul = negatives.get('mx_hidden_bad');
+  const add = negatives.get('mx_hidden_bad_add');
+  assert.ok(mul.hidden.some((h) => h.value === 0.8), JSON.stringify(mul.hidden));
+  assert.ok(add.hidden.some((h) => h.value === 0.1), JSON.stringify(add.hidden));
 });
 
 test('inventaire : chaque UGen audité couvre tous ses arguments documentés (exposé ou exclu par écrit)', () => {
