@@ -55,7 +55,7 @@ Le module Qt WebSockets est absent de `C:\Qt\6.12.0\mingw_64` (relevé du 5 nove
     - `put` coalesce les requêtes par `path` : une requête au plus en vol, la dernière en attente remplace la précédente.
     - Reconnexion WS toutes les 2 s ; à chaque (re)connexion, `get("/api/state")`.
   - `class StateStore : QObject` (QML singleton `Engine`) :
-    - `Q_PROPERTY(QVariantMap engine, audioProfile, master, cue)` ;
+    - `Q_PROPERTY(QVariantMap engine, master, cue)` ;
     - `Q_PROPERTY(SourceListModel* sources)` ;
     - `Q_PROPERTY(QVariantMap outputMeters)` ;
     - `void applyState(QJsonObject)` ; `void applyEvent(QString type, QJsonObject)` ; `void applySourceResponse(QJsonObject source)`.
@@ -157,7 +157,7 @@ Le module Qt WebSockets est absent de `C:\Qt\6.12.0\mingw_64` (relevé du 5 nove
   - **Presets** : liste, enregistrement (nom 1..60), application après confirmation (« remplace toute la session »), suppression.
   - **Moteur** :
     - état et erreur ; boutons Démarrer, Arrêter et Redémarrer, activés selon `status` ;
-    - profil audio (listes `sampleRate` et `bufferFrames` du contrat, avec un avertissement de redémarrage) ;
+    - horloge audio en lecture seule (`engine.audioClock` : fréquence et taille de bloc imposées par TimoxVasio, mention « réglées dans TimoxVasio »), erreur `TIMOXVASIO_NOT_READY` affichée telle quelle ;
     - indicateurs runtime (événement `engineRuntimeChanged`) ;
     - arbre des nœuds (`GET /api/engine/node-tree`, bouton Actualiser) ;
     - banc compresseur (exécution, puis affichage du résultat) ;
@@ -166,7 +166,7 @@ Le module Qt WebSockets est absent de `C:\Qt\6.12.0\mingw_64` (relevé du 5 nove
   - « Appliquer » sans confirmation → aucun appel ;
   - avec confirmation → `post("/api/presets/preset-1/apply")` ;
   - `status == "restoring"` → tous les boutons du cycle de vie sont désactivés ;
-  - changement de buffer → `put("/api/engine/audio-profile", {sampleRate:48000, bufferFrames:512})`.
+  - `engine.audioClock == null` → la zone horloge affiche « moteur arrêté » et aucun contrôle de fréquence ou de buffer n'existe.
 - [ ] **Step 2–4 :** ÉCHEC, implémentation, SUCCÈS.
 - [ ] **Step 5 : commit** `feat(desktop): add presets and engine tabs`
 

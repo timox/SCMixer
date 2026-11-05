@@ -197,7 +197,7 @@ Un nouveau fichier `openapi.yaml` décrit uniquement le moteur SC. Ressources pr
 
 - Toute mutation renvoie l'état confirmé après acquittement sclang. L'interface met à jour sa vue depuis cette réponse et les événements, sans état optimiste.
 - Une valeur hors plage ou un champ inconnu est refusé (corps strict).
-- Le lissage de contrôle de 50 ms s'applique à toutes les mutations venant de l'API.
+- Aucun lissage de contrôle par défaut : les réglages s'appliquent immédiatement (`controlLag = 0`, décision de l'utilisateur du 5 novembre 2026). Le temps de lissage reste un paramètre exposé et réglable.
 
 ## 8. Interface Qt
 
@@ -249,3 +249,16 @@ Ajout demandé par l'utilisateur le 5 novembre 2026.
 - Les données utilisateur (`session.json`, presets, registre runtime) restent dans `%LOCALAPPDATA%\Mixette\sc-engine\`. La désinstallation ne les supprime pas.
 - Le fichier `COPYING` de SuperCollider est installé avec le sous-dossier embarqué.
 - L'installateur crée un raccourci qui lance le service moteur puis l'application Qt, par un lanceur unique. Ce lanceur applique les règles de PID d'AGENTS.md.
+
+## 13. Architecture interne de SuperCollider
+
+Exigence de l'utilisateur (5 novembre 2026). Le moteur respecte strictement l'architecture interne de scsynth, vérifiée dans la documentation officielle de SuperCollider 3.14.1 (`HelpSource` : Server-Architecture, ServerOptions, Bus, Order-of-execution). Les principes :
+
+- Disposition des bus : sorties matérielles 0 à 3, puis entrées 4 à 259, puis bus privés à partir de 260, alloués uniquement par l'allocateur.
+- Ordre d'exécution : écrivains avant lecteurs, avec un placement explicite des nœuds à chaque création ou reconstruction.
+- Options figées au démarrage (numAudioBusChannels, numWireBufs, memSize…) : calculées à partir des besoins mesurés et consignées au démarrage dans le journal. numWireBufs ne pouvant pas augmenter après le démarrage, il est dimensionné pour la SynthDef la plus complexe autorisée. Une modification qui dépasserait ce dimensionnement est refusée explicitement.
+- Un audit du graphe SC, mené contre cette documentation, fait partie de la validation du moteur.
+
+## 14. Exposition complète des paramètres
+
+Exigence de l'utilisateur (5 novembre 2026). Chaque argument de contrôle de chaque UGen utilisé dans un traitement est exposé par l'API et pilotable depuis l'interface : aucun paramètre caché, figé ou dérivé d'un autre. Seuls les arguments qui portent le signal ou le câblage (`in`, bus) n'en sont pas. La liste de référence des arguments est la documentation officielle de chaque UGen. Les valeurs par défaut reproduisent le son actuel. Cette règle remplace les plages réduites de la section 6 partout où celle-ci omettait des arguments : fréquences et largeurs des EQ, pentes et temps des compresseurs, croisements du multibande, paramètres de PitchShift, anticipation du limiteur, paramètres de mise en stéréo, mul/add.
