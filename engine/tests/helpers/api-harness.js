@@ -9,7 +9,10 @@ import { PresetStore } from '../../src/session/preset-store.js';
 import { createServer } from '../../src/api/server.js';
 
 /** Horloge TimoxVasio simulée : aucun appel réseau. */
-export const fakeTimoxVasio = (clock = { sampleRate: 48000, bufferFrames: 2048 }) => ({ audioClock: async () => ({ ...clock }) });
+export const fakeInfo = { apiUrl: 'http://127.0.0.1:52525', apiVersion: '1.1', hostPid: 4242, launchedByEngine: false, physicalDriverId: 'drv', state: 'running' };
+export const fakeTimoxVasio = (clock = { sampleRate: 48000, bufferFrames: 2048 }) => ({
+  apiUrl: fakeInfo.apiUrl, prepare: async () => ({ audioClock: { ...clock }, info: { ...fakeInfo } }),
+});
 
 class FakeListener extends EventEmitter {
   async start() { return 45678; }

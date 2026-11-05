@@ -107,7 +107,7 @@ test('start exécute applySessionCode avant d\'émettre running', async () => {
   assert.equal(state.status, 'running');
   assert.equal(state.scsynthPid, 7003);
   assert.deepEqual(state.models, { Compander: true, CompanderD: true, FaustRMS: false });
-  assert.equal(state.timoxVasio.apiUrl, 'http://127.0.0.1:52525');
+  assert.deepEqual(state.timoxVasio, { apiUrl: 'http://127.0.0.1:52525', apiVersion: '1.1', hostPid: 4242, launchedByEngine: false, physicalDriverId: 'drv', state: 'running' });
   const cmds = langs[0].commands();
   assert.equal(cmds.length, 1);
   assert.match(cmds[0], /~mxAddSource\.\(\"src-1", 0, 1, 2,/);
@@ -500,7 +500,7 @@ test('horloge TimoxVasio : jetons de démarrage et EngineState.audioClock', asyn
 
 test('horloge relue à chaque démarrage', async () => {
   let clock = { sampleRate: 48000, bufferFrames: 256 };
-  const { engine, langs } = setup({ timoxVasio: { audioClock: async () => ({ ...clock }) } });
+  const { engine, langs } = setup({ timoxVasio: { apiUrl: 'http://x', prepare: async () => ({ audioClock: { ...clock }, info: { apiUrl: 'http://x', apiVersion: '1.1', hostPid: null, launchedByEngine: false, physicalDriverId: 'd', state: 'running' } }) } });
   await engine.start();
   await engine.stop();
   clock = { sampleRate: 44100, bufferFrames: 128 };
@@ -510,7 +510,7 @@ test('horloge relue à chaque démarrage', async () => {
 });
 
 test('TimoxVasio non prêt : start refusé, aucun sclang lancé, état stopped', async () => {
-  const failing = { audioClock: async () => { throw new ApiError('TIMOXVASIO_NOT_READY', 409, 'TimoxVasio injoignable : ECONNREFUSED'); } };
+  const failing = { apiUrl: 'http://127.0.0.1:52525', prepare: async () => { throw new ApiError('TIMOXVASIO_NOT_READY', 409, 'TimoxVasio injoignable : ECONNREFUSED'); } };
   const { engine, langs, listener } = setup({ timoxVasio: failing });
   const states = [];
   engine.on('state', (s) => states.push(s.status));

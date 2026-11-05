@@ -10,7 +10,7 @@ import { MeterRelay } from './meter-relay.js';
 import { OscListener } from './osc-listener.js';
 import { ProcessRegistry, resolveScsynthWindows } from './process-registry.js';
 import { DEFAULT_SIZING, SYNTHDEF_TIMEOUT_SECONDS, assertSessionFitsSizing, computeServerOptions } from './server-options.js';
-import { TimoxVasioClient } from './timoxvasio-client.js';
+import { DEFAULT_TIMOXVASIO_ENGINE_EXE, DEFAULT_TIMOXVASIO_URL, TimoxVasioClient } from './timoxvasio-client.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SC_DIR = path.resolve(here, '..', '..', 'sc');
@@ -108,7 +108,7 @@ class StaleBoot extends Error {}
 
 export class EngineProcess extends EventEmitter {
   #store; #registry; #langFactory; #listenerFactory; #resolveScsynth; #isAlive; #kill; #watchMs;
-  #apiUrl; #timoxVasio; #audioClock = null; #scDir; #langPort; #logFile; #askTimeoutMs; #resolveAttempts; #sizing;
+  #timoxVasio; #tvInfo = null; #audioClock = null; #scDir; #langPort; #logFile; #askTimeoutMs; #resolveAttempts; #sizing;
   #status = 'stopped'; #error = null; #scsynthPid = null;
   #models = { Compander: true, CompanderD: false, FaustRMS: false };
   #session; #generation = 0;
@@ -122,8 +122,9 @@ export class EngineProcess extends EventEmitter {
     isAlive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } },
     killProcess = (pid) => process.kill(pid, 'SIGTERM'),
     watchIntervalMs = 1000, langPort = DEFAULT_LANG_PORT, askTimeoutMs = 30_000, resolveAttempts = 20,
-    apiUrl = process.env.MIXETTE_TIMOXVASIO_URL || 'http://127.0.0.1:52525',
-    scDir = DEFAULT_SC_DIR, timoxVasio = new TimoxVasioClient({ apiUrl }),
+    apiUrl = process.env.MIXETTE_TIMOXVASIO_URL || DEFAULT_TIMOXVASIO_URL,
+    timoxVasioEngineExe = process.env.MIXETTE_TIMOXVASIO_ENGINE_EXE || DEFAULT_TIMOXVASIO_ENGINE_EXE,
+    scDir = DEFAULT_SC_DIR, timoxVasio,
     sizing = DEFAULT_SIZING,
   }) {
     super();
@@ -140,8 +141,7 @@ export class EngineProcess extends EventEmitter {
     this.#langPort = langPort;
     this.#askTimeoutMs = askTimeoutMs;
     this.#resolveAttempts = resolveAttempts;
-    this.#apiUrl = apiUrl;
-    this.#timoxVasio = timoxVasio;
+    this.#timoxVasio = timoxVasio ?? new TimoxVasioClient({ apiUrl, registry: this.#registry, engineExe: timoxVasioEngineExe });
     this.#scDir = scDir;
     this.#logFile = dataDir ? path.join(dataDir, 'logs', 'sclang.log') : null;
     this.#session = store.load();
@@ -152,7 +152,9 @@ export class EngineProcess extends EventEmitter {
       status: this.#status,
       error: this.#error,
       scsynthPid: this.#scsynthPid,
-      timoxVasio: { apiUrl: this.#apiUrl },
+      timoxVasio: this.#tvInfo ? { ...this.#tvInfo } : {
+        apiUrl: this.#timoxVasio.apiUrl, apiVersion: null, hostPid: null, launchedByEngine: false, physicalDriverId: null, state: null,
+      },
       audioClock: this.#audioClock ? { ...this.#audioClock } : null,
       models: { ...this.#models },
     };
@@ -249,8 +251,11 @@ export class EngineProcess extends EventEmitter {
         const pids = foreign.map((p) => p.pid).join(', ');
         throw busy(`Un scsynth.exe non inscrit par ce moteur est déjà actif (PID ${pids}) ; démarrage refusé.`);
       }
-      // Horloge imposée par TimoxVasio, lue à chaque démarrage ; aucune surveillance ensuite.
-      const clock = await this.#timoxVasio.audioClock();
+      // TimoxVasio supervisé puis horloge imposée, lues à chaque démarrage ; aucune surveillance ensuite.
+      // L'hôte et son transport ne sont jamais arrêtés par le moteur (voir TimoxVasioClient).
+      this.#tvInfo = null;
+      const { audioClock: clock, info } = await this.#timoxVasio.prepare();
+      this.#tvInfo = info;
       this.#audioClock = { sampleRate: clock.sampleRate, bufferFrames: clock.bufferFrames };
       this.#setStatus('starting');
       const ctx = { lang: null, listener: null, queue: null, procs: [], watcher: null };

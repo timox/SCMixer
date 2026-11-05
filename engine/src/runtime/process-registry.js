@@ -6,9 +6,20 @@ import { writeJsonAtomic } from '../session/atomic-file.js';
 
 const execFileAsync = promisify(execFile);
 
-/** Énumère les scsynth.exe du système : [{ pid, name, command }]. */
-export async function listProcessesWindows() {
-  const script = "Get-CimInstance Win32_Process -Filter \"Name='scsynth.exe'\" | Select-Object ProcessId, Name, CommandLine | ConvertTo-Json -Compress";
+/**
+ * Script PowerShell d'énumération des processus d'un exécutable donné.
+ * Le nom est restreint à un nom de fichier simple (lettres, chiffres, . _ -) : aucune injection possible dans le filtre CIM.
+ */
+export function buildListScript(executableName) {
+  if (typeof executableName !== 'string' || !/^[A-Za-z0-9._-]+\.exe$/i.test(executableName)) {
+    throw new Error(`Nom d'exécutable invalide pour l'inventaire des processus : ${JSON.stringify(executableName)}`);
+  }
+  return `Get-CimInstance Win32_Process -Filter "Name='${executableName}'" | Select-Object ProcessId, Name, CommandLine | ConvertTo-Json -Compress`;
+}
+
+/** Énumère les processus de l'exécutable demandé (scsynth.exe par défaut) : [{ pid, name, command }]. */
+export async function listProcessesWindows(executableName = 'scsynth.exe') {
+  const script = buildListScript(executableName);
   const { stdout } = await execFileAsync('pwsh.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], {
     windowsHide: true, timeout: 20_000, maxBuffer: 1024 * 1024,
   });
@@ -37,9 +48,12 @@ export class ProcessRegistry {
     }
   }
 
-  add({ role, pid, command }) {
+  /** `ownedByEngine` marque un processus lancé par ce moteur et laissé actif à son arrêt (hôte TimoxVasio). */
+  add({ role, pid, command, ownedByEngine }) {
     const entries = this.entries().filter((e) => e.pid !== pid);
-    entries.push({ role, pid, command, startedAt: new Date().toISOString() });
+    const entry = { role, pid, command, startedAt: new Date().toISOString() };
+    if (ownedByEngine === true) entry.ownedByEngine = true;
+    entries.push(entry);
     writeJsonAtomic(this.file, entries);
   }
 

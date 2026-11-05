@@ -371,9 +371,22 @@ components:
         error: { type: [string, 'null'] }
         scsynthPid: { type: [integer, 'null'] }
         timoxVasio:
+          description: >
+            Supervision de TimoxVasio (API 1.1, dépôt TimoxVAudioEngine). Au démarrage, le moteur lance l'hôte
+            TimoxVirtualAsioEngine.exe s'il est absent (port lu dans l'événement api.ready), envoie engine.start si le
+            transport est arrêté avec un pilote physique configuré, puis lit l'horloge. Il ne crée aucune route
+            (TimoxVasio ajoute scsynth à son graphe) et n'arrête jamais l'hôte ni son transport. Champs null tant que le
+            moteur n'a pas démarré. Refus : 409 TIMOXVASIO_NOT_READY avec la cause (version d'API, hôte injoignable,
+            aucun pilote physique, transport resté arrêté, état error).
           type: object
-          required: [apiUrl]
-          properties: { apiUrl: { type: string } }
+          required: [apiUrl, apiVersion, hostPid, launchedByEngine, physicalDriverId, state]
+          properties:
+            apiUrl: { type: string }
+            apiVersion: { type: [string, 'null'], enum: ['1.1', null] }
+            hostPid: { type: [integer, 'null'] }
+            launchedByEngine: { type: boolean }
+            physicalDriverId: { type: [string, 'null'] }
+            state: { type: [string, 'null'], enum: [stopped, running, reconfiguring, error, null] }
         audioClock:
           description: >
             Fréquence et tampon matériel imposés par TimoxVasio (GET /api/v1/state), lus au démarrage

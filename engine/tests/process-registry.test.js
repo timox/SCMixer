@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ProcessRegistry, buildResolveScript } from '../src/runtime/process-registry.js';
+import { ProcessRegistry, buildResolveScript, buildListScript, listProcessesWindows } from '../src/runtime/process-registry.js';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'mx-reg-'));
 const read = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'runtime-processes.json'), 'utf8'));
@@ -46,4 +46,22 @@ test('le script PowerShell d identification contient la regex exacte du port', (
   assert.ok(script.includes(String.raw`(?:^|\s)-u\s+$serverPort(?:\s|$)`));
   assert.ok(script.includes('$serverPort = 57130'));
   assert.ok(script.includes("$audioDevice = 'ASIO : TimoxVasio'"));
+});
+
+test('inventaire : le script filtre sur l\'exécutable demandé, pas toujours scsynth.exe', () => {
+  assert.match(buildListScript('TimoxVirtualAsioEngine.exe'), /Name='TimoxVirtualAsioEngine\.exe'/);
+  assert.match(buildListScript('scsynth.exe'), /Name='scsynth\.exe'/);
+  assert.doesNotMatch(buildListScript('TimoxVirtualAsioEngine.exe'), /scsynth/);
+  for (const bad of ["x' OR Name='y.exe", 'a b.exe', 'scsynth', '', null]) {
+    assert.throws(() => buildListScript(bad), /Nom d'exécutable invalide/);
+  }
+});
+
+test('inventaire réel : un nom inconnu donne une liste vide, sans erreur', { skip: process.platform !== 'win32' }, async () => {
+  assert.deepEqual(await listProcessesWindows('mx-inexistant-0b099f6.exe'), []);
+});
+
+test('inventaire réel : le processus node courant est trouvé par son nom', { skip: process.platform !== 'win32' }, async () => {
+  const found = await listProcessesWindows('node.exe');
+  assert.ok(found.some((p) => p.pid === process.pid && p.name.toLowerCase() === 'node.exe'));
 });
