@@ -367,6 +367,52 @@ test('les opérations ne mutent pas l’entrée', () => { /* Object.freeze en pr
   - aucun fichier de `engine/src` ne contient `decks`, `Mixxx`, `Renoise`, `Ableton`, `SSL`, `Traktor` ni `K3`.
 - [ ] **Step 5 : `npm test`** — SUCCÈS. **Commit** `feat(engine): expose engine, sources and outputs API`
 
+### Task 8d : chemin direct Node → scsynth pour les changements de valeur
+
+Exigence de l'utilisateur (5 novembre 2026) : latence geste → application minimale. Ruling R17 du registre.
+
+**Files :** Create `engine/src/runtime/scsynth-direct.js` (client OSC UDP vers scsynth : `/n_set`, `/sync`, attente de `/synced`) ; Modify `engine/src/runtime/engine-process.js` (deux types de mutation : structure par sclang, valeur par chemin direct), `engine/sc/engine.scd` (publication des identifiants de nœuds), `engine/src/api/routes/sources.js`, `engine/src/api/routes/outputs.js`, `engine/src/session/session-store.js` (persistance regroupée) · Test `engine/tests/scsynth-direct.test.js`, extension de `engine/tests/api-sources.test.js`, `api-outputs.test.js`, `session-store.test.js`, `sc-integration.test.js`
+
+**Interfaces :**
+- Consumes : `sourceControls`, `outputControls` (`src/contract/controls.js`) : les noms de contrôles des SynthDefs sont déjà les champs du contrat, aucune table de correspondance n'est ajoutée.
+- Produces :
+  - **Structure** (création, suppression, déplacement de source ; changement de `model` ; reset MoogFF ; reconstruction) : passe toujours par sclang (`~mx*`). Après chaque opération de structure, sclang renvoie à Node les identifiants de nœuds de la source ou de la sortie concernée (`{ synthKey → nodeId }`, clés = celles de `SOURCE_SYNTH_GROUPS` et le synth de sortie) ; Node tient cette table, remplacée à chaque opération de structure et vidée à l'arrêt.
+  - **Valeur** (tout `PUT` d'étage ou de bande dont le `model` ne change pas, et `copy-master` si aucun modèle ne change) : Node envoie un bundle OSC `/n_set` (booléens en 0/1) au nœud concerné, suivi de `/sync <id>` ; la réponse HTTP part après `/synced <id>`. Échec ou délai dépassé (1 s) → 502 `SC_COMMAND_FAILED`, session inchangée.
+  - Les mutations de valeur restent sérialisées avec les mutations de structure (même file `mutate`) : aucune valeur n'est envoyée à un nœud en cours de remplacement.
+  - **Persistance regroupée** : la session confirmée est écrite au plus tard 200 ms après la dernière mutation, et immédiatement à l'arrêt du service et du moteur. Les opérations de structure et l'application de preset écrivent immédiatement.
+  - Objectif mesuré : réception de la requête → émission de `/n_set` < 5 ms (médiane sur 100 requêtes, consignée dans le rapport).
+- [ ] **Step 1 : tests qui échouent** :
+  - faux serveur OSC UDP : `PUT /api/sources/src-1/processing/eq` → un `/n_set` au nœud `eq` de `src-1` avec les contrôles de l'étage, puis `/sync` ; aucun code sclang émis ;
+  - changement de `model` HP → passage par sclang, pas de `/n_set` ;
+  - `/synced` absent → 502, session inchangée ;
+  - 10 PUT en 50 ms → une seule écriture du fichier de session, au plus 200 ms après le dernier ; arrêt → écriture immédiate ;
+  - intégration (sclang réel) : la valeur lue par `/s_get` sur le nœud est celle envoyée. Si le test exige TimoxVasio, il est marqué comme tel et ignoré en son absence.
+- [ ] **Step 2–4 :** ÉCHEC, implémentation, SUCCÈS (`npm test`).
+- [ ] **Step 5 : commit** `feat(engine): apply value changes directly to scsynth`
+
+### Task 8f : descripteurs de paramètres publiés par l'API
+
+Décision de l'utilisateur (5 novembre 2026) : l'interface obtient plages, défauts et listes de modèles depuis l'API ; aucune copie du contrat côté client.
+
+**Files :** Create `engine/src/contract/descriptors.js`, `engine/src/api/routes/parameters.js` ; Modify `engine/src/contract/schemas.js` (métadonnées), `engine/src/api/server.js`, `engine/openapi.yaml` · Test `engine/tests/api-parameters.test.js`
+
+**Interfaces :**
+- Consumes : schémas zod de `src/contract/schemas.js` (seule source des plages), `defaultSourceProcessing`, `defaultOutput` (seule source des défauts).
+- Produces :
+  - `GET /api/parameters` → `{ source: { <étage>: Stage, bandCompressor: { low|mid|high|crossover: Stage } }, output: { <étage>: Stage } }`, avec `Stage = { fields: [Field] }` et `Field = { key, type 'number'|'integer'|'boolean'|'enum', min?, max?, step?, default, options?, unit?, scale 'linear'|'log', label, description, appliesTo? }`.
+  - `type`, `min`, `max`, `options` sont dérivés des schémas zod (pas de recopie) ; `default` des fonctions de défaut ; `unit`, `scale`, `label` (français, court) et `appliesTo` sont des métadonnées attachées aux schémas (`.meta()` de zod 4) au même endroit que la plage.
+  - `appliesTo` exprime les conditions d'usage déjà décrites dans `openapi.yaml` : largeur de source (`{ width: { min, max } }`, ex. `panLevel` largeur 1, `spread` largeur ≥ 3) et modèle (`{ model: [...] }`, ex. `gain` de LP pour MoogFF). L'interface masque un champ dont la condition n'est pas remplie.
+  - L'ordre des champs est celui du schéma.
+  - `openapi.yaml` décrit la route et ses schémas `ParameterCatalog`, `ParameterStage`, `ParameterField`.
+- [ ] **Step 1 : tests qui échouent** :
+  - chaque champ de chaque étage de `SourceProcessing` et `Output` a un descripteur, et aucun descripteur ne désigne un champ absent ;
+  - `min`/`max`/`options` égaux aux bornes des schémas zod, `default` égal au défaut de session, pour tous les champs ;
+  - chaque champ numérique a `scale` et `label` ; les champs en Hz ont `scale: 'log'` et `unit: 'Hz'` ;
+  - `appliesTo` de `mix.panLevel` = largeur 1 ; de `lp.gain` = modèle MoogFF ;
+  - la route répond moteur arrêté (catalogue statique, pas de 409).
+- [ ] **Step 2–4 :** ÉCHEC, implémentation, SUCCÈS (`npm test`).
+- [ ] **Step 5 : commit** `feat(engine): publish parameter descriptors`
+
 ### Task 9 : presets et bancs de test
 
 **Files :** Create `engine/src/api/routes/presets.js`, `engine/src/api/routes/benches.js`; Modify `engine/sc/engine.scd` (bancs repris de `hub.scd:583-602, 904-940` et des commandes associées de `hub/sc-command-dispatch.js`), `engine/openapi.yaml` · Test `engine/tests/api-presets.test.js`, `engine/tests/api-benches.test.js`
