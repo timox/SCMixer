@@ -19,7 +19,7 @@
 - Pas de helper de traduction de contrat : les noms de champs JSON sont utilisés tels quels jusqu'en QML.
 - Pas d'état optimiste : seule une réponse API ou un événement modifie `StateStore`.
 - L'URL TimoxVasio vient de `engine.timoxVasio.apiUrl` ; les extrémités de scsynth sont filtrées par `virtual:TimoxVasio:<engine.scsynthPid>:`.
-- Plages, défauts et listes de modèles : ceux du contrat ; le QML ne les recopie pas en dur quand ils figurent dans l'état. Les plages numériques sont centralisées dans `qml/ContractRanges.js`, et un test les compare à `engine/openapi.yaml`.
+- Plages, défauts, unités, échelles, libellés et listes de modèles : lus exclusivement dans `GET /api/parameters` (tâche 8f du plan moteur, décision de l'utilisateur du 5 novembre 2026). Aucune plage ni valeur par défaut n'est écrite dans le QML ou le C++. Un champ dont `appliesTo` n'est pas rempli (largeur, modèle) est masqué.
 - Textes en français, ton posé, sans emoji. Tout est pilotable à la souris.
 - L'application ne lance ni le moteur ni son service.
 
@@ -35,7 +35,7 @@
 
 ### Task 0 : prérequis Qt WebSockets
 
-Le module Qt WebSockets est absent de `C:\Qt\6.12.0\mingw_64` (relevé du 5 novembre 2026).
+Relevé du 5 novembre 2026 (reprise) : `libQt6WebSockets.a` présent dans `C:\Qt\6.12.0\mingw_64\lib`. Le Step 1 est sans objet ; le Step 2 reste la vérification d'entrée.
 
 - [ ] **Step 1 :** demander à l'utilisateur d'installer le module « Qt WebSockets » pour Qt 6.12.0 MinGW 64, avec `C:\Qt\MaintenanceTool.exe`. Ne pas contourner ce prérequis (pas de client WebSocket écrit à la main).
 - [ ] **Step 2 :** vérifier `C:\Qt\6.12.0\mingw_64\lib\libQt6WebSockets.a`. Absent → s'arrêter et le signaler.
@@ -58,6 +58,7 @@ Le module Qt WebSockets est absent de `C:\Qt\6.12.0\mingw_64` (relevé du 5 nove
     - `Q_PROPERTY(QVariantMap engine, master, cue)` ;
     - `Q_PROPERTY(SourceListModel* sources)` ;
     - `Q_PROPERTY(QVariantMap outputMeters)` ;
+    - `Q_PROPERTY(QVariantMap parameters)` : réponse de `GET /api/parameters`, relue à chaque (re)connexion ;
     - `void applyState(QJsonObject)` ; `void applyEvent(QString type, QJsonObject)` ; `void applySourceResponse(QJsonObject source)`.
   - `class SourceListModel : QAbstractListModel` :
     - rôles `sourceId`, `name`, `firstChannel`, `width`, `processing` (QVariantMap), `peakDb`, `rmsDb` ;
@@ -96,18 +97,20 @@ Le module Qt WebSockets est absent de `C:\Qt\6.12.0\mingw_64` (relevé du 5 nove
 ### Task 3 : contrôles QML de base
 
 **Files :**
-- Create : `desktop/qml/controls/Knob.qml`, `Fader.qml`, `Meter.qml`, `Toggle.qml`, `ModelSelector.qml`, `ResponseCurve.qml`, `CompCurve.qml`, `StagePanel.qml`, `desktop/qml/ContractRanges.js`, `desktop/qml/ErrorBanner.qml`
-- Test : `desktop/tests/qml/tst_controls.qml` (QuickTest), `desktop/tests/tst_contractranges.cpp` (compare `ContractRanges.js` à `../engine/openapi.yaml`)
+- Create : `desktop/qml/controls/Knob.qml`, `Fader.qml`, `Meter.qml`, `Toggle.qml`, `ModelSelector.qml`, `ResponseCurve.qml`, `CompCurve.qml`, `StagePanel.qml`, `ParameterControl.qml`, `desktop/qml/ErrorBanner.qml`
+- Test : `desktop/tests/qml/tst_controls.qml` (QuickTest), `desktop/tests/fixtures/parameters.json` (réponse de `GET /api/parameters` enregistrée depuis le service moteur)
 
 **Interfaces :**
 - Produces :
   - `Knob`/`Fader` : propriétés `confirmedValue`, `from`, `to`, `stepSize`, `unit`, `label` ; signal `moved(real value)`. Pendant le glissement, la valeur affichée suit la souris ; au relâchement, ou si `confirmedValue` change sans glissement, l'affichage reprend `confirmedValue`. Double-clic → `moved(defaultValue)`.
   - `Meter` : `peakDb`, `rmsDb`, échelle −60..0 dBFS.
-  - `StagePanel` : `path` (ex. `/api/sources/src-1/processing/eq`), `value` (QVariantMap confirmé). `send(key, v)` appelle `Api.put(path, {...value, [key]: v})`. Sur `requestFailed` de son `path`, il affiche le message dans `ErrorBanner` et ses contrôles reviennent à `value` (Review Focus 3).
+  - `ParameterControl` : `descriptor` (un `Field` de `/api/parameters`), `confirmedValue` ; instancie `Knob`, `Toggle` ou `ModelSelector` selon `descriptor.type`, avec `from`/`to`/`stepSize`/`unit`/`label`/`defaultValue` tirés du descripteur (`scale: 'log'` → course logarithmique).
+  - `StagePanel` : `descriptors` (le `Stage` correspondant de `/api/parameters`) et `context` (`{ width, model }`) construisent un `ParameterControl` par champ applicable ; `path` (ex. `/api/sources/src-1/processing/eq`), `value` (QVariantMap confirmé). `send(key, v)` appelle `Api.put(path, {...value, [key]: v})`. Sur `requestFailed` de son `path`, il affiche le message dans `ErrorBanner` et ses contrôles reviennent à `value` (Review Focus 3).
 - [ ] **Step 1 : tests qui échouent** :
   - glissement de `Knob` → `moved` émis ; après relâchement sans changement de `confirmedValue`, l'affichage est égal à `confirmedValue` ;
   - `StagePanel` recevant `requestFailed` → texte de bannière égal au message et contrôle revenu ;
-  - les plages de `ContractRanges.js` correspondent à `openapi.yaml`.
+  - `StagePanel` alimenté par la fixture `parameters.json` (étage `lp`) : avec `context.model == 'MoogFF'` le contrôle `gain` existe, avec `BLowPass` il n'existe pas ; les bornes du contrôle `freq` sont celles du descripteur ;
+  - aucun fichier QML ou C++ de `desktop/` ne contient de plage numérique du contrat (test de recherche sur les sources).
 - [ ] **Step 2–4 :** ÉCHEC, implémentation, SUCCÈS.
 - [ ] **Step 5 : commit** `feat(desktop): add base QML controls`
 
