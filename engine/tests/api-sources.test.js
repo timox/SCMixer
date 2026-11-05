@@ -64,8 +64,8 @@ test('PUT bandCompressor/{band} et étage inconnu', async (t) => {
   assert.equal(r.status, 200);
   assert.deepEqual(r.body.processing.bandCompressor.mid, band);
   assert.match(h.langs[0].commands().at(-1), /band: \\mid/);
-  assert.equal((await h.call('PUT', '/api/sources/src-1/processing/bandCompressor/top', band)).status, 400);
-  assert.equal((await h.call('PUT', '/api/sources/src-1/processing/nope', {})).status, 400);
+  assert.equal((await h.call('PUT', '/api/sources/src-1/processing/bandCompressor/top', band)).status, 404);
+  assert.equal((await h.call('PUT', '/api/sources/src-1/processing/nope', {})).status, 404);
 });
 
 test('hp/reset et lp/reset rétablissent les défauts', async (t) => {

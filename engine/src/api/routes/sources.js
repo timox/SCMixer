@@ -1,3 +1,4 @@
+import { SOURCE_STAGES, BANDS } from '../../contract/schemas.js';
 import { route } from '../async-route.js';
 import { ApiError } from '../../contract/errors.js';
 import {
@@ -14,6 +15,10 @@ const find = (session, id) => {
   const source = session.sources.find((s) => s.id === id);
   if (!source) throw new ApiError('NOT_FOUND', 404, `Source inconnue : ${id}.`);
   return source;
+};
+
+const known = (list, value, what) => {
+  if (!list.includes(value)) throw new ApiError('NOT_FOUND', 404, `${what} inconnu : ${value}.`);
 };
 
 const sourceOf = (session, id) => structuredClone(find(session, id));
@@ -55,6 +60,7 @@ export function registerSourceRoutes(api, engine) {
   // Routes littérales avant la route à paramètre `:stage`.
   api.put('/sources/:id/processing/bandCompressor/:band', route(async (req, res) => {
     const { id, band } = req.params;
+    known(BANDS, band, 'Bande');
     const session = await engine.mutate((current) => {
       const next = setSourceBand(current, id, band, req.body);
       return { session: next, code: setSourceBandCode(id, band, find(next, id).processing.bandCompressor[band]) };
@@ -86,6 +92,7 @@ export function registerSourceRoutes(api, engine) {
 
   api.put('/sources/:id/processing/:stage', route(async (req, res) => {
     const { id, stage } = req.params;
+    known(SOURCE_STAGES, stage, 'Étage de source');
     const session = await engine.mutate((current) => {
       const next = setSourceStage(current, id, stage, req.body);
       return { session: next, code: setSourceStageCode(id, stage, find(next, id).processing[stage]) };

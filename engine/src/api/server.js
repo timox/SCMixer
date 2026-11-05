@@ -35,7 +35,7 @@ export function createServer({ engine, presets }) {
     } else {
       console.error('Erreur interne :', err);
       status = 500;
-      body = { code: 'INTERNAL', message: err?.message ?? 'Erreur interne.' };
+      body = { code: 'INTERNAL', message: 'Erreur interne du moteur ; consulter le journal du service.' };
     }
     res.status(status).json({ error: body });
   });
@@ -57,7 +57,11 @@ export function createServer({ engine, presets }) {
       meter: (event) => send(event.type, event.data),
     };
     for (const [name, handler] of Object.entries(handlers)) engine.on(name, handler);
-    wss.on('connection', (ws) => ws.send(JSON.stringify({ type: 'stateChanged', data: statePayload(engine) })));
+    wss.on('connection', (ws) => {
+      ws.on('error', (e) => { console.error('Erreur client WebSocket :', e.message); ws.terminate(); });
+      ws.send(JSON.stringify({ type: 'stateChanged', data: statePayload(engine) }));
+    });
+    wss.on('error', (e) => console.error('Erreur serveur WebSocket :', e.message));
     wss.on('close', () => {
       for (const [name, handler] of Object.entries(handlers)) engine.off(name, handler);
     });

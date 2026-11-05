@@ -51,7 +51,29 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().catch((e) => {
+  main().then(({ engine, httpServer }) => {
+    httpServer.on('error', (e) => {
+      console.error(`Erreur du serveur HTTP : ${e.message}`);
+      process.exit(1);
+    });
+    let stopping = false;
+    const shutdown = async () => {
+      if (stopping) return;
+      stopping = true;
+      let code = 0;
+      try {
+        await engine.stop();
+      } catch (e) {
+        console.error(`Arrêt du moteur impossible : ${e.message}`);
+        code = 1;
+      }
+      httpServer.close();
+      httpServer.closeAllConnections?.();
+      process.exit(code);
+    };
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
+  }, (e) => {
     console.error(e.message);
     process.exit(1);
   });

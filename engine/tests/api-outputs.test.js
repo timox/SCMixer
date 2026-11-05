@@ -34,7 +34,7 @@ test('compresseur CompanderD disponible : 200 et Output confirmé', async (t) =>
 test('étage de sortie : validation, sortie inconnue, moteur arrêté', async (t) => {
   const h = await startHarness(); t.after(() => h.close());
   assert.equal((await h.call('PUT', '/api/outputs/master/limiter', { enabled: true, ceilingDb: -1, x: 1 })).status, 400);
-  assert.equal((await h.call('PUT', '/api/outputs/master/nope', {})).status, 400);
+  assert.equal((await h.call('PUT', '/api/outputs/master/nope', {})).status, 404);
   assert.equal((await h.call('PUT', '/api/outputs/aux/limiter', { enabled: true, ceilingDb: -1 })).status, 404);
   const ok = await h.call('PUT', '/api/outputs/cue/limiter', { enabled: true, ceilingDb: -3 });
   assert.equal(ok.status, 200);
@@ -56,9 +56,20 @@ test('processing-graph : étages ordonnés, modèle demandé et chargé', async 
   const h = await startHarness(); t.after(() => h.close());
   const r = await h.call('GET', '/api/outputs/master/processing-graph');
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body.map((s) => s.stage), ['infraHpf', 'sideHpf', 'eq', 'compressor', 'clipper', 'limiter', 'mix']);
+  assert.deepEqual(r.body.map((s) => s.stage), ['infraHpf', 'sideHpf', 'eq', 'mix', 'clipper', 'limiter', 'compressor']);
   const comp = r.body.find((s) => s.stage === 'compressor');
   assert.equal(comp.requestedModel, 'Compander');
   assert.equal(comp.loadedModel, 'Compander');
   assert.equal((await h.call('GET', '/api/outputs/aux/processing-graph')).status, 404);
+});
+
+test('modèle stocké indisponible : PUT eq réussit, PUT compressor FaustRMS refusé', async (t) => {
+  const h = await startHarness({ lang: { faustRMS: true } }); t.after(() => h.close());
+  assert.equal((await h.call('PUT', '/api/outputs/master/compressor', COMP)).status, 200);
+  h.lang.faustRMS = false;
+  await h.call('POST', '/api/engine/restart');
+  assert.equal(h.engine.state().models.FaustRMS, false);
+  const eq = await h.call('PUT', '/api/outputs/master/eq', { low: 0.4, mid: 0.5, high: 0.6 });
+  assert.equal(eq.status, 200);
+  assert.equal((await h.call('PUT', '/api/outputs/master/compressor', COMP)).body.error.code, 'MODEL_UNAVAILABLE');
 });

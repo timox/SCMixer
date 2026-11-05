@@ -79,7 +79,7 @@ export async function startHarness({ running = true, lang = {} } = {}) {
     return { status: res.status, body: text ? JSON.parse(text) : undefined };
   };
   return {
-    engine, store, presets, api, base, port, call, langs, wss,
+    engine, lang, store, presets, api, base, port, call, langs, wss,
     async close() {
       for (const c of wss.clients) c.terminate();
       wss.close();

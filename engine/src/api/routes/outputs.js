@@ -5,12 +5,16 @@ import { OUTPUT_STAGES } from '../../contract/schemas.js';
 import { setOutputStage, copyMasterToCue } from '../../session/session-model.js';
 import { setOutputStageCode } from '../../sc/commands.js';
 
-/** Ordre de traversée du signal sur une sortie, de l'entrée vers le volume final. */
-const GRAPH_ORDER = ['infraHpf', 'sideHpf', 'eq', 'compressor', 'clipper', 'limiter', 'mix'];
+/** Ordre de traversée du signal sur une sortie, de l'entrée vers la compression finale. */
+const GRAPH_ORDER = ['infraHpf', 'sideHpf', 'eq', 'mix', 'clipper', 'limiter', 'compressor'];
 
 function checkOutput(name) {
   if (name !== 'master' && name !== 'cue') throw new ApiError('NOT_FOUND', 404, `Sortie inconnue : ${name}.`);
   return name;
+}
+
+function checkStage(list, stage, what) {
+  if (!list.includes(stage)) throw new ApiError('NOT_FOUND', 404, `${what} inconnu : ${stage}.`);
 }
 
 export function registerOutputRoutes(api, engine) {
@@ -27,9 +31,11 @@ export function registerOutputRoutes(api, engine) {
 
   api.put('/outputs/:output/:stage', route(async (req, res) => {
     const { output, stage } = req.params;
+    checkOutput(output);
+    checkStage(OUTPUT_STAGES, stage, 'Étage de sortie');
     const session = await engine.mutate((current) => {
       const next = setOutputStage(current, output, stage, req.body);
-      assertModelsAvailable({ [output]: next.outputs[output] }, engine.state().models);
+      if (stage === 'compressor') assertModelsAvailable({ [output]: next.outputs[output] }, engine.state().models);
       return { session: next, code: setOutputStageCode(output, stage, next.outputs[output][stage]) };
     });
     res.json(session.outputs[output]);

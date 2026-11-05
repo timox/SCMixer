@@ -71,3 +71,29 @@ test('WebSocket : stateChanged à la connexion et après mutation, engineStateCh
   assert.ok(messages.some((m) => m.type === 'engineRuntimeChanged'));
   ws.close();
 });
+
+test('trame WebSocket invalide : le service survit et les autres clients reçoivent', async (t) => {
+  const h = await startHarness(); t.after(() => h.close());
+  const bad = new WebSocket(`ws://127.0.0.1:${h.port}/api/ws`);
+  const good = new WebSocket(`ws://127.0.0.1:${h.port}/api/ws`);
+  const messages = collect(good);
+  bad.on('error', () => {});
+  await Promise.all([bad, good].map((w) => new Promise((r) => w.once('open', r))));
+  bad._socket.write(Buffer.from([0x83, 0x80, 0, 0, 0, 0])); // opcode réservé
+  await new Promise((r) => setTimeout(r, 150));
+  await h.call('POST', '/api/sources', { name: 'A', firstChannel: 1, width: 1 });
+  await until(() => messages.filter((m) => m.type === 'stateChanged').length >= 2);
+  assert.ok(messages.filter((m) => m.type === 'stateChanged').length >= 2);
+  good.close();
+});
+
+test('erreur interne : message générique sans détail', async (t) => {
+  const h = await startHarness(); t.after(() => h.close());
+  h.engine.runtime = () => { throw new Error('secret interne'); };
+  const orig = console.error; console.error = () => {};
+  const r = await h.call('GET', '/api/engine/runtime');
+  console.error = orig;
+  assert.equal(r.status, 500);
+  assert.equal(r.body.error.code, 'INTERNAL');
+  assert.doesNotMatch(r.body.error.message, /secret/);
+});
