@@ -58,6 +58,12 @@ Option de vérification : `scmixer.exe --capture <dossier>` attend l'état de l'
 | Moteur | Démarrer, arrêter, redémarrer selon l'état ; horloge audio en lecture seule (réglée dans TimoxVasio) ; indicateurs d'exécution ; arbre des nœuds ; bancs compresseur et EQ. |
 | Routage | Pour chaque canal de source, ce qui l'alimente ; destinations de Master et Cue. Lecture seule : les routes se modifient dans TimoxVasio. |
 
+Sous la barre moteur, visible sur tous les onglets, la barre d'enregistrement capte la sortie Master dans un fichier WAV (`POST /api/recording/*`) :
+- choix de la précision : 16 bits, 24 bits ou 32 bits flottants ;
+- boutons Enregistrer, Pause, Reprendre et Arrêter ;
+- durée, taille et nom du fichier, tels que publiés par l'API ;
+- motif d'arrêt, s'il n'est pas l'arrêt par l'utilisateur.
+
 ## Vérification du 6 novembre 2026
 
 - **Tests automatiques** : `ctest` passe 6 suites sur 6 (client API, magasin d'état, 12 courbes, absence de plage en dur, routage TimoxVasio, tests QML : contrôles, console, traitements, presets et moteur).

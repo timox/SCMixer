@@ -25,6 +25,13 @@ ApplicationWindow {
             connected: Api.connected
             baseUrl: Api.baseUrl
         }
+        RecordBar {
+            objectName: "record-bar"
+            Layout.fillWidth: true
+            client: Api
+            store: Engine
+            connected: Api.connected
+        }
         TabBar {
             objectName: "tabs"
             id: tabs

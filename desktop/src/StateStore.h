@@ -19,6 +19,7 @@ class StateStore : public QObject {
     Q_PROPERTY(QVariantMap outputMeters READ outputMeters NOTIFY outputMetersChanged)
     Q_PROPERTY(QVariantMap runtime READ runtime NOTIFY runtimeChanged)
     Q_PROPERTY(QVariantMap parameters READ parameters NOTIFY parametersChanged)
+    Q_PROPERTY(QVariantMap recording READ recording NOTIFY recordingChanged)
 
 public:
     explicit StateStore(QObject *parent = nullptr);
@@ -30,6 +31,7 @@ public:
     QVariantMap outputMeters() const { return m_outputMeters; }
     QVariantMap runtime() const { return m_runtime; }
     QVariantMap parameters() const { return m_parameters; }
+    QVariantMap recording() const { return m_recording; }
 
     void applyState(const QJsonObject &state);
     void applyEvent(const QString &type, const QJsonObject &data);
@@ -46,6 +48,7 @@ signals:
     void outputMetersChanged();
     void runtimeChanged();
     void parametersChanged();
+    void recordingChanged();
 
 private:
     void applyResponse(const QString &method, const QString &path, const QVariant &body);
@@ -57,4 +60,5 @@ private:
     QVariantMap m_outputMeters;
     QVariantMap m_runtime;
     QVariantMap m_parameters;
+    QVariantMap m_recording;
 };

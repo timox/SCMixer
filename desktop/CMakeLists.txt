@@ -64,6 +64,7 @@ qt_add_qml_module(scmixer
         qml/tabs/RoutingTab.qml
         qml/tabs/LogTab.qml
         qml/panels/EngineBar.qml
+        qml/panels/RecordBar.qml
 )
 target_link_libraries(scmixer PRIVATE desktop_core Qt6::Gui Qt6::Quick Qt6::QuickControls2)
 set_target_properties(scmixer PROPERTIES WIN32_EXECUTABLE ON)

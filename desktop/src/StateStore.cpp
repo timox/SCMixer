@@ -19,6 +19,8 @@ void StateStore::applyState(const QJsonObject &state)
     m_cue = outputs.value(QStringLiteral("cue")).toObject().toVariantMap();
     emit outputsChanged();
     m_sources.setSources(state.value(QStringLiteral("sources")).toArray());
+    m_recording = state.value(QStringLiteral("recording")).toObject().toVariantMap();
+    emit recordingChanged();
 }
 
 void StateStore::applyEvent(const QString &type, const QJsonObject &data)
@@ -28,6 +30,9 @@ void StateStore::applyEvent(const QString &type, const QJsonObject &data)
     } else if (type == QStringLiteral("engineStateChanged")) {
         m_engine = data.toVariantMap();
         emit engineChanged();
+    } else if (type == QStringLiteral("recordingChanged")) {
+        m_recording = data.toVariantMap();
+        emit recordingChanged();
     } else if (type == QStringLiteral("engineRuntimeChanged")) {
         m_runtime = data.toVariantMap();
         emit runtimeChanged();
@@ -79,6 +84,7 @@ void StateStore::applyResponse(const QString &method, const QString &path, const
     static const QRegularExpression sourcePath(QStringLiteral("^/api/sources/src-\\d+(/.*)?$"));
     static const QRegularExpression outputPath(QStringLiteral("^/api/outputs/(master|cue)/[A-Za-z]+$"));
     static const QRegularExpression outputResetPath(QStringLiteral("^/api/outputs/(master|cue)/([A-Za-z]+/)?reset$"));
+    static const QRegularExpression recordingPath(QStringLiteral("^/api/recording(/(start|pause|resume|stop))?$"));
     static const QRegularExpression enginePath(QStringLiteral("^/api/engine(/(start|stop|restart))?$"));
     const QJsonObject object = QJsonObject::fromVariantMap(body.toMap());
 
@@ -87,6 +93,9 @@ void StateStore::applyResponse(const QString &method, const QString &path, const
         applyState(object);
     } else if (path == QStringLiteral("/api/parameters")) {
         applyParameters(object);
+    } else if (recordingPath.match(path).hasMatch()) {
+        m_recording = body.toMap();
+        emit recordingChanged();
     } else if (enginePath.match(path).hasMatch()) {
         m_engine = body.toMap();
         emit engineChanged();

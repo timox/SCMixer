@@ -100,6 +100,19 @@ private slots:
         store.applyParameters(fixture("parameters.json"));
         QVERIFY(store.parameters().value("source").toMap().contains("lp"));
     }
+
+    void recordingFromStateAndEvent()
+    {
+        StateStore store;
+        QSignalSpy changed(&store, &StateStore::recordingChanged);
+        store.applyState(fixture("state.json"));
+        QCOMPARE(store.recording().value("state").toString(), QString("stopped"));
+        QCOMPARE(changed.size(), 1);
+        store.applyEvent("recordingChanged", QJsonObject{{"state", "recording"}, {"recordedSeconds", 3}});
+        QCOMPARE(store.recording().value("state").toString(), QString("recording"));
+        QCOMPARE(store.recording().value("recordedSeconds").toDouble(), 3.0);
+        QCOMPARE(changed.size(), 2);
+    }
 };
 
 QTEST_GUILESS_MAIN(TestStateStore)

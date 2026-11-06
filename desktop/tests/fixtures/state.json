@@ -596,5 +596,16 @@
         "fadeSeconds": 0.05
       }
     }
+  },
+  "recording": {
+    "state": "stopped",
+    "file": null,
+    "sampleFormat": null,
+    "sampleRate": null,
+    "channels": 2,
+    "recordedSeconds": 0,
+    "bytes": 0,
+    "stopReason": null,
+    "error": null
   }
 }

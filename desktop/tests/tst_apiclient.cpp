@@ -164,6 +164,25 @@ private slots:
         transport.reply(3, 200, R"({"lines":[],"lastSeq":12})");
         QCOMPARE(ok[0][1].toString(), QString("/api/engine/log?after=12"));
     }
+
+    void recordingResponsesUpdateStore()
+    {
+        FakeTransport transport;
+        FakeChannel channel;
+        ApiClient api(QUrl("http://127.0.0.1:3100"), &transport, &channel);
+        StateStore store;
+        store.attach(&api);
+        const QStringList actions{"start", "pause", "resume", "stop"};
+        const QStringList states{"recording", "paused", "recording", "stopped"};
+        for (int i = 0; i < actions.size(); ++i) {
+            api.post("/api/recording/" + actions[i]);
+            transport.reply(i, 200, QStringLiteral(R"({"state":"%1"})").arg(states[i]).toUtf8());
+            QCOMPARE(store.recording().value("state").toString(), states[i]);
+        }
+        api.get("/api/recording");
+        transport.reply(4, 200, R"({"state":"stopped","stopReason":"engineStopped"})");
+        QCOMPARE(store.recording().value("stopReason").toString(), QString("engineStopped"));
+    }
 };
 
 QTEST_GUILESS_MAIN(TestApiClient)
