@@ -40,7 +40,7 @@ void captureTabs(QQmlApplicationEngine *engine, ApiClient *api, StateStore *stor
             QCoreApplication::exit(1);
             return;
         }
-        const QStringList names{QStringLiteral("sources"), QStringLiteral("sorties"), QStringLiteral("presets"),
+        const QStringList names{QStringLiteral("sources"), QStringLiteral("traitements"), QStringLiteral("sorties"), QStringLiteral("presets"),
                                 QStringLiteral("moteur"), QStringLiteral("routage")};
         for (int i = 0; i < names.size(); ++i) {
             QTimer::singleShot(1500 * (i + 1), window, [=]() { tabs->setProperty("currentIndex", i); });

@@ -14,7 +14,6 @@ Rectangle {
     property var curves: null
     property real sampleRate: 0
     property var source: null
-    signal closeRequested()
 
     readonly property string base: source ? "/api/sources/" + source.id + "/processing/" : ""
     readonly property var processing: source ? source.processing : ({})
@@ -28,16 +27,12 @@ Rectangle {
         anchors.fill: parent
         anchors.margins: 10
         spacing: 8
-        RowLayout {
+        Text {
             Layout.fillWidth: true
-            Text {
-                Layout.fillWidth: true
-                text: detail.source ? detail.source.name + " — " + detail.source.id : ""
-                color: Theme.text
-                font.pixelSize: 14
-                font.bold: true
-            }
-            Toggle { label: "Fermer"; onToggled: detail.closeRequested() }
+            text: detail.source ? detail.source.name + " — " + detail.source.id : ""
+            color: Theme.text
+            font.pixelSize: 14
+            font.bold: true
         }
         ScrollView {
             Layout.fillWidth: true

@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import Mixette.Api
 import "controls/Theme.js" as Theme
 
-// Fenêtre principale : bandeau de connexion et cinq onglets. Toute donnée affichée vient de l'API
+// Fenêtre principale : bandeau de connexion et six onglets. Toute donnée affichée vient de l'API
 // (Api : requêtes, Engine : état confirmé) ; sans connexion, les contrôles sont désactivés.
 ApplicationWindow {
     id: window
@@ -35,7 +35,7 @@ ApplicationWindow {
             id: tabs
             Layout.fillWidth: true
             Repeater {
-                model: ["Sources", "Sorties", "Presets", "Moteur", "Routage"]
+                model: ["Sources", "Traitements", "Sorties", "Presets", "Moteur", "Routage"]
                 TabButton { required property string modelData; text: modelData }
             }
         }
@@ -46,7 +46,11 @@ ApplicationWindow {
         currentIndex: tabs.currentIndex
         enabled: Api.connected
 
-        SourcesTab { client: Api; store: Engine; curves: CurveMath }
+        SourcesTab {
+            client: Api; store: Engine
+            onProcessingRequested: function (sourceId) { processingTab.show(sourceId); tabs.currentIndex = 1; }
+        }
+        ProcessingTab { id: processingTab; client: Api; store: Engine; curves: CurveMath }
         OutputsTab { client: Api; store: Engine; curves: CurveMath }
         PresetsTab { client: Api }
         EngineTab { client: Api; store: Engine }

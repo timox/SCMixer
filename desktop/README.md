@@ -7,7 +7,7 @@ Application native Qt 6.12 (QML et C++) qui pilote, à la souris, tous les régl
 ```mermaid
 flowchart LR
     subgraph Desktop[Interface Qt]
-        QML["Onglets QML<br/>Sources, Sorties, Presets, Moteur, Routage"]
+        QML["Onglets QML<br/>Sources, Traitements, Sorties, Presets, Moteur, Routage"]
         API["ApiClient<br/>(Api)"]
         STORE["StateStore<br/>(Engine)"]
         CURVES["CurveMath"]
@@ -52,7 +52,8 @@ Option de vérification : `mixette-desktop.exe --capture <dossier>` attend l'ét
 
 | Onglet | Contenu |
 |---|---|
-| Sources | Une tranche par source (fader, vumètre, coupure, gain, EQ, transposition, balance, envoi Cue), avec défilement horizontal. « Détails » donne tous les étages, la courbe HP + LP et les courbes des compresseurs. La boîte de source permet la création, la modification et la suppression (sur confirmation). |
+| Sources | Une tranche par source (fader, vumètre, coupure, gain, EQ, transposition, balance, envoi Cue), avec défilement horizontal. Le bouton « Traitements » ouvre l'onglet Traitements sur la source. La boîte de source permet la création, la modification et la suppression (sur confirmation). |
+| Traitements | Liste des sources à gauche ; pour la source choisie, tous les étages dans l'ordre de la chaîne, la courbe HP + LP et les courbes des compresseurs. Si la source disparaît, un message l'indique et la première source restante est affichée. |
 | Sorties | Master et Cue : tous les étages, vumètres L/R, courbe du compresseur, modèles indisponibles désactivés, copie Master → Cue, graphe de traitement. |
 | Presets | Liste, enregistrement de la session ; application et suppression après un second clic de confirmation. |
 | Moteur | Démarrer, arrêter, redémarrer selon l'état ; horloge audio en lecture seule (réglée dans TimoxVasio) ; indicateurs d'exécution ; arbre des nœuds ; bancs compresseur et EQ. |

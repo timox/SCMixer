@@ -23,7 +23,6 @@ Item {
         anchors.fill: parent
         client: fakeApi
         store: testStore
-        curves: testCurves
     }
 
     function clone(v) { return JSON.parse(JSON.stringify(v)); }
@@ -52,7 +51,7 @@ Item {
         name: "Sources"
         when: windowShown
 
-        function init() { testBridge.reset(); fakeApi.calls = []; tab.notice = ""; tab.detailId = ""; tab.dialog.close(); }
+        function init() { testBridge.reset(); fakeApi.calls = []; tab.notice = ""; tab.dialog.close(); }
 
         function test_faderSendsWholeMixStage() {
             tryVerify(function () { return strip("src-2") !== null; });
@@ -68,15 +67,14 @@ Item {
             compare(fader.confirmedValue, stateFixture.sources[1].processing.mix.volume, "affichage inchangé sans réponse de l'API");
         }
 
-        function test_moogShowsGainNotQ() {
-            var state = clone(stateFixture);
-            state.sources[1].processing.lp.model = "MoogFF";
-            testBridge.applyState(state);
-            tab.detailId = "src-2";
-            var lp = child(tab, "panel-lp");
-            verify(lp !== null);
-            tryVerify(function () { return lp.control("gain") !== null; });
-            compare(lp.control("q"), null);
+        function test_processingButtonRequestsTab() {
+            tryVerify(function () { return strip("src-2") !== null; });
+            var spy = Qt.createQmlObject("import QtTest; SignalSpy { signalName: \"processingRequested\" }", root);
+            spy.target = tab;
+            child(strip("src-2"), "button-processing").toggled(true);
+            compare(spy.count, 1);
+            compare(spy.signalArguments[0][0], "src-2");
+            compare(fakeApi.calls.length, 0);
         }
 
         function test_dialogClosesWhenSourceDisappears() {

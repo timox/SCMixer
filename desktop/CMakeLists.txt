@@ -45,6 +45,7 @@ qt_add_qml_module(mixette-desktop
         qml/panels/SourceDialog.qml
         qml/panels/CompBandEditor.qml
         qml/tabs/SourcesTab.qml
+        qml/tabs/ProcessingTab.qml
         qml/panels/OutputPanel.qml
         qml/tabs/OutputsTab.qml
         qml/controls/ConfirmButton.qml

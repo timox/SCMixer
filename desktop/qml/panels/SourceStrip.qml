@@ -17,7 +17,7 @@ Rectangle {
     property var processing: ({})
     property real peakDb: -120
     property real rmsDb: -120
-    signal detailsRequested()
+    signal processingRequested()
     signal editRequested()
 
     readonly property string base: "/api/sources/" + sourceId + "/processing/"
@@ -111,8 +111,9 @@ Rectangle {
                     onToggled: function (v) { strip.send("mix", "mute", v) }
                 }
                 Toggle {
-                    label: "Détails"
-                    onToggled: strip.detailsRequested()
+                    objectName: "button-processing"
+                    label: "Traitements"
+                    onToggled: strip.processingRequested()
                 }
             }
         }
