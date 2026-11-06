@@ -11,7 +11,9 @@
 #>
 param(
     [Parameter(Mandatory = $true)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version,
-    [string]$Notes = ''
+    [string]$Notes = '',
+    # Release marquée « préversion » sur GitHub (alpha).
+    [switch]$Prerelease
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
@@ -55,5 +57,7 @@ Write-Host "== Étiquette $tag et release GitHub"
 Run git @('tag', '-a', $tag, '-m', "SCMixer $Version")
 Run git @('push', 'origin', $tag)
 if ($Notes -eq '') { $Notes = "SCMixer $Version. Prérequis : Node.js 22 ou plus récent, pilote ASIO TimoxVasio. SuperCollider 3.14.1 est embarqué (GPL v3)." }
-Run gh @('release', 'create', $tag, $setup, '--title', "SCMixer $Version", '--notes', $Notes)
+$ghArgs = @('release', 'create', $tag, $setup, '--title', "SCMixer $Version", '--notes', $Notes)
+if ($Prerelease) { $ghArgs += '--prerelease' }
+Run gh $ghArgs
 Write-Host "Release $tag publiée."
