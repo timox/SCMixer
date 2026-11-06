@@ -26,20 +26,40 @@ qt_add_qml_module(mixette-desktop
     VERSION 1.0
     QML_FILES
         qml/Main.qml
+        qml/controls/Theme.js
+        qml/controls/RangeControl.qml
+        qml/controls/Knob.qml
+        qml/controls/Fader.qml
+        qml/controls/Meter.qml
+        qml/controls/Toggle.qml
+        qml/controls/ModelSelector.qml
+        qml/controls/ResponseCurve.qml
+        qml/controls/CompCurve.qml
+        qml/controls/ErrorBanner.qml
+        qml/controls/ParameterControl.qml
+        qml/controls/StagePanel.qml
 )
 target_link_libraries(mixette-desktop PRIVATE desktop_core Qt6::Gui Qt6::Quick Qt6::QuickControls2)
 set_target_properties(mixette-desktop PROPERTIES WIN32_EXECUTABLE ON)
 
 enable_testing()
 set(DESKTOP_FIXTURES "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
+set(DESKTOP_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}")
 
 function(desktop_test name)
     qt_add_executable(${name} tests/${name}.cpp)
     target_link_libraries(${name} PRIVATE desktop_core Qt6::Test)
-    target_compile_definitions(${name} PRIVATE DESKTOP_FIXTURES="${DESKTOP_FIXTURES}")
+    target_compile_definitions(${name} PRIVATE DESKTOP_FIXTURES="${DESKTOP_FIXTURES}" DESKTOP_SOURCES="${DESKTOP_SOURCES}")
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
 desktop_test(tst_statestore)
 desktop_test(tst_apiclient)
 desktop_test(tst_curvemath)
+desktop_test(tst_noranges)
+
+# Tests QML (QuickTest) : composants chargés depuis qml/ par import de répertoire.
+qt_add_executable(tst_qml tests/tst_qml.cpp)
+target_link_libraries(tst_qml PRIVATE Qt6::Quick Qt6::QuickTest)
+target_compile_definitions(tst_qml PRIVATE DESKTOP_FIXTURES="${DESKTOP_FIXTURES}" QUICK_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/qml")
+add_test(NAME tst_qml COMMAND tst_qml)
