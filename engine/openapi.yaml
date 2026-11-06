@@ -848,7 +848,7 @@ components:
             FaustRMS: { type: boolean }
     Runtime:
       type: object
-      required: [cpuAvg, cpuPeak, synths, ugens, groups, sampleRateRequested, sampleRateActual, blockSize, hardwareBufferFrames, latencyMs, lastFail]
+      required: [cpuAvg, cpuPeak, synths, ugens, groups, sampleRateRequested, sampleRateActual, blockSize, hardwareBufferFrames, latencyMs, lastFail, scsynthReplyAgeMs]
       properties:
         cpuAvg: { type: number }
         cpuPeak: { type: number }
@@ -861,6 +861,9 @@ components:
         hardwareBufferFrames: { type: integer }
         latencyMs: { type: number }
         lastFail: { type: [string, 'null'] }
+        scsynthReplyAgeMs:
+          type: integer
+          description: Millisecondes depuis la dernière réponse de scsynth à /status. Au-delà de 5000 ms sur trois statuts de suite, scsynth ne reçoit plus d'audio et le moteur passe en échec.
     NodeTree:
       type: object
       required: [rootId, nodes]
