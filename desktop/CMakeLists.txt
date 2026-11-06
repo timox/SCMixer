@@ -15,6 +15,7 @@ add_library(desktop_core STATIC
     src/ApiClient.h src/ApiClient.cpp
     src/SourceListModel.h src/SourceListModel.cpp
     src/StateStore.h src/StateStore.cpp
+    src/CurveMath.h src/CurveMath.cpp
 )
 target_include_directories(desktop_core PUBLIC src)
 target_link_libraries(desktop_core PUBLIC Qt6::Core Qt6::Network Qt6::WebSockets Qt6::Qml)
@@ -41,3 +42,4 @@ endfunction()
 
 desktop_test(tst_statestore)
 desktop_test(tst_apiclient)
+desktop_test(tst_curvemath)

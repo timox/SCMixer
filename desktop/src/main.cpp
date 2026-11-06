@@ -4,6 +4,7 @@
 #include <QUrl>
 
 #include "ApiClient.h"
+#include "CurveMath.h"
 #include "EventChannel.h"
 #include "HttpTransport.h"
 #include "StateStore.h"
@@ -21,10 +22,12 @@ int main(int argc, char *argv[])
     WebSocketChannel channel(&app);
     ApiClient api(baseUrl, &transport, &channel, &app);
     StateStore store(&app);
+    CurveMath curveMath(&app);
     store.attach(&api);
 
     qmlRegisterSingletonInstance("Mixette.Api", 1, 0, "Api", &api);
     qmlRegisterSingletonInstance("Mixette.Api", 1, 0, "Engine", &store);
+    qmlRegisterSingletonInstance("Mixette.Api", 1, 0, "CurveMath", &curveMath);
     qmlRegisterUncreatableType<SourceListModel>("Mixette.Api", 1, 0, "SourceListModel", QStringLiteral("Fourni par Engine.sources"));
 
     QQmlApplicationEngine engine;
