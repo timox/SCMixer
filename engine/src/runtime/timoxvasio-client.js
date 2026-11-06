@@ -96,7 +96,7 @@ export class TimoxVasioClient {
   /** Lance l'hôte TimoxVasio et renvoie { port, pid, command } d'après l'événement JSON `api.ready`. */
   async #launchHost() {
     if (!this.#exists(this.#exe)) {
-      throw notReady(`Hôte TimoxVasio introuvable : ${this.#exe} (MIXETTE_TIMOXVASIO_ENGINE_EXE). Installer Timox VASIO ou démarrer l'hôte.`);
+      throw notReady(`Hôte TimoxVasio introuvable : ${this.#exe} (SCMIXER_TIMOXVASIO_ENGINE_EXE). Installer Timox VASIO ou démarrer l'hôte.`);
     }
     const child = this.#spawn(this.#exe, [], {
       cwd: path.win32.dirname(this.#exe), stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, detached: true,
@@ -207,7 +207,7 @@ export class TimoxVasioClient {
       const existing = await this.#hostProcesses();
       if (existing.length > 0) {
         const pids = existing.map((p) => p.pid).join(', ');
-        throw notReady(`Un hôte TimoxVasio est actif (PID ${pids}) mais son API est injoignable sur ${this.#url} (${reason}) ; aucun second hôte n'est lancé et le processus existant n'est pas touché. Vérifier MIXETTE_TIMOXVASIO_URL ou l'état de l'hôte.`);
+        throw notReady(`Un hôte TimoxVasio est actif (PID ${pids}) mais son API est injoignable sur ${this.#url} (${reason}) ; aucun second hôte n'est lancé et le processus existant n'est pas touché. Vérifier SCMIXER_TIMOXVASIO_URL ou l'état de l'hôte.`);
       }
       const host = await this.#launchHost();
       this.#url = `http://127.0.0.1:${host.port}`;

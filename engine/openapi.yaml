@@ -1,10 +1,10 @@
 openapi: 3.1.0
 info:
-  title: API du moteur audio Mixette
+  title: API du moteur audio SCMixer
   version: 0.1.0
   description: >
     Contrat HTTP et WebSocket du moteur SuperCollider. Écoute sur 127.0.0.1 uniquement
-    (port 3100, variable MIXETTE_ENGINE_PORT). Les corps de requête sont stricts : un champ
+    (port 3100, variable SCMIXER_ENGINE_PORT). Les corps de requête sont stricts : un champ
     inconnu ou une valeur hors plage renvoie 400 VALIDATION. Toute mutation exige un moteur
     en état running (409 ENGINE_NOT_RUNNING sinon). Les routes de presets et de bancs d'essai
     sont décrites par leurs tâches respectives.

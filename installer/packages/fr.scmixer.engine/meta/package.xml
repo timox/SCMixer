@@ -6,5 +6,5 @@
     <ReleaseDate>2026-11-06</ReleaseDate>
     <Default>true</Default>
     <ForcedInstallation>true</ForcedInstallation>
-    <Dependencies>fr.mixette.supercollider</Dependencies>
+    <Dependencies>fr.scmixer.supercollider</Dependencies>
 </Package>

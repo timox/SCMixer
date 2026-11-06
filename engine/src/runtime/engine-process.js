@@ -135,8 +135,8 @@ export class EngineProcess extends EventEmitter {
     isAlive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } },
     killProcess = (pid) => process.kill(pid, 'SIGTERM'),
     watchIntervalMs = 1000, langPort = DEFAULT_LANG_PORT, askTimeoutMs = 30_000, resolveAttempts = 20,
-    apiUrl = process.env.MIXETTE_TIMOXVASIO_URL || DEFAULT_TIMOXVASIO_URL,
-    timoxVasioEngineExe = process.env.MIXETTE_TIMOXVASIO_ENGINE_EXE || DEFAULT_TIMOXVASIO_ENGINE_EXE,
+    apiUrl = process.env.SCMIXER_TIMOXVASIO_URL || DEFAULT_TIMOXVASIO_URL,
+    timoxVasioEngineExe = process.env.SCMIXER_TIMOXVASIO_ENGINE_EXE || DEFAULT_TIMOXVASIO_ENGINE_EXE,
     scDir = DEFAULT_SC_DIR, timoxVasio,
     sizing = DEFAULT_SIZING,
   }) {
@@ -378,7 +378,7 @@ export class EngineProcess extends EventEmitter {
     if (!sclang?.pid) throw new Error('PID de sclang introuvable');
     this.#register(ctx, { role: 'sclang', pid: sclang.pid, command: [sclang.spawnfile, ...(sclang.spawnargs ?? []).slice(1)].join(' ') });
 
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mixette-engine-'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scmixer-engine-'));
     try {
       const file = path.join(dir, 'engine.scd');
       fs.writeFileSync(file, this.#bootSource(relayPort), 'utf8');

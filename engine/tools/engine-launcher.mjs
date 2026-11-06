@@ -36,7 +36,7 @@ function defaultDeps(env) {
 
 function context(deps) {
   const dataDir = defaultDataDir(deps.env);
-  const port = Number(deps.env.MIXETTE_ENGINE_PORT ?? DEFAULT_PORT);
+  const port = Number(deps.env.SCMIXER_ENGINE_PORT ?? DEFAULT_PORT);
   fs.mkdirSync(dataDir, { recursive: true });
   return {
     dataDir,

@@ -59,7 +59,7 @@ test('main.js : port occupé, sortie non nulle et message en français', async (
   const port = blocker.address().port;
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mx-main-'));
   const child = spawn(process.execPath, [path.join(root, 'src', 'main.js')], {
-    env: { ...process.env, MIXETTE_ENGINE_PORT: String(port), MIXETTE_ENGINE_DATA_DIR: dataDir },
+    env: { ...process.env, SCMIXER_ENGINE_PORT: String(port), SCMIXER_ENGINE_DATA_DIR: dataDir },
   });
   let stderr = '';
   child.stderr.on('data', (d) => { stderr += d; });

@@ -15,13 +15,13 @@ flowchart LR
 
 | Paquet | Dossier installé | Contenu |
 |---|---|---|
-| `fr.mixette.desktop` | `desktop\`, `Mixette.cmd` | `mixette-desktop.exe` et ses bibliothèques Qt (windeployqt), lanceur, raccourcis « Mixette SC » (menu Démarrer et bureau) |
-| `fr.mixette.engine` | `engine\` | service Node.js (`src`, `sc`, `tools`, `engine.cmd`, `openapi.yaml`) et dépendances de production |
-| `fr.mixette.supercollider` | `supercollider\` | `sclang.exe`, `scsynth.exe`, DLL, plug-ins Qt chargés par sclang, `SCClassLibrary`, `plugins`, `COPYING` |
+| `fr.scmixer.desktop` | `desktop\`, `SCMixer.cmd` | `scmixer.exe` et ses bibliothèques Qt (windeployqt), lanceur, raccourcis « SCMixer » (menu Démarrer et bureau) |
+| `fr.scmixer.engine` | `engine\` | service Node.js (`src`, `sc`, `tools`, `engine.cmd`, `openapi.yaml`) et dépendances de production |
+| `fr.scmixer.supercollider` | `supercollider\` | `sclang.exe`, `scsynth.exe`, DLL, plug-ins Qt chargés par sclang, `SCClassLibrary`, `plugins`, `COPYING` |
 
 Prérequis vérifiés au lancement de l'installateur (`config/controlscript.qs`) : `node --version` et la clé `HKLM\SOFTWARE\ASIO\TimoxVasio`. Un prérequis absent arrête l'installation avec un message.
 
-`Mixette.cmd` démarre le service avec `engine.cmd start --sc-dir "<installation>\supercollider"` (PID inscrit dans le registre des processus du moteur ; un service déjà démarré est gardé), puis l'interface. La désinstallation arrête d'abord ce service (`engine.cmd stop`). Les données de `%LOCALAPPDATA%\Mixette\sc-engine` sont conservées.
+`SCMixer.cmd` démarre le service avec `engine.cmd start --sc-dir "<installation>\supercollider"` (PID inscrit dans le registre des processus du moteur ; un service déjà démarré est gardé), puis l'interface. La désinstallation arrête d'abord ce service (`engine.cmd stop`). Les données de `%LOCALAPPDATA%\SCMixer` sont conservées.
 
 ## Construire
 

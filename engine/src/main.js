@@ -24,16 +24,16 @@ function parseArgs(argv) {
 }
 
 export function defaultDataDir(env) {
-  if (env.MIXETTE_ENGINE_DATA_DIR) return env.MIXETTE_ENGINE_DATA_DIR;
+  if (env.SCMIXER_ENGINE_DATA_DIR) return env.SCMIXER_ENGINE_DATA_DIR;
   const base = env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local');
-  return path.join(base, 'Mixette', 'sc-engine');
+  return path.join(base, 'SCMixer');
 }
 
 /** Compose le service ; ne démarre pas SuperCollider (POST /api/engine/start). */
 export async function main(argv = process.argv.slice(2), env = process.env) {
   const { scDir } = parseArgs(argv);
-  const port = Number(env.MIXETTE_ENGINE_PORT ?? DEFAULT_PORT);
-  if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error(`Port invalide : ${env.MIXETTE_ENGINE_PORT}.`);
+  const port = Number(env.SCMIXER_ENGINE_PORT ?? DEFAULT_PORT);
+  if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error(`Port invalide : ${env.SCMIXER_ENGINE_PORT}.`);
   const dataDir = defaultDataDir(env);
   const engine = new EngineProcess({ store: new SessionStore(dataDir), dataDir, scDir });
   const api = createServer({ engine, presets: new PresetStore(dataDir) });
@@ -46,7 +46,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     });
   });
   api.attachWebSocket(httpServer);
-  console.log(`Moteur Mixette à l'écoute sur http://${HOST}:${port} (données : ${dataDir}).`);
+  console.log(`Moteur SCMixer à l'écoute sur http://${HOST}:${port} (données : ${dataDir}).`);
   return { engine, httpServer };
 }
 

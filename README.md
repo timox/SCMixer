@@ -28,7 +28,7 @@ Télécharger `SCMixer-<version>-Setup.exe` depuis la page [Releases](https://gi
 - Node.js 22 ou plus récent dans le `PATH` ;
 - le pilote ASIO TimoxVasio enregistré (`HKLM\SOFTWARE\ASIO\TimoxVasio`).
 
-SuperCollider 3.14.1 est embarqué. Le raccourci « Mixette SC » démarre le service moteur puis l'interface. Les données (session, presets, journaux) restent dans `%LOCALAPPDATA%\Mixette\sc-engine`, y compris après désinstallation.
+SuperCollider 3.14.1 est embarqué. Le raccourci « SCMixer » démarre le service moteur puis l'interface. Les données (session, presets, journaux) restent dans `%LOCALAPPDATA%\SCMixer`, y compris après désinstallation.
 
 ## Développement
 

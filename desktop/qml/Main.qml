@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import Mixette.Api
+import SCMixer.Api
 import "controls/Theme.js" as Theme
 
 // Fenêtre principale : barre du moteur (connexion, état, commandes, remise à zéro globale) et six onglets.
@@ -12,7 +12,7 @@ ApplicationWindow {
     width: 1440
     height: 860
     visible: true
-    title: "Mixette — moteur SC"
+    title: "SCMixer"
     color: Theme.bg
 
     header: ColumnLayout {

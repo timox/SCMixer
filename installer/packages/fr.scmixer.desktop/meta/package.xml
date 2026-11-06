@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Package>
-    <DisplayName>Interface Mixette SC</DisplayName>
-    <Description>Application Qt qui pilote le moteur par son API, lanceur « Mixette SC » et raccourcis.</Description>
+    <DisplayName>Interface SCMixer</DisplayName>
+    <Description>Application Qt qui pilote le moteur par son API, lanceur « SCMixer » et raccourcis.</Description>
     <Version>0.1.0</Version>
     <ReleaseDate>2026-11-06</ReleaseDate>
     <Default>true</Default>
     <ForcedInstallation>true</ForcedInstallation>
-    <Dependencies>fr.mixette.engine</Dependencies>
+    <Dependencies>fr.scmixer.engine</Dependencies>
     <Script>installscript.qs</Script>
 </Package>

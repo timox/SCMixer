@@ -12,7 +12,7 @@
  */
 import { controlName, SOURCE_SYNTH_GROUPS } from '../src/contract/controls.js';
 
-const base = process.argv[2] ?? `http://127.0.0.1:${process.env.MIXETTE_ENGINE_PORT ?? 3100}`;
+const base = process.argv[2] ?? `http://127.0.0.1:${process.env.SCMIXER_ENGINE_PORT ?? 3100}`;
 const WIDTHS = [1, 2, 5];
 const TOLERANCE = 1e-4;
 

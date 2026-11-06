@@ -1,4 +1,4 @@
-# Interface Qt du moteur SC de Mixette
+# Interface Qt du moteur de SCMixer
 
 Application native Qt 6.12 (QML et C++) qui pilote, à la souris, tous les réglages du moteur SC par sa seule API (HTTP et WebSocket), et affiche en lecture seule le routage TimoxVasio.
 
@@ -21,7 +21,7 @@ flowchart LR
     VASIO -- "GET /api/v1/state<br/>(lecture seule)" --> TV["API TimoxVasio"]
 ```
 
-- **Seul point d'entrée : l'API du moteur.** L'interface ne lit aucun fichier du moteur (session, presets, registre). Sa seule configuration est l'adresse de l'API, `MIXETTE_ENGINE_URL` (défaut `http://127.0.0.1:3100`). L'adresse de TimoxVasio et le PID de scsynth viennent de `GET /api/engine`.
+- **Seul point d'entrée : l'API du moteur.** L'interface ne lit aucun fichier du moteur (session, presets, registre). Sa seule configuration est l'adresse de l'API, `SCMIXER_ENGINE_URL` (défaut `http://127.0.0.1:3100`). L'adresse de TimoxVasio et le PID de scsynth viennent de `GET /api/engine`.
 - **Pas d'état optimiste.** `StateStore` n'est modifié que par une réponse de l'API ou un événement WebSocket. Pendant un glissement, un contrôle affiche sa position ; au relâchement, il revient à la valeur confirmée.
 - **Plages venant de l'API.** Plages, pas, défauts, unités, échelles, libellés, groupes (principal, avancé), conversions vers la grandeur jouée (Hz, dB) et conditions d'usage (largeur de source, modèle) viennent de `GET /api/parameters`. La chaîne de chaque source et de chaque sortie (ordre, état, modèle, liens vers l'aide SuperCollider des UGens utilisés) vient de `GET …/processing-graph`. Aucune plage n'est écrite dans le QML ou le C++ ; `tests/tst_noranges.cpp` le vérifie.
 - **Regroupement des réglages.** Pour un même chemin, une seule requête `PUT` est en vol ; la plus récente remplace celle en attente.
@@ -46,7 +46,7 @@ Les données de test (`tests/fixtures/state.json`, `parameters.json`) sont des r
 2. Lancer l'interface : `desktop\start-desktop.cmd`.
 3. Démarrer le moteur depuis l'onglet Moteur.
 
-Option de vérification : `mixette-desktop.exe --capture <dossier>` attend l'état de l'API, enregistre une capture PNG de chaque onglet puis de chaque page d'étage (première source, Master), puis quitte.
+Option de vérification : `scmixer.exe --capture <dossier>` attend l'état de l'API, enregistre une capture PNG de chaque onglet puis de chaque page d'étage (première source, Master), puis quitte.
 
 ## Onglets
 

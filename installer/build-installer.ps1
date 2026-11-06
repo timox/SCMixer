@@ -52,25 +52,25 @@ Copy-Item (Join-Path $here 'config') (Join-Path $stage 'config') -Recurse
 $xmlFiles = @(Join-Path $stage 'config\config.xml') + @(Get-ChildItem $packages -Recurse -Filter package.xml | ForEach-Object FullName)
 foreach ($file in $xmlFiles) {
     $text = [IO.File]::ReadAllText($file)
-    if ($file -notlike '*fr.mixette.supercollider*') { $text = $text -replace '<Version>[^<]*</Version>', "<Version>$Version</Version>" }
+    if ($file -notlike '*fr.scmixer.supercollider*') { $text = $text -replace '<Version>[^<]*</Version>', "<Version>$Version</Version>" }
     $text = $text -replace '<ReleaseDate>[^<]*</ReleaseDate>', ('<ReleaseDate>' + (Get-Date -Format 'yyyy-MM-dd') + '</ReleaseDate>')
     [IO.File]::WriteAllText($file, $text, (New-Object Text.UTF8Encoding $false))
 }
 New-Item -ItemType Directory -Force $dist | Out-Null
-$desktopData = Join-Path $packages 'fr.mixette.desktop\data'
-$engineData = Join-Path $packages 'fr.mixette.engine\data\engine'
-$scData = Join-Path $packages 'fr.mixette.supercollider\data\supercollider'
+$desktopData = Join-Path $packages 'fr.scmixer.desktop\data'
+$engineData = Join-Path $packages 'fr.scmixer.engine\data\engine'
+$scData = Join-Path $packages 'fr.scmixer.supercollider\data\supercollider'
 
 Step 'Interface : compilation Release et windeployqt'
 $desktop = Join-Path $root 'desktop'
 Run 'cmake' @('--preset', 'release') $desktop
-Run 'cmake' @('--build', '--preset', 'release', '--target', 'mixette-desktop') $desktop
+Run 'cmake' @('--build', '--preset', 'release', '--target', 'scmixer') $desktop
 $appDir = Join-Path $desktopData 'desktop'
 New-Item -ItemType Directory -Force $appDir | Out-Null
-Copy-Item (Join-Path $desktop 'build\release\mixette-desktop.exe') $appDir
+Copy-Item (Join-Path $desktop 'build\release\scmixer.exe') $appDir
 Run 'windeployqt' @('--release', '--qmldir', (Join-Path $desktop 'qml'), '--no-translations', '--compiler-runtime',
-                    (Join-Path $appDir 'mixette-desktop.exe'))
-Copy-Item (Join-Path $here 'Mixette.cmd') $desktopData
+                    (Join-Path $appDir 'scmixer.exe'))
+Copy-Item (Join-Path $here 'SCMixer.cmd') $desktopData
 
 Step 'Service moteur : sources et dépendances de production'
 $engine = Join-Path $root 'engine'

@@ -14,7 +14,7 @@ function missingPrerequisites()
         missing.push("Node.js est introuvable (commande « node » absente du PATH). Installer Node.js 22 ou plus récent.");
     var asio = installer.execute("reg", ["query", "HKLM\\SOFTWARE\\ASIO\\TimoxVasio"]);
     if (!asio || asio.length < 2 || asio[1] !== 0)
-        missing.push("Le pilote ASIO TimoxVasio n'est pas enregistré (clé HKLM\\SOFTWARE\\ASIO\\TimoxVasio absente). Installer TimoxVasio avant Mixette SC.");
+        missing.push("Le pilote ASIO TimoxVasio n'est pas enregistré (clé HKLM\\SOFTWARE\\ASIO\\TimoxVasio absente). Installer TimoxVasio avant SCMixer.");
     return missing;
 }
 
@@ -25,7 +25,7 @@ Controller.prototype.IntroductionPageCallback = function ()
     var missing = missingPrerequisites();
     if (missing.length === 0)
         return;
-    QMessageBox.critical("mixette.prerequisites", "Prérequis manquants",
+    QMessageBox.critical("scmixer.prerequisites", "Prérequis manquants",
                          missing.join("\n\n") + "\n\nL'installation est arrêtée.", QMessageBox.Ok);
     gui.rejectWithoutPrompt();
 };

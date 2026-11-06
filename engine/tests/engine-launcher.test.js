@@ -20,7 +20,7 @@ function fakeSystem({ processes = [], apiUp = true } = {}) {
     lines: [],
   };
   sys.deps = {
-    env: { MIXETTE_ENGINE_DATA_DIR: dataDir, MIXETTE_ENGINE_PORT: '3999' },
+    env: { SCMIXER_ENGINE_DATA_DIR: dataDir, SCMIXER_ENGINE_PORT: '3999' },
     log: (line) => sys.lines.push(line),
     listProcesses: async () => sys.processes.map((p) => ({ ...p })),
     spawn: (cmd, args, options) => {

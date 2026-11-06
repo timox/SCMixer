@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(mixette_desktop LANGUAGES CXX)
+project(scmixer LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -21,9 +21,9 @@ add_library(desktop_core STATIC
 target_include_directories(desktop_core PUBLIC src)
 target_link_libraries(desktop_core PUBLIC Qt6::Core Qt6::Network Qt6::WebSockets Qt6::Qml)
 
-qt_add_executable(mixette-desktop src/main.cpp)
-qt_add_qml_module(mixette-desktop
-    URI Mixette.Desktop
+qt_add_executable(scmixer src/main.cpp)
+qt_add_qml_module(scmixer
+    URI SCMixer.Desktop
     VERSION 1.0
     QML_FILES
         qml/Main.qml
@@ -65,8 +65,8 @@ qt_add_qml_module(mixette-desktop
         qml/tabs/LogTab.qml
         qml/panels/EngineBar.qml
 )
-target_link_libraries(mixette-desktop PRIVATE desktop_core Qt6::Gui Qt6::Quick Qt6::QuickControls2)
-set_target_properties(mixette-desktop PROPERTIES WIN32_EXECUTABLE ON)
+target_link_libraries(scmixer PRIVATE desktop_core Qt6::Gui Qt6::Quick Qt6::QuickControls2)
+set_target_properties(scmixer PROPERTIES WIN32_EXECUTABLE ON)
 
 enable_testing()
 set(DESKTOP_FIXTURES "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")

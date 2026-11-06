@@ -1,4 +1,4 @@
-# Moteur SC de Mixette
+# Moteur de SCMixer
 
 Service local qui pilote un moteur SuperCollider à sources génériques : de 1 à 256 canaux d'entrée répartis entre des sources de largeur libre, une chaîne de traitement par source, et deux sorties stéréo fixes, Master (sorties 1/2) et Cue (sorties 3/4). Le service est le seul point d'accès au moteur : HTTP et WebSocket sur `127.0.0.1`, contrat décrit dans `openapi.yaml`.
 
@@ -42,10 +42,10 @@ engine.cmd stop
 
 | Variable | Rôle | Défaut |
 |---|---|---|
-| `MIXETTE_ENGINE_PORT` | Port d'écoute de l'API (loopback) | `3100` |
-| `MIXETTE_ENGINE_DATA_DIR` | Dossier de données | `%LOCALAPPDATA%\Mixette\sc-engine` |
-| `MIXETTE_TIMOXVASIO_URL` | API TimoxVasio | `http://127.0.0.1:52525` |
-| `MIXETTE_TIMOXVASIO_ENGINE_EXE` | Hôte TimoxVasio lancé s'il est absent | `C:\Program Files\TimoxVSSC\resources\backend\TimoxVirtualAsioEngine.exe` |
+| `SCMIXER_ENGINE_PORT` | Port d'écoute de l'API (loopback) | `3100` |
+| `SCMIXER_ENGINE_DATA_DIR` | Dossier de données | `%LOCALAPPDATA%\SCMixer` |
+| `SCMIXER_TIMOXVASIO_URL` | API TimoxVasio | `http://127.0.0.1:52525` |
+| `SCMIXER_TIMOXVASIO_ENGINE_EXE` | Hôte TimoxVasio lancé s'il est absent | `C:\Program Files\TimoxVSSC\resources\backend\TimoxVirtualAsioEngine.exe` |
 | `SCLANG_PATH` | sclang à utiliser à la place de celui de `--sc-dir` | — |
 
 ## Données
@@ -87,7 +87,7 @@ Les tests de l'API utilisent un faux sclang. `tests/sc-integration.test.js` dém
 
 ## Vérification réelle
 
-Le 6 novembre 2026, sur le poste de développement, avec un dossier de données dédié (`MIXETTE_ENGINE_DATA_DIR=%LOCALAPPDATA%\Mixette\sc-engine-verify`) :
+Le 6 novembre 2026, sur le poste de développement, avec un dossier de données dédié (`SCMIXER_ENGINE_DATA_DIR=%LOCALAPPDATA%\SCMixer-verify`) :
 
 ```
 engine.cmd start
