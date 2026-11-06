@@ -98,7 +98,7 @@ server.options.ugenPluginsPath = [Platform.resourceDir +/+ "plugins", root +/+ "
 server.waitForBoot({
   try {
     var neutral = [\in, \eqdirect, \hpBHiPass, \lpBLowPass, \pitch, \dyn, \mix];
-    var errors, tasks, groupsBefore, groupsAfter, defaultTree, sourcesTree, outputTree, outputDefs, ids1, ids3, removedGroup, raised, delays, node, oldPitch, probe, sampler, samples, oldGroupId, peakBus, steadyA, steadyB, peak, tolerance, getBus;
+    var errors, tasks, groupsBefore, groupsAfter, defaultTree, sourcesTree, outputTree, outputDefs, ids1, ids3, removedGroup, raised, delays, node, oldPitch, probe, sampler, samples, oldGroupId, peakBus, steadyA, steadyB, peak, tolerance, getBus, stallStart, realSync;
     ("MX-TEST-SCSYNTH-PID " ++ server.pid).postln;
 
     ~mxInit.(server, 256);
@@ -366,6 +366,27 @@ server.waitForBoot({
     try { ~mxAddSource.("src-wide", 10, 250, 10, defaultProc.()) } { |error| raised = error.errorString.find("au-delà").notNil };
     check.(raised, "~mxAddSource accepte des canaux au-delà des entrées");
     check.(~mxSources["src-wide"].isNil, "réservation résiduelle après refus");
+
+    // scsynth muet (aucune réponse /synced) : ~mxSync lève une erreur au bout de ~mxSyncTimeout au lieu d'attendre
+    // indéfiniment. Serveur fantôme : port sans scsynth. Sur le vrai serveur, ~mxSync rend la main sans erreur.
+    ~mxSyncTimeout = 1;
+    ~mxSync.(server);
+    raised = false;
+    stallStart = Main.elapsedTime;
+    try { ~mxSync.(Server(\mxghost, NetAddr("127.0.0.1", 57198))) } { |error| raised = error.errorString.find("ne répond pas").notNil };
+    check.(raised, "~mxSync sans réponse ne lève pas d'erreur");
+    check.((Main.elapsedTime - stallStart) < 3, "~mxSync attend au-delà du délai");
+    // Création interrompue par un scsynth muet : l'identifiant est libéré, une nouvelle création réussit.
+    realSync = ~mxSync;
+    ~mxSync = { |s| Error("scsynth ne répond pas (test)").throw };
+    raised = false;
+    try { ~mxAddSource.("src-stall", 11, 1, 9, defaultProc.()) } { |error| raised = error.errorString.find("ne répond pas").notNil };
+    ~mxSync = realSync;
+    ~mxSyncTimeout = 30;
+    check.(raised, "création sans réponse de scsynth acceptée");
+    check.(~mxSources["src-stall"].isNil, "réservation résiduelle après scsynth muet");
+    ~mxAddSource.("src-stall", 11, 1, 9, defaultProc.());
+    ~mxRemoveSource.("src-stall");
 
     finish.("MX-TEST-OK");
   } { |error|

@@ -358,6 +358,20 @@
   true
 };
 
+// server.sync avec délai. scsynth exécute ses commandes au rythme des appels audio : s'il n'en reçoit plus (client
+// TimoxVasio arrêté), /synced ne vient jamais et server.sync attendrait indéfiniment. ~mxSync lève alors une erreur
+// au bout de ~mxSyncTimeout secondes.
+~mxSyncTimeout = 30;
+~mxSync = { |server|
+  var id = UniqueID.next, seconds = ~mxSyncTimeout, cond = Condition(false), answered = false, responder;
+  responder = OSCFunc({ answered = true; cond.test = true; cond.signal }, '/synced', server.addr, argTemplate: [id]);
+  server.sendMsg('/sync', id);
+  SystemClock.sched(seconds, { cond.test = true; cond.signal; nil });
+  cond.wait;
+  responder.free;
+  if(answered.not) { Error("scsynth ne répond pas (aucune réponse /sync en " ++ seconds ++ " s)").throw };
+};
+
 // === SOURCES ===
 
 ~mxSource = { |id|
@@ -471,7 +485,7 @@
       group: group, bus: bus, nodes: nodes, kinds: kinds,
       pitchWindow: proc[\pitch][\windowSize]);
     ~mxSources[id] = source;
-    server.sync;
+    ~mxSync.(server);
     if(old.notNil) { ~mxScheduleFree.(old) };
   } { |error|
     // Échec après réservation : libère l'id et ce qui a déjà été alloué.
