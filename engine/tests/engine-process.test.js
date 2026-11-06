@@ -35,7 +35,10 @@ class FakeLang extends EventEmitter {
     this.bootSource = fs.readFileSync(file, 'utf8');
     if (this.opts.outputOnExecute) this.factoryOptions.onOutput('stdout', this.opts.outputOnExecute);
   }
-  async interpret(code) {
+  async interpret(text) {
+    // Commande longue : la file la transmet par un fichier chargé (command-queue.js, MAX_INLINE_BYTES).
+    const load = /^"(.+\.scd)"\.load$/.exec(text);
+    const code = load ? fs.readFileSync(load[1], 'utf8') : text;
     this.calls.push(code);
     if (code.includes('~mxBootState')) return this.opts.bootState ? this.opts.bootState() : 1;
     if (code.includes('s.pid')) return [7002, 57130, 'C:\\SC\\scsynth.exe'];

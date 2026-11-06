@@ -1,4 +1,15 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { ApiError } from '../contract/errors.js';
+
+/**
+ * Taille maximale (octets UTF-8) d'un texte transmis directement à sclang. Au-delà, le texte est écrit
+ * dans un fichier .scd que sclang charge : une ligne interprétée plus longue est tronquée (relevé réel du
+ * 6 novembre 2026 : restauration de trois sources, « syntax error, unexpected end of file » au caractère
+ * 7973). Seuil à la moitié de cette limite observée.
+ */
+export const MAX_INLINE_BYTES = 4096;
 
 const fail = (message) => new ApiError('SC_COMMAND_FAILED', 502, message);
 
@@ -22,6 +33,7 @@ export class CommandQueue {
   #tail = Promise.resolve();
   #pending = null; // { id, resolve, reject }
   #disposed = null;
+  #scriptDir = null;
 
   constructor({ lang, listener, timeoutMs = 120_000 }) {
     this.#lang = lang;
@@ -59,6 +71,14 @@ export class CommandQueue {
       : `{ ${code}
 }.value; ~mxAck.(${id}, "ok", "")`;
     const wrapper = `fork { try { ${body} } { |e| ~mxAck.(${id}, "error", e.errorString) } }`;
+    let file = null;
+    let text = wrapper;
+    if (Buffer.byteLength(wrapper, 'utf8') > MAX_INLINE_BYTES) {
+      this.#scriptDir ??= fs.mkdtempSync(path.join(os.tmpdir(), 'mx-sclang-cmd-'));
+      file = path.join(this.#scriptDir, `cmd-${id}.scd`);
+      fs.writeFileSync(file, wrapper, 'utf8');
+      text = `${JSON.stringify(file.replaceAll('\\', '/'))}.load`;
+    }
     let timer;
     const ack = new Promise((resolve, reject) => {
       this.#pending = { id, resolve, reject };
@@ -67,12 +87,13 @@ export class CommandQueue {
     ack.catch(() => {});
     try {
       let sent;
-      try { sent = Promise.resolve(this.#lang.interpret(wrapper)); } catch (e) { sent = Promise.reject(e); }
+      try { sent = Promise.resolve(this.#lang.interpret(text)); } catch (e) { sent = Promise.reject(e); }
       sent.catch((e) => this.#pending?.id === id && this.#pending.reject(fail(`Envoi à sclang impossible : ${e?.message ?? e}`)));
       return await ack;
     } finally {
       clearTimeout(timer);
       if (this.#pending?.id === id) this.#pending = null;
+      if (file) fs.rmSync(file, { force: true });
     }
   }
 
@@ -81,5 +102,6 @@ export class CommandQueue {
     this.#disposed = error instanceof Error ? error : new Error(String(error));
     this.#listener.off('message', this.#onMessage);
     if (this.#pending) this.#pending.reject(this.#disposed);
+    if (this.#scriptDir) fs.rmSync(this.#scriptDir, { recursive: true, force: true });
   }
 }

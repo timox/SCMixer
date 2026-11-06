@@ -28,7 +28,9 @@ class FakeLang extends EventEmitter {
     this.process = { pid: 7001, spawnfile: 'sclang.exe', spawnargs: ['sclang.exe', '-u', '57131'] };
   }
   async executeFile() {}
-  async interpret(code) {
+  async interpret(text) {
+    const load = /^"(.+\.scd)"\.load$/.exec(text);
+    const code = load ? fs.readFileSync(load[1], 'utf8') : text;
     this.calls.push(code);
     if (code.includes('~mxBootState')) return 1;
     if (code.includes('s.pid')) return [7002, 57130, 'C:\\SC\\scsynth.exe'];

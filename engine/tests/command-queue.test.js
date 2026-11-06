@@ -141,3 +141,33 @@ test('throw synchrone de interpret : SC_COMMAND_FAILED ; la commande finit par u
   await q2.run('x // commentaire');
   assert.ok(code.includes('x // commentaire' + String.fromCharCode(10) + '}.value'));
 });
+
+test('commande longue : passée à sclang par un fichier chargé, supprimé après acquittement', async () => {
+  const fs = await import('node:fs');
+  const { MAX_INLINE_BYTES } = await import('../src/runtime/command-queue.js');
+  const listener = new FakeListener();
+  const sent = [];
+  const lang = { interpret: (code) => { sent.push(code); } };
+  const queue = new CommandQueue({ lang, listener });
+  const long = `~mxBig.(${'1, '.repeat(MAX_INLINE_BYTES)}1)`;
+  const done = queue.run(long);
+  await wait(10);
+  assert.equal(sent.length, 1);
+  const m = /^"(.+\.scd)"\.load$/.exec(sent[0]);
+  assert.ok(m, `chargement de fichier attendu, reçu : ${sent[0].slice(0, 80)}`);
+  const content = fs.readFileSync(m[1], 'utf8');
+  assert.ok(content.includes(long));
+  assert.ok(Buffer.byteLength(sent[0]) < MAX_INLINE_BYTES);
+  listener.ack(reqIdOf(content));
+  await done;
+  assert.equal(fs.existsSync(m[1]), false);
+
+  // Commande courte : texte direct.
+  const short = queue.run('~mxSmall.()');
+  await wait(10);
+  assert.ok(sent[1].includes('~mxSmall.()'));
+  assert.doesNotMatch(sent[1], /\.load$/);
+  listener.ack(reqIdOf(sent[1]));
+  await short;
+  queue.dispose(new Error('fin'));
+});
