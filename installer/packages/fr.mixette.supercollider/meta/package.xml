@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package>
+    <DisplayName>SuperCollider 3.14.1 (embarqué)</DisplayName>
+    <Description>sclang, scsynth, leurs bibliothèques, SCClassLibrary et les plug-ins de serveur, utilisés uniquement par le moteur Mixette. Licence GPL (COPYING).</Description>
+    <Version>3.14.1</Version>
+    <ReleaseDate>2026-11-06</ReleaseDate>
+    <Default>true</Default>
+    <ForcedInstallation>true</ForcedInstallation>
+</Package>

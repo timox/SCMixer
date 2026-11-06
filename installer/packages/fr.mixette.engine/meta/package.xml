@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package>
+    <DisplayName>Service moteur</DisplayName>
+    <Description>Service Node.js qui expose l'API du moteur (port 3100) et pilote sclang et scsynth. Nécessite Node.js.</Description>
+    <Version>0.1.0</Version>
+    <ReleaseDate>2026-11-06</ReleaseDate>
+    <Default>true</Default>
+    <ForcedInstallation>true</ForcedInstallation>
+    <Dependencies>fr.mixette.supercollider</Dependencies>
+</Package>

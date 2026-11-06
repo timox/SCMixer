@@ -16,12 +16,25 @@
       "environment": {
         "PATH": "C:/Qt/6.12.0/mingw_64/bin;C:/Qt/Tools/mingw1310_64/bin;$penv{PATH}"
       }
+    },
+    {
+      "name": "release",
+      "displayName": "Qt 6.12 MinGW 64 (Release, installateur)",
+      "inherits": "mingw",
+      "binaryDir": "${sourceDir}/build/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
     }
   ],
   "buildPresets": [
     {
       "name": "mingw",
       "configurePreset": "mingw"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
     }
   ],
   "testPresets": [
