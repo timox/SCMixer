@@ -24,7 +24,7 @@ test('cycle de vie : start, stop, restart renvoient EngineState', async (t) => {
 test('GET /api/state', async (t) => {
   const h = await startHarness({ running: false }); t.after(() => h.close());
   const { body } = await h.call('GET', '/api/state');
-  assert.deepEqual(Object.keys(body).sort(), ['engine', 'outputs', 'sources']);
+  assert.deepEqual(Object.keys(body).sort(), ['engine', 'outputs', 'recording', 'sources']);
   assert.equal(body.engine.status, 'stopped');
   assert.equal(body.engine.audioClock, null);
 });

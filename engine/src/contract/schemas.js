@@ -164,6 +164,9 @@ export function defaultEqBench() {
   return { method: 'threeBand', parameters: { low: 0.5, mid: 0.5, high: 0.5 } };
 }
 
+/** Corps de POST /api/recording/start : précision du fichier WAV. */
+export const RecordingStart = z.strictObject({ sampleFormat: z.enum(['int16', 'int24', 'float']) });
+
 export const EqBench = z.strictObject({
   method: z.enum(EQ_BENCH_METHODS),
   parameters: z.strictObject({ low: unit(), mid: unit(), high: unit() }),

@@ -468,6 +468,61 @@ paths:
         '200': { description: État, content: { application/json: { schema: { $ref: '#/components/schemas/EqBenchState' } } } }
         '409': { $ref: '#/components/responses/Error' }
 
+  /api/recording:
+    get:
+      tags: [Enregistrement]
+      summary: État de l'enregistrement WAV de la sortie Master
+      responses:
+        '200': { description: État, content: { application/json: { schema: { $ref: '#/components/schemas/Recording' } } } }
+  /api/recording/start:
+    post:
+      tags: [Enregistrement]
+      summary: Démarre l'enregistrement de la sortie Master dans un nouveau fichier WAV
+      description: >
+        Capte le bus matériel 0/1 (ce qui part vers la carte sur Master, après tous les traitements) dans
+        Documents\SCMixer\Enregistrements\AAAA-MM-JJ_HH-MM-SS_master.wav (heure locale du démarrage ;
+        dossier modifiable par SCMIXER_RECORDINGS_DIR), en stéréo, à la fréquence du serveur audio, sans
+        rééchantillonnage. Moteur démarré requis (409 ENGINE_NOT_RUNNING). 409 RECORDING_STATE si un
+        enregistrement est en cours ou en pause ; 409 RECORDING_FILE_EXISTS si le fichier existe déjà (aucun
+        écrasement) ; 502 RECORDING_OPEN_FAILED si le fichier ne peut pas être ouvert. L'enregistrement
+        s'arrête de lui-même juste avant 4 Go de données (stopReason sizeLimit), si l'espace disque libre
+        passe sous 64 Mio (error) ou à l'arrêt du moteur (engineStopped).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/RecordingStart' } } }
+      responses:
+        '200': { description: État, content: { application/json: { schema: { $ref: '#/components/schemas/Recording' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+  /api/recording/pause:
+    post:
+      tags: [Enregistrement]
+      summary: Met l'enregistrement en pause (rien n'est écrit) ; 409 RECORDING_STATE hors enregistrement ; corps vide
+      responses:
+        '200': { description: État, content: { application/json: { schema: { $ref: '#/components/schemas/Recording' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+  /api/recording/resume:
+    post:
+      tags: [Enregistrement]
+      summary: Reprend l'enregistrement dans le même fichier ; 409 RECORDING_STATE hors pause ; corps vide
+      responses:
+        '200': { description: État, content: { application/json: { schema: { $ref: '#/components/schemas/Recording' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+  /api/recording/stop:
+    post:
+      tags: [Enregistrement]
+      summary: Arrête l'enregistrement et ferme le fichier (en-tête définitif) ; 409 RECORDING_STATE s'il est arrêté ; corps vide
+      responses:
+        '200': { description: État, content: { application/json: { schema: { $ref: '#/components/schemas/Recording' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+
 x-websocket:
   path: /api/ws
   description: >
@@ -492,6 +547,9 @@ x-websocket:
     outputMeter:
       description: Mesure d'un canal de sortie, 10 Hz.
       data: { $ref: '#/components/schemas/OutputMeter' }
+    recordingChanged:
+      description: À chaque changement d'état de l'enregistrement, et une fois par seconde pendant l'enregistrement (durée, taille).
+      data: { $ref: '#/components/schemas/Recording' }
 
 components:
   parameters:
@@ -686,10 +744,11 @@ components:
           properties:
             code:
               type: string
-              enum: [VALIDATION, NOT_FOUND, CHANNEL_OVERLAP, CHANNEL_LIMIT, ENGINE_NOT_RUNNING, ENGINE_BUSY, ENGINE_RESTART_REQUIRED, MODEL_UNAVAILABLE, TIMOXVASIO_NOT_READY, BENCH_RUNNING, BENCH_NOT_RUNNING, SC_COMMAND_FAILED, INTERNAL]
+              enum: [VALIDATION, NOT_FOUND, CHANNEL_OVERLAP, CHANNEL_LIMIT, ENGINE_NOT_RUNNING, ENGINE_BUSY, ENGINE_RESTART_REQUIRED, MODEL_UNAVAILABLE, TIMOXVASIO_NOT_READY, BENCH_RUNNING, BENCH_NOT_RUNNING, RECORDING_STATE, RECORDING_FILE_EXISTS, RECORDING_OPEN_FAILED, SC_COMMAND_FAILED, INTERNAL]
               description: >
                 VALIDATION 400, NOT_FOUND 404, CHANNEL_OVERLAP 409, CHANNEL_LIMIT 400,
                 ENGINE_NOT_RUNNING 409, ENGINE_BUSY 409, ENGINE_RESTART_REQUIRED 409, MODEL_UNAVAILABLE 409, TIMOXVASIO_NOT_READY 409, BENCH_RUNNING 409, BENCH_NOT_RUNNING 409,
+                RECORDING_STATE 409, RECORDING_FILE_EXISTS 409, RECORDING_OPEN_FAILED 502,
                 SC_COMMAND_FAILED 502, INTERNAL 500.
             message: { type: string }
     EngineLogLine:
@@ -709,11 +768,34 @@ components:
       properties:
         lines: { type: array, items: { $ref: '#/components/schemas/EngineLogLine' } }
         lastSeq: { type: integer, minimum: 0, description: Numéro de la dernière ligne écrite (0 journal vide). }
+    RecordingStart:
+      type: object
+      additionalProperties: false
+      required: [sampleFormat]
+      properties:
+        sampleFormat:
+          type: string
+          enum: [int16, int24, float]
+          description: "Précision du fichier : int16 (16 bits entiers), int24 (24 bits entiers), float (32 bits flottants)."
+    Recording:
+      type: object
+      required: [state, file, sampleFormat, sampleRate, channels, recordedSeconds, bytes, stopReason, error]
+      properties:
+        state: { type: string, enum: [stopped, recording, paused] }
+        file: { type: [string, 'null'], description: Chemin complet du fichier en cours, ou du dernier fichier fermé ; null si aucun. }
+        sampleFormat: { type: [string, 'null'], enum: [int16, int24, float, null] }
+        sampleRate: { type: [integer, 'null'], description: Fréquence d'échantillonnage du fichier (celle du serveur audio). }
+        channels: { type: integer, const: 2 }
+        recordedSeconds: { type: number, minimum: 0, description: Durée enregistrée, pauses exclues. }
+        bytes: { type: integer, minimum: 0, description: Taille estimée des données audio. }
+        stopReason: { type: [string, 'null'], enum: [user, sizeLimit, engineStopped, error, null], description: null pendant l'enregistrement ou avant le premier. }
+        error: { type: [string, 'null'], description: Message si stopReason vaut error. }
     State:
       type: object
-      required: [engine, sources, outputs]
+      required: [engine, sources, outputs, recording]
       properties:
         engine: { $ref: '#/components/schemas/EngineState' }
+        recording: { $ref: '#/components/schemas/Recording' }
         sources: { type: array, items: { $ref: '#/components/schemas/Source' } }
         outputs:
           type: object

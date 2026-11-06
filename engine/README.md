@@ -47,6 +47,7 @@ engine.cmd stop
 | `SCMIXER_TIMOXVASIO_URL` | API TimoxVasio | `http://127.0.0.1:52525` |
 | `SCMIXER_TIMOXVASIO_ENGINE_EXE` | Hôte TimoxVasio lancé s'il est absent | `C:\Program Files\TimoxVSSC\resources\backend\TimoxVirtualAsioEngine.exe` |
 | `SCLANG_PATH` | sclang à utiliser à la place de celui de `--sc-dir` | — |
+| `SCMIXER_RECORDINGS_DIR` | Dossier des enregistrements WAV | `Documents\SCMixer\Enregistrements` (dossier Documents connu de Windows) |
 
 ## Données
 
@@ -61,6 +62,28 @@ Dans le dossier de données :
 | `logs\sclang.log` | Sortie de sclang, un bloc horodaté par démarrage |
 
 Ces fichiers ne sont lus que par le service. Aucun client ne doit les lire.
+
+## Enregistrement
+
+`POST /api/recording/start` (corps `{ "sampleFormat": "int16" | "int24" | "float" }`), puis `pause`, `resume` et `stop`, enregistrent la sortie Master dans un fichier WAV stéréo à la fréquence du serveur audio. L'état est publié par `GET /api/recording` et l'événement `recordingChanged`.
+
+- **Point de captation** : le bus matériel 0/1, en fin de chaîne. C'est exactement ce qui part vers la carte sur Master, y compris le banc EQ s'il est actif.
+- **Fichiers** : `AAAA-MM-JJ_HH-MM-SS_master.wav` dans le dossier des enregistrements. Un fichier existant n'est jamais écrasé.
+- **Arrêt automatique** :
+  - juste avant 4 Go de données (`sizeLimit`) ;
+  - quand l'espace libre passe sous 64 Mio (`error`) ;
+  - avant l'arrêt du moteur (`engineStopped`, fichier fermé avant celui de scsynth) ;
+  - au plantage de scsynth (`error`). Dans ce cas, l'en-tête du fichier peut rester incomplet.
+
+```mermaid
+stateDiagram-v2
+    [*] --> stopped
+    stopped --> recording : start
+    recording --> paused : pause
+    paused --> recording : resume
+    recording --> stopped : stop, sizeLimit, engineStopped, error
+    paused --> stopped : stop, engineStopped, error
+```
 
 ## Contrat
 

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from './api/server.js';
 import { DEFAULT_SC_DIR, EngineProcess } from './runtime/engine-process.js';
+import { documentsDir } from './runtime/documents-dir.js';
 import { PresetStore } from './session/preset-store.js';
 import { SessionStore } from './session/session-store.js';
 
@@ -29,13 +30,20 @@ export function defaultDataDir(env) {
   return path.join(base, 'SCMixer');
 }
 
+/** Dossier des enregistrements WAV : SCMIXER_RECORDINGS_DIR, sinon Documents\SCMixer\Enregistrements. */
+export function defaultRecordingsDir(env, resolveDocuments = documentsDir) {
+  if (env.SCMIXER_RECORDINGS_DIR) return env.SCMIXER_RECORDINGS_DIR;
+  return path.join(resolveDocuments(), 'SCMixer', 'Enregistrements');
+}
+
 /** Compose le service ; ne démarre pas SuperCollider (POST /api/engine/start). */
 export async function main(argv = process.argv.slice(2), env = process.env) {
   const { scDir } = parseArgs(argv);
   const port = Number(env.SCMIXER_ENGINE_PORT ?? DEFAULT_PORT);
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error(`Port invalide : ${env.SCMIXER_ENGINE_PORT}.`);
   const dataDir = defaultDataDir(env);
-  const engine = new EngineProcess({ store: new SessionStore(dataDir), dataDir, scDir });
+  const recordingsDir = defaultRecordingsDir(env);
+  const engine = new EngineProcess({ store: new SessionStore(dataDir), dataDir, scDir, recordingsDir });
   const api = createServer({ engine, presets: new PresetStore(dataDir) });
   const httpServer = await new Promise((resolve, reject) => {
     const server = api.app.listen(port, HOST, () => resolve(server));
@@ -46,7 +54,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     });
   });
   api.attachWebSocket(httpServer);
-  console.log(`Moteur SCMixer à l'écoute sur http://${HOST}:${port} (données : ${dataDir}).`);
+  console.log(`Moteur SCMixer à l'écoute sur http://${HOST}:${port} (données : ${dataDir} ; enregistrements : ${recordingsDir}).`);
   return { engine, httpServer };
 }
 

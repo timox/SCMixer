@@ -9,6 +9,7 @@ import { applySessionCode } from '../sc/commands.js';
 import { CommandQueue } from './command-queue.js';
 import { MeterRelay } from './meter-relay.js';
 import { OscListener } from './osc-listener.js';
+import { Recorder } from './recorder.js';
 import { ProcessRegistry, resolveScsynthWindows } from './process-registry.js';
 import { DEFAULT_SIZING, SYNTHDEF_TIMEOUT_SECONDS, assertSessionFitsSizing, computeServerOptions } from './server-options.js';
 import { DEFAULT_TIMOXVASIO_ENGINE_EXE, DEFAULT_TIMOXVASIO_URL, TimoxVasioClient } from './timoxvasio-client.js';
@@ -138,7 +139,7 @@ export class EngineProcess extends EventEmitter {
     apiUrl = process.env.SCMIXER_TIMOXVASIO_URL || DEFAULT_TIMOXVASIO_URL,
     timoxVasioEngineExe = process.env.SCMIXER_TIMOXVASIO_ENGINE_EXE || DEFAULT_TIMOXVASIO_ENGINE_EXE,
     scDir = DEFAULT_SC_DIR, timoxVasio,
-    sizing = DEFAULT_SIZING,
+    sizing = DEFAULT_SIZING, recordingsDir = null,
   }) {
     super();
     this.#sizing = Object.freeze({ maxSourceWidth: sizing.maxSourceWidth, maxSources: sizing.maxSources });
@@ -158,6 +159,8 @@ export class EngineProcess extends EventEmitter {
     this.#scDir = scDir;
     this.#logFile = dataDir ? path.join(dataDir, 'logs', 'sclang.log') : null;
     this.#session = store.load();
+    /** Enregistrement WAV de la sortie Master ; commandes par la file sclang, sans modifier la session. */
+    this.recorder = new Recorder({ run: (code) => this.diagnostic(code), dir: recordingsDir });
   }
 
   state() {
@@ -492,6 +495,7 @@ export class EngineProcess extends EventEmitter {
     const message = error?.message ?? String(error);
     ctx?.queue?.dispose(this.#notRunning(message));
     this.#setStatus('failed', message);
+    this.recorder.engineFailed(message);
     this.#scsynthPid = null;
     this.#cleanup = ctx ? this.#release(ctx, false).catch(() => {}) : Promise.resolve();
   }
@@ -540,6 +544,12 @@ export class EngineProcess extends EventEmitter {
     }
     this.#transition = true;
     try {
+      // Le fichier d'enregistrement est fermé tant que scsynth tourne encore.
+      if (this.#status === 'running') {
+        try { await this.recorder.closeForEngineStop(); } catch (e) {
+          this.#journalAppend('service', `fermeture de l'enregistrement impossible : ${e.message}`);
+        }
+      }
       if (this.#status === 'failed') {
         await this.#cleanup;
         this.#setStatus('stopped');

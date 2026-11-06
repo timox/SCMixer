@@ -10,6 +10,7 @@ export function statePayload(engine, session = engine.session()) {
     engine: engine.state(),
     sources: session.sources,
     outputs: session.outputs,
+    recording: engine.recorder.state(),
   };
 }
 

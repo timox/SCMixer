@@ -7,6 +7,7 @@ import { registerOutputRoutes } from './routes/outputs.js';
 import { registerParameterRoutes } from './routes/parameters.js';
 import { registerPresetRoutes } from './routes/presets.js';
 import { registerBenchRoutes } from './routes/benches.js';
+import { registerRecordingRoutes } from './routes/recording.js';
 
 const notFound = (req) => new ApiError('NOT_FOUND', 404, `Route inconnue : ${req.method} ${req.path}.`);
 
@@ -25,6 +26,7 @@ export function createServer({ engine, presets }) {
   registerParameterRoutes(api);
   registerPresetRoutes(api, engine, presets);
   registerBenchRoutes(api, engine);
+  registerRecordingRoutes(api, engine);
   app.use('/api', api);
 
   app.use((req, res, next) => next(notFound(req)));
@@ -64,6 +66,8 @@ export function createServer({ engine, presets }) {
       log: (line) => send('engineLog', line),
     };
     for (const [name, handler] of Object.entries(handlers)) engine.on(name, handler);
+    const onRecording = (state) => send('recordingChanged', state);
+    engine.recorder.on('changed', onRecording);
     wss.on('connection', (ws) => {
       ws.on('error', (e) => { console.error('Erreur client WebSocket :', e.message); ws.terminate(); });
       ws.send(JSON.stringify({ type: 'stateChanged', data: statePayload(engine) }));
@@ -71,6 +75,7 @@ export function createServer({ engine, presets }) {
     wss.on('error', (e) => console.error('Erreur serveur WebSocket :', e.message));
     wss.on('close', () => {
       for (const [name, handler] of Object.entries(handlers)) engine.off(name, handler);
+      engine.recorder.off('changed', onRecording);
     });
     return wss;
   }

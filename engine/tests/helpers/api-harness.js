@@ -19,6 +19,15 @@ class FakeListener extends EventEmitter {
   stop() {}
 }
 
+/** Réponses de sc/recording.scd pour le faux sclang. */
+function recordingReply(code) {
+  if (code.includes('~mxRecStart')) return 'recording|48000';
+  if (code.includes('~mxRecPause')) return 'paused';
+  if (code.includes('~mxRecResume')) return 'recording';
+  if (code.includes('~mxRecStop')) return 'stopped';
+  return undefined;
+}
+
 class FakeLang extends EventEmitter {
   constructor(listener, opts) {
     super();
@@ -39,7 +48,7 @@ class FakeLang extends EventEmitter {
     if (m) {
       setImmediate(() => this.listener.emit('message', {
         address: '/mx/ack',
-        args: [Number(m[1]), 'ok', this.opts.reply?.(code) ?? (code.includes('g_queryTree') ? '[0,0,0]' : '')],
+        args: [Number(m[1]), 'ok', this.opts.reply?.(code) ?? recordingReply(code) ?? (code.includes('g_queryTree') ? '[0,0,0]' : '')],
       }));
     }
     return undefined;
@@ -51,6 +60,7 @@ class FakeLang extends EventEmitter {
 /** Serveur d'API sur port 0 avec faux sclang ; ne démarre jamais SuperCollider. */
 export async function startHarness({ running = true, lang = {}, engineOptions = {} } = {}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mx-api-'));
+  const recordingsDir = path.join(dataDir, 'Enregistrements');
   const store = new SessionStore(dataDir);
   const listener = new FakeListener();
   const langs = [];
@@ -68,6 +78,7 @@ export async function startHarness({ running = true, lang = {}, engineOptions = 
     killProcess: () => {},
     watchIntervalMs: 0,
     timoxVasio: fakeTimoxVasio(),
+    recordingsDir,
     ...engineOptions,
   });
   const presets = new PresetStore(dataDir);
@@ -89,7 +100,7 @@ export async function startHarness({ running = true, lang = {}, engineOptions = 
     return { status: res.status, body: text ? JSON.parse(text) : undefined };
   };
   return {
-    engine, lang, store, presets, api, base, port, call, langs, wss,
+    engine, lang, store, presets, api, base, port, call, langs, wss, recordingsDir,
     async close() {
       for (const c of wss.clients) c.terminate();
       wss.close();
