@@ -62,6 +62,7 @@ if(options.firstPrivateBus != (options.numInputBusChannels + options.numOutputBu
 }.join(" ")).postln;
 
 (dir +/+ "graph.scd").load;
+(dir +/+ "recording.scd").load;
 
 // Acquittement des commandes : la file Node attend '/mx/ack' (identifiant, "ok" ou "error", message).
 ~mxRelayPort = __MX_RELAY_PORT__;
