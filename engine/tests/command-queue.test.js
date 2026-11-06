@@ -157,6 +157,8 @@ test('commande longue : passée à sclang par un fichier chargé, supprimé apr�
   assert.ok(m, `chargement de fichier attendu, reçu : ${sent[0].slice(0, 80)}`);
   const content = fs.readFileSync(m[1], 'utf8');
   assert.ok(content.includes(long));
+  // Valeur interprétée nil, et non la Routine (sa représentation dépasse ce que supercolliderjs relaie).
+  assert.match(content, /\}; nil$/);
   assert.ok(Buffer.byteLength(sent[0]) < MAX_INLINE_BYTES);
   listener.ack(reqIdOf(content));
   await done;
@@ -167,6 +169,7 @@ test('commande longue : passée à sclang par un fichier chargé, supprimé apr�
   await wait(10);
   assert.ok(sent[1].includes('~mxSmall.()'));
   assert.doesNotMatch(sent[1], /\.load$/);
+  assert.match(sent[1], /\}; nil$/);
   listener.ack(reqIdOf(sent[1]));
   await short;
   queue.dispose(new Error('fin'));

@@ -70,7 +70,11 @@ export class CommandQueue {
 }.value; ~mxAck.(${id}, "ok", r.asString)`
       : `{ ${code}
 }.value; ~mxAck.(${id}, "ok", "")`;
-    const wrapper = `fork { try { ${body} } { |e| ~mxAck.(${id}, "error", e.errorString) } }`;
+    // Valeur finale nil : l'interprétation renvoie nil et non la Routine créée par fork, dont supercolliderjs
+    // relaie la représentation textuelle (au-delà d'environ 8 Ko, cette réponse est un JSON invalide et
+    // l'exception de supercolliderjs arrête le service : relevé réel du 6 novembre 2026). Le résultat d'une
+    // commande passe toujours par '/mx/ack'.
+    const wrapper = `fork { try { ${body} } { |e| ~mxAck.(${id}, "error", e.errorString) } }; nil`;
     let file = null;
     let text = wrapper;
     if (Buffer.byteLength(wrapper, 'utf8') > MAX_INLINE_BYTES) {

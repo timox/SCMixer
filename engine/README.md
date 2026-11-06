@@ -87,4 +87,15 @@ Les tests de l'API utilisent un faux sclang. `tests/sc-integration.test.js` dém
 
 ## Vérification réelle
 
-À faire (tâche 10, étapes 2 à 4 du plan moteur).
+Le 6 novembre 2026, sur le poste de développement, avec un dossier de données dédié (`MIXETTE_ENGINE_DATA_DIR=%LOCALAPPDATA%\Mixette\sc-engine-verify`) :
+
+```
+engine.cmd start
+node tools/verify-runtime.mjs
+engine.cmd stop
+```
+
+- Inventaire préalable : aucun processus de l'ancien produit, aucun sclang ni scsynth ; hôte TimoxVasio lancé par son interface (non lancé par le moteur), transport démarré, 48 000 Hz, 512 trames.
+- Résultat : `VERIFY OK`. Service PID 11304 ; scsynth PID 22700 puis 7096 après le redémarrage du moteur. Sources de largeurs 1, 2 et 5 ; 38 contrôles retrouvés sur scsynth (`node-tree?controls=true`) ; session et contrôles identiques après redémarrage ; preset appliqué égal à l'instantané. Après `engine.cmd stop`, aucun processus inscrit ne restait actif.
+- Défauts trouvés par les deux premiers essais et corrigés : une commande sclang de plus de 8 Ko était tronquée (restauration de trois sources), puis la valeur renvoyée par le chargement du fichier faisait échouer supercolliderjs et arrêtait le service (`src/runtime/command-queue.js`).
+- Non couvert : l'écoute réelle à travers TimoxVasio et la sortie analogique.
