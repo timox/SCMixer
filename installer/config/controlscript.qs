@@ -1,5 +1,5 @@
 // Prérequis vérifiés avant toute installation : Node.js (exécute le service moteur) et le pilote ASIO
-// TimoxVasio (seul périphérique audio du moteur, voir ../asio/INSTALL.md). Un prérequis absent : message
+// TimoxVasio (seul périphérique audio du moteur, installé par son propre dépôt). Un prérequis absent : message
 // explicite et arrêt de l'installation. La désinstallation n'est pas concernée.
 
 function Controller()

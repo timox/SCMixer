@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Construit l'installateur Mixette SC (Qt Installer Framework) : installer\dist\Mixette-SC-Setup.exe.
+  Construit l'installateur (Qt Installer Framework) : installer\dist\SCMixer-<Version>-Setup.exe.
 
 .DESCRIPTION
   1. Interface : compilation Release (preset CMake « release »), puis windeployqt.
@@ -11,6 +11,7 @@
   Les dossiers installer\build et installer\dist sont recréés à chaque exécution.
 #>
 param(
+    [Parameter(Mandatory = $true)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version,
     [string]$ScDir = 'C:\Program Files\SuperCollider-3.14.1',
     [string]$QtDir = 'C:\Qt\6.12.0\mingw_64',
     [string]$QtTools = 'C:\Qt\Tools'
@@ -47,6 +48,14 @@ Step 'Préparation de installer\build'
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 if (Test-Path $dist) { Remove-Item $dist -Recurse -Force }
 Copy-Item (Join-Path $here 'packages') $packages -Recurse
+Copy-Item (Join-Path $here 'config') (Join-Path $stage 'config') -Recurse
+$xmlFiles = @(Join-Path $stage 'config\config.xml') + @(Get-ChildItem $packages -Recurse -Filter package.xml | ForEach-Object FullName)
+foreach ($file in $xmlFiles) {
+    $text = [IO.File]::ReadAllText($file)
+    if ($file -notlike '*fr.mixette.supercollider*') { $text = $text -replace '<Version>[^<]*</Version>', "<Version>$Version</Version>" }
+    $text = $text -replace '<ReleaseDate>[^<]*</ReleaseDate>', ('<ReleaseDate>' + (Get-Date -Format 'yyyy-MM-dd') + '</ReleaseDate>')
+    [IO.File]::WriteAllText($file, $text, (New-Object Text.UTF8Encoding $false))
+}
 New-Item -ItemType Directory -Force $dist | Out-Null
 $desktopData = Join-Path $packages 'fr.mixette.desktop\data'
 $engineData = Join-Path $packages 'fr.mixette.engine\data\engine'
@@ -81,7 +90,7 @@ foreach ($dir in 'SCClassLibrary', 'plugins', 'platforms', 'styles', 'imageforma
 }
 
 Step 'binarycreator'
-$setup = Join-Path $dist 'Mixette-SC-Setup.exe'
-Run $binarycreator.FullName @('--offline-only', '-c', (Join-Path $here 'config\config.xml'), '-p', $packages, $setup)
+$setup = Join-Path $dist "SCMixer-$Version-Setup.exe"
+Run $binarycreator.FullName @('--offline-only', '-c', (Join-Path $stage 'config\config.xml'), '-p', $packages, $setup)
 $size = (Get-Item $setup).Length / 1MB
 Write-Host ("Installateur : {0} ({1:N1} Mo)" -f $setup, $size)

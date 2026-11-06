@@ -1,0 +1,46 @@
+# SCMixer
+
+Console de mixage multi-source sur SuperCollider pour Windows : un service moteur qui pilote sclang et scsynth par une API documentée, et une interface native Qt qui pilote tous les réglages à la souris. L'audio passe par le pilote ASIO TimoxVasio.
+
+```mermaid
+flowchart LR
+    UI["Interface Qt<br/>desktop/"] -- "HTTP + WebSocket<br/>127.0.0.1:3100" --> SVC["Service moteur Node<br/>engine/"]
+    SVC -- commandes --> LANG[sclang]
+    LANG -- OSC --> SYNTH[scsynth]
+    SYNTH <-- "ASIO : TimoxVasio" --> TV[TimoxVasio]
+```
+
+## Contenu
+
+| Dossier | Rôle |
+|---|---|
+| `engine/` | Service moteur (Node.js) : API HTTP et WebSocket, contrat `engine/openapi.yaml`, graphe SuperCollider `engine/sc/`. Voir `engine/README.md`. |
+| `desktop/` | Interface Qt 6.12 (QML et C++) : console, traitements avec graphes, presets, routage, moteur, journal. Voir `desktop/README.md`. |
+| `installer/` | Installateur Qt Installer Framework (interface, service, SuperCollider embarqué) et script de release. Voir `installer/README.md`. |
+| `docs/` | Spécification, plans de réalisation et maquettes. |
+
+L'API est le seul point de passage entre l'interface et le moteur : l'interface ne lit aucun fichier du moteur et n'affiche que l'état confirmé par l'API.
+
+## Installation
+
+Télécharger `SCMixer-<version>-Setup.exe` depuis la page [Releases](https://github.com/timox/SCMixer/releases). Prérequis vérifiés par l'installateur :
+
+- Node.js 22 ou plus récent dans le `PATH` ;
+- le pilote ASIO TimoxVasio enregistré (`HKLM\SOFTWARE\ASIO\TimoxVasio`).
+
+SuperCollider 3.14.1 est embarqué. Le raccourci « Mixette SC » démarre le service moteur puis l'interface. Les données (session, presets, journaux) restent dans `%LOCALAPPDATA%\Mixette\sc-engine`, y compris après désinstallation.
+
+## Développement
+
+```
+cd engine && npm ci && npm test
+cd desktop && cmake --preset mingw && cmake --build --preset mingw && ctest --preset mingw
+engine\engine.cmd start
+desktop\start-desktop.cmd
+```
+
+Prérequis : Node.js, SuperCollider 3.14.1 dans `C:\Program Files\SuperCollider-3.14.1`, Qt 6.12.0 MinGW 64 dans `C:\Qt`, TimoxVasio.
+
+## Licences
+
+SuperCollider est distribué sous licence GPL version 3 (`COPYING`, copié dans le dossier `supercollider` de l'installation) ; ses sources sont publiées par le projet SuperCollider (étiquette `Version-3.14.1` de github.com/supercollider/supercollider). Qt est utilisé sous licence LGPL version 3.
