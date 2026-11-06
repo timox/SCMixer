@@ -48,6 +48,7 @@ public slots:
         QQmlContext *context = engine->rootContext();
         context->setContextProperty(QStringLiteral("parametersFixture"), fixture("parameters").toVariantMap());
         context->setContextProperty(QStringLiteral("stateFixture"), fixture("state").toVariantMap());
+        context->setContextProperty(QStringLiteral("graphsFixture"), fixture("graphs").toVariantMap());
         context->setContextProperty(QStringLiteral("testStore"), store);
         context->setContextProperty(QStringLiteral("testBridge"), bridge);
         context->setContextProperty(QStringLiteral("testCurves"), new CurveMath(engine));

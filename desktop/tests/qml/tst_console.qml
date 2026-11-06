@@ -18,7 +18,7 @@ Item {
         function del(path) { calls.push({ method: "DELETE", path: path }); }
     }
 
-    SourcesTab {
+    ConsoleTab {
         id: tab
         anchors.fill: parent
         client: fakeApi
@@ -48,7 +48,7 @@ Item {
     }
 
     TestCase {
-        name: "Sources"
+        name: "Console"
         when: windowShown
 
         function init() { testBridge.reset(); fakeApi.calls = []; tab.notice = ""; tab.dialog.close(); }
@@ -75,6 +75,40 @@ Item {
             compare(spy.count, 1);
             compare(spy.signalArguments[0][0], "src-2");
             compare(fakeApi.calls.length, 0);
+        }
+
+        function test_outputStripVolumeSendsWholeMixStage() {
+            var strip = child(tab, "output-strip-master");
+            verify(strip !== null);
+            child(strip, "fader-output-volume").moved(0.6);
+            compare(fakeApi.calls.length, 1);
+            compare(fakeApi.calls[0].path, "/api/outputs/master/mix");
+            var expected = clone(stateFixture.outputs.master.mix);
+            expected.volume = 0.6;
+            compare(JSON.stringify(fakeApi.calls[0].body), JSON.stringify(expected));
+        }
+
+        function test_outputStripsOpenProcessingAndCopy() {
+            var spy = Qt.createQmlObject("import QtTest; SignalSpy { signalName: \"outputProcessingRequested\" }", root);
+            spy.target = tab;
+            child(child(tab, "output-strip-cue"), "button-processing").clicked();
+            compare(spy.signalArguments[0][0], "cue");
+            verify(!child(child(tab, "output-strip-master"), "button-copy-master").visible);
+            child(child(tab, "output-strip-cue"), "button-copy-master").clicked();
+            compare(fakeApi.calls[fakeApi.calls.length - 1].path, "/api/outputs/cue/copy-master");
+        }
+
+        function test_outputMeterUpdatesCueRight() {
+            testBridge.applyEvent("outputMeter", { output: "cue", channel: "right", peakDb: -3, rmsDb: -9 });
+            compare(child(child(tab, "output-strip-cue"), "meter-right").rmsDb, -9);
+            compare(child(child(tab, "output-strip-cue"), "meter-left").rmsDb, -120);
+            compare(child(child(tab, "output-strip-master"), "meter-right").rmsDb, -120);
+        }
+
+        function test_stripShowsEqGainInDb() {
+            tryVerify(function () { return strip("src-1") !== null; });
+            var low = child(strip("src-1"), "knob-eq-low");
+            verify(low.valueText.indexOf("dB") > 0, low.valueText);
         }
 
         function test_dialogClosesWhenSourceDisappears() {

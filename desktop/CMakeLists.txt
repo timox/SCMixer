@@ -34,20 +34,28 @@ qt_add_qml_module(mixette-desktop
         qml/controls/Meter.qml
         qml/controls/Toggle.qml
         qml/controls/ModelSelector.qml
-        qml/controls/ResponseCurve.qml
-        qml/controls/CompCurve.qml
         qml/controls/ErrorBanner.qml
         qml/controls/ParameterControl.qml
-        qml/controls/StagePanel.qml
         qml/controls/Contract.js
+        qml/controls/StageControls.qml
+        qml/controls/ActionButton.qml
+        qml/controls/ChainStrip.qml
+        qml/graphs/FrequencyGraph.qml
+        qml/graphs/TransferGraph.qml
+        qml/graphs/StereoPosition.qml
+        qml/panels/pages/CompressorView.qml
+        qml/panels/pages/FiltersPage.qml
+        qml/panels/pages/EqPage.qml
+        qml/panels/pages/MultibandPage.qml
+        qml/panels/pages/HighPassPage.qml
+        qml/panels/pages/LimiterPage.qml
+        qml/panels/pages/CompactPage.qml
+        qml/panels/ProcessingWorkspace.qml
+        qml/panels/OutputStrip.qml
         qml/panels/SourceStrip.qml
-        qml/panels/SourceDetail.qml
         qml/panels/SourceDialog.qml
-        qml/panels/CompBandEditor.qml
-        qml/tabs/SourcesTab.qml
+        qml/tabs/ConsoleTab.qml
         qml/tabs/ProcessingTab.qml
-        qml/panels/OutputPanel.qml
-        qml/tabs/OutputsTab.qml
         qml/controls/ConfirmButton.qml
         qml/tabs/PresetsTab.qml
         qml/tabs/EngineTab.qml

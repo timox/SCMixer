@@ -35,3 +35,42 @@ function withField(value, key, v) {
     body[key] = v;
     return body;
 }
+
+// Le champ s'applique-t-il ? appliesTo du descripteur : largeur de la source (context.width) et modèle
+// de l'étage (value.model).
+function applies(descriptor, value, context) {
+    var a = descriptor.appliesTo;
+    if (!a)
+        return true;
+    if (a.width && context) {
+        var w = context.width;
+        if (w !== undefined && ((a.width.min !== undefined && w < a.width.min) || (a.width.max !== undefined && w > a.width.max)))
+            return false;
+    }
+    if (a.model && value && a.model.indexOf(value.model) < 0)
+        return false;
+    return true;
+}
+
+// Grandeur jouée par le moteur, selon la conversion `display` publiée par l'API pour ce champ ;
+// null si le champ n'en déclare pas. stageValue : objet confirmé de l'étage (champs de référence).
+function played(descriptor, stageValue, v) {
+    var d = descriptor ? descriptor.display : null;
+    if (!d || !stageValue)
+        return null;
+    if (d.kind === "linexp") {
+        var lo = Number(stageValue[d.minField]), hi = Number(stageValue[d.maxField]);
+        return { value: lo * Math.pow(hi / lo, v), unit: d.unit };
+    }
+    if (d.kind === "bipolar")
+        return { value: (v * 2 - 1) * Number(stageValue[d.rangeField]), unit: d.unit };
+    return null;
+}
+
+// L'étage agit-il ? state publié par le catalogue (champ et valeur active) ; absent : toujours actif.
+function active(stageDescriptor, value) {
+    var s = stageDescriptor ? stageDescriptor.state : null;
+    if (!s || !value)
+        return true;
+    return value[s.field] === s.active;
+}

@@ -63,9 +63,15 @@ Rectangle {
                 delegate: Knob {
                     required property var modelData
                     readonly property var desc: strip.d(modelData[0], modelData[1])
+                    readonly property var stageValue: strip.processing[modelData[0]] || ({})
                     objectName: "knob-" + modelData[0] + "-" + modelData[1]
-                    width: 52
+                    dense: true
                     label: desc.label || modelData[1]
+                    hint: desc.description || ""
+                    formatter: function (v) {
+                        var p = Contract.played(desc, stageValue, v);
+                        return p ? Theme.formatValue(p.value, p.unit, 0) : Theme.formatValue(v, desc.unit || "", desc.step || 0);
+                    }
                     from: desc.min
                     to: desc.max
                     stepSize: desc.step || 0

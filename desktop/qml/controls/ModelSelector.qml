@@ -2,9 +2,9 @@ import QtQuick
 import QtQuick.Layouts
 import "Theme.js" as Theme
 
-// Choix d'un modèle parmi les options du descripteur. Un modèle indisponible reste visible, désactivé,
-// avec la mention « indisponible ».
-Column {
+// Choix d'un modèle parmi les options du descripteur, en contrôle segmenté sur une ligne avec son
+// libellé. Un modèle indisponible reste visible, désactivé, avec la mention « indisponible ».
+Row {
     id: selector
     property var options: []
     property string confirmedValue: ""
@@ -12,22 +12,27 @@ Column {
     property string label: ""
     signal selected(string value)
 
-    spacing: 3
-    Text { text: selector.label; color: Theme.dim; font.pixelSize: Theme.fontSmall; visible: selector.label !== "" }
-    Flow {
-        width: Math.max(selector.width, 120)
-        spacing: 4
+    spacing: 6
+    Text {
+        anchors.verticalCenter: parent.verticalCenter
+        text: selector.label
+        color: Theme.dim
+        font.pixelSize: Theme.fontSmall
+        visible: selector.label !== ""
+    }
+    Row {
+        spacing: 0
         Repeater {
             model: selector.options
             delegate: Rectangle {
                 id: option
                 required property string modelData
+                required property int index
                 readonly property bool missing: selector.unavailable.indexOf(modelData) >= 0
                 readonly property bool current: modelData === selector.confirmedValue
                 objectName: "option-" + modelData
-                width: optionText.implicitWidth + 14
-                height: 22
-                radius: 3
+                width: optionText.implicitWidth + 16
+                height: 24
                 color: current ? Theme.accent : Theme.panel2
                 border.color: Theme.line
                 opacity: missing || !selector.enabled ? 0.45 : 1

@@ -6,6 +6,9 @@ import "Theme.js" as Theme
 //   la souris ; au relâchement, l'affichage reprend `confirmedValue`.
 // - `moved(value)` est émis pendant le glissement, à la molette et au double-clic (valeur par défaut).
 // - Bornes, pas, unité, échelle et défaut viennent du descripteur du paramètre (GET /api/parameters).
+// - Aperçu : `dragging` et `dragValue` exposent la position en cours de glissement, pour qu'un graphe
+//   trace une courbe de prévisualisation sans modifier l'état confirmé.
+// - `formatter(v)`, s'il est fourni, donne le texte de la valeur (grandeur jouée par le moteur).
 Item {
     id: root
 
@@ -19,12 +22,13 @@ Item {
     property string scale: "linear"
     // Course de la souris (pixels) pour parcourir toute la plage.
     property real dragRange: 160
+    property var formatter: null
 
     readonly property bool dragging: mouse.pressed && mouse.moved
     property real dragValue: confirmedValue
     readonly property real displayedValue: dragging ? dragValue : confirmedValue
     readonly property real position: valueToPosition(displayedValue)
-    readonly property string valueText: Theme.formatValue(displayedValue, unit, stepSize)
+    readonly property string valueText: formatter ? formatter(displayedValue) : Theme.formatValue(displayedValue, unit, stepSize)
 
     signal moved(real value)
 
