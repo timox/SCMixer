@@ -21,7 +21,10 @@ add_library(desktop_core STATIC
 target_include_directories(desktop_core PUBLIC src)
 target_link_libraries(desktop_core PUBLIC Qt6::Core Qt6::Network Qt6::WebSockets Qt6::Qml)
 
-qt_add_executable(scmixer src/main.cpp)
+# Icône de l'exécutable (raccourcis, barre des tâches) : resources/scmixer.ico, rendu de assets/logo/scmix-icon.svg.
+qt_add_executable(scmixer src/main.cpp resources/scmixer.rc)
+qt_add_resources(scmixer "icons" PREFIX "/icons" BASE resources FILES
+    resources/scmixer-16.png resources/scmixer-32.png resources/scmixer-64.png resources/scmixer-256.png)
 qt_add_qml_module(scmixer
     URI SCMixer.Desktop
     VERSION 1.0

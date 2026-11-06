@@ -1,6 +1,7 @@
 #include <QCommandLineParser>
 #include <QDir>
 #include <QGuiApplication>
+#include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
@@ -86,6 +87,10 @@ int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("SCMixer"));
+    QIcon icon;
+    for (int size : {16, 32, 64, 256})
+        icon.addFile(QStringLiteral(":/icons/scmixer-%1.png").arg(size), QSize(size, size));
+    app.setWindowIcon(icon);
     // Style sobre et identique sur tous les postes (maquette docs/maquettes/qt-desktop).
     QQuickStyle::setStyle(QStringLiteral("Basic"));
 

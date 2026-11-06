@@ -9,6 +9,8 @@
     <AdminTargetDir>@ApplicationsDirX64@/SCMixer</AdminTargetDir>
     <MaintenanceToolName>Desinstaller-SCMixer</MaintenanceToolName>
     <ControlScript>controlscript.qs</ControlScript>
+    <InstallerApplicationIcon>scmixer</InstallerApplicationIcon>
+    <InstallerWindowIcon>scmixer-256.png</InstallerWindowIcon>
     <WizardStyle>Modern</WizardStyle>
     <AllowNonAsciiCharacters>true</AllowNonAsciiCharacters>
 </Installer>
