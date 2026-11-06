@@ -47,8 +47,8 @@ ApplicationWindow {
 
         SourcesTab { client: Api; store: Engine; curves: CurveMath }
         OutputsTab { client: Api; store: Engine; curves: CurveMath }
-        Label { text: "Presets : à venir"; color: Theme.dim }
-        Label { text: "Moteur : à venir"; color: Theme.dim }
+        PresetsTab { client: Api }
+        EngineTab { client: Api; store: Engine }
         Label { text: "Routage : à venir"; color: Theme.dim }
     }
 }

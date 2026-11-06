@@ -46,6 +46,11 @@ qt_add_qml_module(mixette-desktop
         qml/tabs/SourcesTab.qml
         qml/panels/OutputPanel.qml
         qml/tabs/OutputsTab.qml
+        qml/controls/ConfirmButton.qml
+        qml/tabs/PresetsTab.qml
+        qml/tabs/EngineTab.qml
+        qml/panels/NodeTree.qml
+        qml/panels/BenchPanel.qml
 )
 target_link_libraries(mixette-desktop PRIVATE desktop_core Qt6::Gui Qt6::Quick Qt6::QuickControls2)
 set_target_properties(mixette-desktop PROPERTIES WIN32_EXECUTABLE ON)

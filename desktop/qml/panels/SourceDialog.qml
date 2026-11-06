@@ -67,7 +67,7 @@ Popup {
             columns: 2
             columnSpacing: 10
             Label { text: "Nom"; color: Theme.dim }
-            TextField { id: nameField; objectName: "field-name"; Layout.fillWidth: true; maximumLength: 60 }
+            TextField { id: nameField; objectName: "field-name"; Layout.fillWidth: true }
             Label { text: "Premier canal"; color: Theme.dim }
             TextField { id: firstField; objectName: "field-first"; Layout.fillWidth: true; validator: RegularExpressionValidator { regularExpression: /[0-9]{1,3}/ } }
             Label { text: "Largeur (canaux)"; color: Theme.dim }
