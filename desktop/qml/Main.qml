@@ -31,6 +31,7 @@ ApplicationWindow {
             }
         }
         TabBar {
+            objectName: "tabs"
             id: tabs
             Layout.fillWidth: true
             Repeater {

@@ -23,7 +23,12 @@ Item {
     property alias clockText: clock.text
 
     function lifecycle(action) { errorText = ""; client.post("/api/engine/" + action); }
-    function runtimeLine(label, value, unit) { return value === undefined || value === null ? "" : label + " : " + value + (unit ? " " + unit : ""); }
+    function runtimeLine(label, value, unit) {
+        if (value === undefined || value === null)
+            return "";
+        var text = typeof value === "number" && !Number.isInteger(value) ? value.toFixed(1) : value;
+        return label + " : " + text + (unit ? " " + unit : "");
+    }
 
     Connections {
         target: tab.client
