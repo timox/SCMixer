@@ -16,6 +16,7 @@ add_library(desktop_core STATIC
     src/SourceListModel.h src/SourceListModel.cpp
     src/StateStore.h src/StateStore.cpp
     src/CurveMath.h src/CurveMath.cpp
+    src/TimoxVasioClient.h src/TimoxVasioClient.cpp
 )
 target_include_directories(desktop_core PUBLIC src)
 target_link_libraries(desktop_core PUBLIC Qt6::Core Qt6::Network Qt6::WebSockets Qt6::Qml)
@@ -51,6 +52,7 @@ qt_add_qml_module(mixette-desktop
         qml/tabs/EngineTab.qml
         qml/panels/NodeTree.qml
         qml/panels/BenchPanel.qml
+        qml/tabs/RoutingTab.qml
 )
 target_link_libraries(mixette-desktop PRIVATE desktop_core Qt6::Gui Qt6::Quick Qt6::QuickControls2)
 set_target_properties(mixette-desktop PROPERTIES WIN32_EXECUTABLE ON)
@@ -70,6 +72,7 @@ desktop_test(tst_statestore)
 desktop_test(tst_apiclient)
 desktop_test(tst_curvemath)
 desktop_test(tst_noranges)
+desktop_test(tst_timoxvasio)
 
 # Tests QML (QuickTest) : composants chargés depuis qml/ par import de répertoire.
 qt_add_executable(tst_qml tests/tst_qml.cpp)

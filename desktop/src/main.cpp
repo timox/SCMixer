@@ -9,6 +9,7 @@
 #include "EventChannel.h"
 #include "HttpTransport.h"
 #include "StateStore.h"
+#include "TimoxVasioClient.h"
 
 int main(int argc, char *argv[])
 {
@@ -26,11 +27,13 @@ int main(int argc, char *argv[])
     ApiClient api(baseUrl, &transport, &channel, &app);
     StateStore store(&app);
     CurveMath curveMath(&app);
+    TimoxVasioClient vasio(&transport, &app);
     store.attach(&api);
 
     qmlRegisterSingletonInstance("Mixette.Api", 1, 0, "Api", &api);
     qmlRegisterSingletonInstance("Mixette.Api", 1, 0, "Engine", &store);
     qmlRegisterSingletonInstance("Mixette.Api", 1, 0, "CurveMath", &curveMath);
+    qmlRegisterSingletonInstance("Mixette.Api", 1, 0, "Vasio", &vasio);
     qmlRegisterUncreatableType<SourceListModel>("Mixette.Api", 1, 0, "SourceListModel", QStringLiteral("Fourni par Engine.sources"));
 
     QQmlApplicationEngine engine;

@@ -49,6 +49,6 @@ ApplicationWindow {
         OutputsTab { client: Api; store: Engine; curves: CurveMath }
         PresetsTab { client: Api }
         EngineTab { client: Api; store: Engine }
-        Label { text: "Routage : à venir"; color: Theme.dim }
+        RoutingTab { store: Engine; vasio: Vasio }
     }
 }
