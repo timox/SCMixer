@@ -1,6 +1,7 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QQuickStyle>
 #include <QUrl>
 
 #include "ApiClient.h"
@@ -13,6 +14,8 @@ int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("Mixette SC"));
+    // Style sobre et identique sur tous les postes (maquette docs/maquettes/qt-desktop).
+    QQuickStyle::setStyle(QStringLiteral("Basic"));
 
     // Seule configuration : l'adresse de l'API du moteur (la session et les presets restent dans le moteur).
     const QByteArray envUrl = qgetenv("MIXETTE_ENGINE_URL");

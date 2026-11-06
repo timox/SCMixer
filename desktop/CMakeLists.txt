@@ -38,6 +38,12 @@ qt_add_qml_module(mixette-desktop
         qml/controls/ErrorBanner.qml
         qml/controls/ParameterControl.qml
         qml/controls/StagePanel.qml
+        qml/controls/Contract.js
+        qml/panels/SourceStrip.qml
+        qml/panels/SourceDetail.qml
+        qml/panels/SourceDialog.qml
+        qml/panels/CompBandEditor.qml
+        qml/tabs/SourcesTab.qml
 )
 target_link_libraries(mixette-desktop PRIVATE desktop_core Qt6::Gui Qt6::Quick Qt6::QuickControls2)
 set_target_properties(mixette-desktop PROPERTIES WIN32_EXECUTABLE ON)
@@ -60,6 +66,6 @@ desktop_test(tst_noranges)
 
 # Tests QML (QuickTest) : composants chargés depuis qml/ par import de répertoire.
 qt_add_executable(tst_qml tests/tst_qml.cpp)
-target_link_libraries(tst_qml PRIVATE Qt6::Quick Qt6::QuickTest)
+target_link_libraries(tst_qml PRIVATE desktop_core Qt6::Quick Qt6::QuickControls2 Qt6::QuickTest)
 target_compile_definitions(tst_qml PRIVATE DESKTOP_FIXTURES="${DESKTOP_FIXTURES}" QUICK_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/qml")
 add_test(NAME tst_qml COMMAND tst_qml)

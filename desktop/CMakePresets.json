@@ -19,16 +19,22 @@
     }
   ],
   "buildPresets": [
-    { "name": "mingw", "configurePreset": "mingw" }
+    {
+      "name": "mingw",
+      "configurePreset": "mingw"
+    }
   ],
   "testPresets": [
     {
       "name": "mingw",
       "configurePreset": "mingw",
-      "output": { "outputOnFailure": true },
+      "output": {
+        "outputOnFailure": true
+      },
       "environment": {
         "PATH": "C:/Qt/6.12.0/mingw_64/bin;C:/Qt/Tools/mingw1310_64/bin;$penv{PATH}",
-        "QT_QPA_PLATFORM": "offscreen"
+        "QT_QPA_PLATFORM": "offscreen",
+        "QT_QUICK_CONTROLS_STYLE": "Basic"
       }
     }
   ]
