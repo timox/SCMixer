@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   emptySession, addSource, patchSource, removeSource, setSourceStage, setSourceBand, resetSourceStage,
+  resetSourceBand, resetSource, resetOutputStage, resetOutput, resetAllProcessing,
   setOutputStage, copyMasterToCue, replaceSessionContent, validateChannels,
 } from '../src/session/session-model.js';
 import { Session, defaultSourceProcessing, defaultOutput } from '../src/contract/schemas.js';
@@ -99,14 +100,39 @@ test('setSourceBand', () => {
   assert.throws(() => setSourceBand(s, 'src-2', 'mid', { ...band, slopeAbove: 99 }), { code: 'VALIDATION' });
 });
 
-test('resetSourceStage hp/lp seulement', () => {
+test('resetSourceStage : tout étage de source', () => {
   let s = withAB();
   s = setSourceStage(s, 'src-1', 'hp', { ...defaultSourceProcessing().hp, enabled: true, freq: 0.7 });
   const r = resetSourceStage(s, 'src-1', 'hp');
   assert.deepEqual(r.sources[0].processing.hp, defaultSourceProcessing().hp);
-  assert.deepEqual(resetSourceStage(s, 'src-1', 'lp').sources[0].processing.lp, defaultSourceProcessing().lp);
-  assert.throws(() => resetSourceStage(s, 'src-1', 'eq'), { code: 'VALIDATION' });
+  for (const stage of ['mix', 'input', 'inputCompressor', 'eq', 'lp', 'pitch']) {
+    assert.deepEqual(resetSourceStage(s, 'src-1', stage).sources[0].processing[stage], defaultSourceProcessing()[stage]);
+  }
+  assert.throws(() => resetSourceStage(s, 'src-1', 'bandCompressor'), { code: 'VALIDATION' });
   assert.throws(() => resetSourceStage(s, 'src-9', 'hp'), { code: 'NOT_FOUND' });
+});
+
+test('resetSourceBand, resetSource, resetOutputStage, resetOutput, resetAllProcessing', () => {
+  const band = { ...defaultSourceProcessing().bandCompressor.low, bypass: false };
+  let s = setSourceBand(withAB(), 'src-1', 'low', band);
+  s = setSourceStage(s, 'src-2', 'mix', { ...defaultSourceProcessing().mix, volume: 0.1 });
+  s = setOutputStage(s, 'cue', 'mix', { ...defaultOutput().mix, volume: 0.3 });
+  s = setOutputStage(s, 'cue', 'eq', { ...defaultOutput().eq, low: 0.2 });
+  assert.deepEqual(resetSourceBand(s, 'src-1', 'low').sources[0].processing, defaultSourceProcessing());
+  assert.throws(() => resetSourceBand(s, 'src-1', 'top'), { code: 'VALIDATION' });
+  assert.deepEqual(resetSource(s, 'src-2').sources[1].processing, defaultSourceProcessing());
+  assert.equal(resetSource(s, 'src-2').sources[0].processing.bandCompressor.low.bypass, false);
+  const cue = resetOutputStage(s, 'cue', 'eq').outputs.cue;
+  assert.deepEqual(cue.eq, defaultOutput().eq);
+  assert.equal(cue.mix.volume, 0.3);
+  assert.deepEqual(resetOutput(s, 'cue').outputs.cue, defaultOutput());
+  assert.throws(() => resetOutput(s, 'side'), { code: 'NOT_FOUND' });
+  assert.throws(() => resetOutputStage(s, 'cue', 'nope'), { code: 'VALIDATION' });
+  const all = resetAllProcessing(s);
+  assert.deepEqual(all.sources.map((x) => [x.id, x.name, x.firstChannel, x.width]), s.sources.map((x) => [x.id, x.name, x.firstChannel, x.width]));
+  for (const x of all.sources) assert.deepEqual(x.processing, defaultSourceProcessing());
+  assert.deepEqual(all.outputs, { master: defaultOutput(), cue: defaultOutput() });
+  assert.equal(all.nextSourceSeq, s.nextSourceSeq);
 });
 
 test('setOutputStage', () => {
@@ -157,6 +183,11 @@ test('les opérations ne mutent pas l’entrée', () => {
     setSourceStage(s, 'src-1', 'pitch', { ...defaultSourceProcessing().pitch, semitones: 3 });
     setSourceBand(s, 'src-1', 'low', band);
     resetSourceStage(s, 'src-1', 'lp');
+    resetSourceBand(s, 'src-1', 'mid');
+    resetSource(s, 'src-1');
+    resetOutputStage(s, 'master', 'eq');
+    resetOutput(s, 'cue');
+    resetAllProcessing(s);
     setOutputStage(s, 'cue', 'mix', { ...defaultOutput().mix, volume: 0.3 });
     copyMasterToCue(s);
     replaceSessionContent(s, { sources: s.sources, outputs: s.outputs, nextSourceSeq: 9 });

@@ -25,7 +25,7 @@ const specRoutes = () => {
 test('openapi.yaml : OpenAPI 3.1 avec événements WebSocket', () => {
   assert.match(spec.openapi, /^3\.1/);
   const events = Object.keys(spec['x-websocket'].events).sort();
-  assert.deepEqual(events, ['engineRuntimeChanged', 'engineStateChanged', 'outputMeter', 'sourceMeter', 'stateChanged']);
+  assert.deepEqual(events, ['engineLog', 'engineRuntimeChanged', 'engineStateChanged', 'outputMeter', 'sourceMeter', 'stateChanged']);
   assert.equal(spec['x-websocket'].path, '/api/ws');
 });
 

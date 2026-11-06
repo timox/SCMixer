@@ -71,15 +71,53 @@ test('PUT bandCompressor/{band} et étage inconnu', async (t) => {
   assert.equal((await h.call('PUT', '/api/sources/src-1/processing/nope', {})).status, 404);
 });
 
-test('hp/reset et lp/reset rétablissent les défauts', async (t) => {
+test('RAZ par étage : tout étage de source rétablit son défaut, étage inconnu 404', async (t) => {
   const h = await startHarness(); t.after(() => h.close());
   await h.call('POST', '/api/sources', NEW);
   await h.call('PUT', '/api/sources/src-1/processing/lp', { ...D.lp, enabled: true, model: 'RLPF', freq: 0.2, q: 3 });
+  await h.call('PUT', '/api/sources/src-1/processing/eq', { ...D.eq, low: 0.2 });
   const r = await h.call('POST', '/api/sources/src-1/processing/lp/reset');
   assert.equal(r.status, 200);
-  assert.equal(r.body.processing.lp.model, 'BLowPass');
-  assert.equal(r.body.processing.lp.enabled, false);
-  assert.equal((await h.call('POST', '/api/sources/src-1/processing/hp/reset')).status, 200);
+  assert.deepEqual(r.body.processing.lp, D.lp);
+  assert.equal(r.body.processing.eq.low, 0.2);
+  assert.match(h.langs[0].commands().at(-1), /~mxSetSourceStage\.\("src-1", \\lp, /);
+  for (const stage of ['mix', 'input', 'inputCompressor', 'eq', 'hp', 'pitch']) {
+    const s = await h.call('POST', `/api/sources/src-1/processing/${stage}/reset`);
+    assert.equal(s.status, 200, stage);
+    assert.deepEqual(s.body.processing[stage], D[stage]);
+  }
+  assert.equal((await h.call('POST', '/api/sources/src-1/processing/nope/reset')).status, 404);
+  assert.equal((await h.call('POST', '/api/sources/src-9/processing/eq/reset')).status, 404);
+});
+
+test('RAZ d\'une bande du multibande et de la répartition', async (t) => {
+  const h = await startHarness(); t.after(() => h.close());
+  await h.call('POST', '/api/sources', NEW);
+  await h.call('PUT', '/api/sources/src-1/processing/bandCompressor/mid', { ...D.bandCompressor.mid, thresholdDb: -30, bypass: false });
+  await h.call('PUT', '/api/sources/src-1/processing/bandCompressor/crossover', { ...D.bandCompressor.crossover, lowMidFreq: 300 });
+  const r = await h.call('POST', '/api/sources/src-1/processing/bandCompressor/mid/reset');
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.processing.bandCompressor.mid, D.bandCompressor.mid);
+  assert.equal(r.body.processing.bandCompressor.crossover.lowMidFreq, 300);
+  assert.match(h.langs[0].commands().at(-1), /band: \\mid/);
+  const c = await h.call('POST', '/api/sources/src-1/processing/bandCompressor/crossover/reset');
+  assert.deepEqual(c.body.processing.bandCompressor.crossover, D.bandCompressor.crossover);
+  assert.equal((await h.call('POST', '/api/sources/src-1/processing/bandCompressor/top/reset')).status, 404);
+});
+
+test('RAZ de toute la source : chaîne complète, mix compris, nom et canaux gardés', async (t) => {
+  const h = await startHarness(); t.after(() => h.close());
+  await h.call('POST', '/api/sources', NEW);
+  await h.call('PUT', '/api/sources/src-1/processing/mix', { ...D.mix, volume: 0.3, mute: true });
+  await h.call('PUT', '/api/sources/src-1/processing/bandCompressor/high', { ...D.bandCompressor.high, bypass: false });
+  const r = await h.call('POST', '/api/sources/src-1/processing/reset');
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.processing, D);
+  assert.deepEqual([r.body.name, r.body.firstChannel, r.body.width], ['A', 1, 2]);
+  const code = h.langs[0].commands().at(-1);
+  for (const stage of ['mix', 'input', 'inputCompressor', 'eq', 'hp', 'lp', 'pitch']) assert.ok(code.includes(`"src-1", \\${stage}, `), stage);
+  for (const band of ['low', 'mid', 'high', 'crossover']) assert.ok(code.includes(`band: \\${band}`), band);
+  assert.equal((await h.call('POST', '/api/sources/src-9/processing/reset')).status, 404);
 });
 
 test('lp/reset-state : 400 sur BLowPass, ok sur MoogFF', async (t) => {

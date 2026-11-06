@@ -107,11 +107,29 @@ export function setSourceBand(session, id, band, value) {
   return withSource(session, i, source);
 }
 
+/** Remise aux valeurs par défaut d'un étage de source (tout étage de SOURCE_STAGES). */
 export function resetSourceStage(session, id, stage) {
   const i = indexOfSource(session, id);
-  if (stage !== 'hp' && stage !== 'lp') throw fail('VALIDATION', `Réinitialisation non supportée pour l'étage : ${stage}.`);
+  if (!SOURCE_STAGES.includes(stage)) throw fail('VALIDATION', `Étage de source inconnu : ${stage}.`);
   const source = clone(session.sources[i]);
   source.processing[stage] = defaultSourceProcessing()[stage];
+  return withSource(session, i, source);
+}
+
+/** Remise aux valeurs par défaut d'une bande (ou de la répartition) du compresseur multibande. */
+export function resetSourceBand(session, id, band) {
+  const i = indexOfSource(session, id);
+  if (!BAND_GROUPS.includes(band)) throw fail('VALIDATION', `Bande inconnue : ${band}.`);
+  const source = clone(session.sources[i]);
+  source.processing.bandCompressor[band] = defaultSourceProcessing().bandCompressor[band];
+  return withSource(session, i, source);
+}
+
+/** Remise aux valeurs par défaut de toute la chaîne d'une source, mix compris. */
+export function resetSource(session, id) {
+  const i = indexOfSource(session, id);
+  const source = clone(session.sources[i]);
+  source.processing = defaultSourceProcessing();
   return withSource(session, i, source);
 }
 
@@ -121,6 +139,35 @@ export function setOutputStage(session, output, stage, value) {
   const data = parse(Output.shape[stage], value, `Étage ${stage}`);
   const next = clone(session);
   next.outputs[output][stage] = data;
+  return next;
+}
+
+function checkOutput(output) {
+  if (output !== 'master' && output !== 'cue') throw fail('NOT_FOUND', `Sortie inconnue : ${output}.`);
+}
+
+/** Remise aux valeurs par défaut d'un étage de sortie. */
+export function resetOutputStage(session, output, stage) {
+  checkOutput(output);
+  if (!OUTPUT_STAGES.includes(stage)) throw fail('VALIDATION', `Étage de sortie inconnu : ${stage}.`);
+  const next = clone(session);
+  next.outputs[output][stage] = defaultOutput()[stage];
+  return next;
+}
+
+/** Remise aux valeurs par défaut de tous les étages d'une sortie, volume compris. */
+export function resetOutput(session, output) {
+  checkOutput(output);
+  const next = clone(session);
+  next.outputs[output] = defaultOutput();
+  return next;
+}
+
+/** Remise aux valeurs par défaut de tous les traitements : chaque source (mix compris), Master et Cue. Sources et canaux inchangés. */
+export function resetAllProcessing(session) {
+  const next = clone(session);
+  for (const source of next.sources) source.processing = defaultSourceProcessing();
+  next.outputs = { master: defaultOutput(), cue: defaultOutput() };
   return next;
 }
 

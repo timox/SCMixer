@@ -59,7 +59,7 @@ export async function startHarness({ running = true, lang = {}, engineOptions = 
     dataDir,
     registry: new ProcessRegistry({ dataDir, listProcesses: async () => [] }),
     listenerFactory: () => listener,
-    langFactory: async () => { const l = new FakeLang(listener, lang); langs.push(l); return l; },
+    langFactory: async ({ onOutput }) => { const l = new FakeLang(listener, lang); l.output = onOutput; langs.push(l); return l; },
     resolveScsynth: async () => ({
       launcher: { processId: 7002, parentProcessId: 7001, commandLine: 'cmd.exe /c scsynth' },
       server: { processId: 7003, parentProcessId: 7002, commandLine: 'scsynth.exe -u 57130', serverPort: 57130 },

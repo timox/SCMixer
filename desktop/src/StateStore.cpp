@@ -78,10 +78,12 @@ void StateStore::applyResponse(const QString &method, const QString &path, const
 {
     static const QRegularExpression sourcePath(QStringLiteral("^/api/sources/src-\\d+(/.*)?$"));
     static const QRegularExpression outputPath(QStringLiteral("^/api/outputs/(master|cue)/[A-Za-z]+$"));
+    static const QRegularExpression outputResetPath(QStringLiteral("^/api/outputs/(master|cue)/([A-Za-z]+/)?reset$"));
     static const QRegularExpression enginePath(QStringLiteral("^/api/engine(/(start|stop|restart))?$"));
     const QJsonObject object = QJsonObject::fromVariantMap(body.toMap());
 
-    if (path == QStringLiteral("/api/state") || (method == QStringLiteral("POST") && path.endsWith(QStringLiteral("/apply")))) {
+    if (path == QStringLiteral("/api/state") || path == QStringLiteral("/api/processing/reset")
+        || (method == QStringLiteral("POST") && path.endsWith(QStringLiteral("/apply")))) {
         applyState(object);
     } else if (path == QStringLiteral("/api/parameters")) {
         applyParameters(object);
@@ -94,5 +96,7 @@ void StateStore::applyResponse(const QString &method, const QString &path, const
         applyOutputResponse(QStringLiteral("cue"), object);
     } else if (const auto m = outputPath.match(path); m.hasMatch() && method == QStringLiteral("PUT")) {
         applyOutputResponse(m.captured(1), object);
+    } else if (const auto r = outputResetPath.match(path); r.hasMatch() && method == QStringLiteral("POST")) {
+        applyOutputResponse(r.captured(1), object);
     }
 }

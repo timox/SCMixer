@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -21,6 +22,9 @@ export const AUDIO_DEVICE = 'ASIO : TimoxVasio';
 export const SERVER_PORT = 57130;
 export const DEFAULT_LANG_PORT = 57131;
 
+/** Nombre de lignes conservées par le journal du moteur (GET /api/engine/log). */
+export const JOURNAL_CAPACITY = 5000;
+
 const fwd = (p) => p.replaceAll('\\', '/');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const busy = (message) => new ApiError('ENGINE_BUSY', 409, message);
@@ -32,8 +36,15 @@ export async function defaultLangFactory({ includePaths, langPort, scDir = DEFAU
   const { default: sc } = await import('supercolliderjs');
   const sclang = process.env.SCLANG_PATH
     || (process.platform === 'win32' ? path.join(scDir, 'sclang.exe') : 'sclang');
+  // Sans fenêtre de console : le service n'en a pas, Windows en ouvrirait une pour sclang (et scsynth qui
+  // en hérite), et sa fermeture tuerait le moteur. La sortie est lue par le journal (GET /api/engine/log).
+  class HiddenConsoleLang extends sc.lang.default {
+    _spawnProcess(execPath, commandLineOptions) {
+      return spawn(execPath, commandLineOptions, { cwd: path.dirname(execPath), windowsHide: true });
+    }
+  }
   // Instance créée avant boot() pour journaliser aussi la sortie du démarrage (compilation, erreurs).
-  const lang = new sc.lang.default({ sclang, conf: { includePaths }, stdin: false, echo: false, langPort });
+  const lang = new HiddenConsoleLang({ sclang, conf: { includePaths }, stdin: false, echo: false, langPort });
   lang.on('stdout', (text) => onOutput('stdout', text));
   lang.on('stderr', (text) => onOutput('stderr', text));
   lang.on('error', (err) => onOutput('error', JSON.stringify(err)));
@@ -116,6 +127,7 @@ export class EngineProcess extends EventEmitter {
   #meterIds = new Map(); #nextMeterId = 0;
   #ctx = null; #abortBoot = null; #cleanup = Promise.resolve(); #transition = false;
   #mutations = Promise.resolve(); #runtime = null;
+  #journal = []; #journalSeq = 0;
 
   constructor({
     store, langFactory = defaultLangFactory, registry, dataDir,
@@ -179,6 +191,7 @@ export class EngineProcess extends EventEmitter {
   #setStatus(status, error = null) {
     this.#status = status;
     this.#error = error;
+    this.#journalAppend('service', error ? `moteur ${status} : ${error}` : `moteur ${status}`);
     this.emit('state', this.state());
   }
 
@@ -194,16 +207,42 @@ export class EngineProcess extends EventEmitter {
     this.emit('session', { session: structuredClone(session), generation: this.#generation });
   }
 
-  /** Ouvre un nouveau bloc horodaté de `<dataDir>/logs/sclang.log` et renvoie l'écriveur de sortie sclang. */
+  /**
+   * Journal du moteur, lu par GET /api/engine/log et diffusé par l'événement `log` : une entrée par ligne
+   * de sortie de sclang (et de scsynth, dont sclang relaie la sortie), plus les repères du service
+   * (démarrage, arrêt, échec). Les JOURNAL_CAPACITY dernières lignes sont conservées pour la durée du service.
+   */
+  #journalAppend(stream, text) {
+    for (const raw of String(text).split(/\r?\n/)) {
+      if (raw === '') continue;
+      this.#journalSeq += 1;
+      const line = { seq: this.#journalSeq, time: new Date().toISOString(), stream, text: raw };
+      this.#journal.push(line);
+      if (this.#journal.length > JOURNAL_CAPACITY) this.#journal.shift();
+      this.emit('log', line);
+    }
+  }
+
+  /** Lignes du journal de numéro strictement supérieur à `after` (toutes si 0), dans l'ordre. */
+  log(after = 0) {
+    return { lines: this.#journal.filter((l) => l.seq > after).map((l) => ({ ...l })), lastSeq: this.#journalSeq };
+  }
+
+  /** Ouvre un nouveau bloc horodaté de `<dataDir>/logs/sclang.log` et renvoie l'écriveur de sortie sclang (fichier et journal). */
   #openLog() {
-    if (!this.#logFile) return () => {};
     const write = (text) => {
+      if (!this.#logFile) return;
       try { fs.appendFileSync(this.#logFile, text); } catch { /* le journal ne doit jamais faire échouer le moteur */ }
     };
-    try { fs.mkdirSync(path.dirname(this.#logFile), { recursive: true }); } catch { /* idem */ }
+    if (this.#logFile) {
+      try { fs.mkdirSync(path.dirname(this.#logFile), { recursive: true }); } catch { /* idem */ }
+    }
     write(`\n===== ${new Date().toISOString()} démarrage du moteur =====\n`);
     const line = (text) => String(text).replace(/\n?$/, '\n');
-    return (stream, text) => write(stream === 'stdout' ? line(text) : `[${stream}] ${line(text)}`);
+    return (stream, text) => {
+      write(stream === 'stdout' ? line(text) : `[${stream}] ${line(text)}`);
+      this.#journalAppend(stream, text);
+    };
   }
 
   /** Options de scsynth calculées pour le dimensionnement et la fréquence d'échantillonnage du démarrage. */

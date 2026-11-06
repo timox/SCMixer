@@ -209,5 +209,34 @@ Item {
             compare(child(tab.workspace, "meter-right").rmsDb, -9);
             compare(child(tab.workspace, "meter-left").rmsDb, -120);
         }
+
+        function test_everyStageHasItsReset() {
+            tab.workspace.page = "eq";
+            compare(child(page(), "eq-low").resettable, false, "colonne d'une bande : pas de RAZ partielle");
+            child(child(page(), "eq-common"), "button-reset").clicked();
+            tab.workspace.page = "bandCompressor";
+            child(child(page(), "panel-crossover"), "button-reset").clicked();
+            tab.workspace.page = "filters";
+            child(child(page(), "panel-lp"), "button-reset").clicked();
+            tab.showOutput("master");
+            tryVerify(function () { return tab.workspace.chain.length > 0; });
+            tab.workspace.page = "limiter";
+            child(child(page(), "stage-controls"), "button-reset").clicked();
+            var base = "/api/sources/" + stateFixture.sources[0].id + "/processing/";
+            compare(JSON.stringify(fakeApi.calls.filter(function (c) { return c.method === "POST"; }).map(function (c) { return c.path; })),
+                    JSON.stringify([base + "eq/reset", base + "bandCompressor/crossover/reset", base + "lp/reset", "/api/outputs/master/limiter/reset"]));
+        }
+
+        function test_targetResetNeedsConfirmation() {
+            var reset = child(tab.workspace, "button-reset-target");
+            reset.toggled(true);
+            compare(fakeApi.calls.filter(function (c) { return c.method === "POST"; }).length, 0);
+            reset.toggled(true);
+            compare(fakeApi.calls[fakeApi.calls.length - 1].path, "/api/sources/" + stateFixture.sources[0].id + "/processing/reset");
+            tab.showOutput("cue");
+            reset.toggled(true);
+            reset.toggled(true);
+            compare(fakeApi.calls[fakeApi.calls.length - 1].path, "/api/outputs/cue/reset");
+        }
     }
 }

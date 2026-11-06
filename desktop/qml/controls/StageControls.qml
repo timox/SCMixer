@@ -9,6 +9,8 @@ import "Contract.js" as Contract
 // - réglages principaux (group main), puis « Avancé » replié (group advanced) ;
 // - les champs non applicables (appliesTo : largeur, modèle) sont masqués.
 // `keys` (facultatif) restreint l'affichage à ces champs, dans cet ordre (colonnes d'un même étage).
+// « Réinitialiser » (POST `path`/reset) rétablit les défauts de tout l'étage : présent par défaut
+// seulement quand l'étage est affiché en entier (`resettable`).
 // Une modification envoie l'objet complet de l'étage ; l'affichage suit `value` (état confirmé).
 // Pendant un glissement, `preview` vaut `value` avec la position en cours : les graphes en tracent un
 // aperçu, rien n'est écrit dans le magasin ni envoyé en plus.
@@ -26,6 +28,7 @@ Rectangle {
     property bool dense: false
     property bool advancedOpen: false
     property var keys: []
+    property bool resettable: keys.length === 0
     property alias errorText: banner.text
     default property alias actions: actionRow.data
 
@@ -96,7 +99,7 @@ Rectangle {
         target: panel.client
         ignoreUnknownSignals: true
         function onRequestFailed(method, path, code, message) {
-            if (path === panel.path)
+            if (path === panel.path || path === panel.path + "/reset")
                 panel.errorText = message;
         }
     }
@@ -140,6 +143,13 @@ Rectangle {
                     unavailable: modelData.key === "model" ? panel.unavailableOptions : []
                     onEdited: function (v) { panel.send(modelData.key, v) }
                 }
+            }
+            ActionButton {
+                objectName: "button-reset"
+                visible: panel.resettable && panel.path !== ""
+                enabled: panel.enabled
+                label: "Réinitialiser"
+                onClicked: { panel.errorText = ""; panel.client.post(panel.path + "/reset"); }
             }
             Row { id: actionRow; spacing: 6 }
             Row {

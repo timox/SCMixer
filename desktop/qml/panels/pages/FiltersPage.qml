@@ -85,7 +85,6 @@ Item {
                 descriptors: page.parameters.source ? page.parameters.source.hp : ({ fields: [] })
                 context: page.context
                 docs: page.docsOf("hp")
-                ActionButton { label: "Réinitialiser"; onClicked: page.client.post(page.base + "hp/reset") }
             }
             StageControls {
                 id: lpControls
@@ -101,7 +100,6 @@ Item {
                 descriptors: page.parameters.source ? page.parameters.source.lp : ({ fields: [] })
                 context: page.context
                 docs: page.docsOf("lp")
-                ActionButton { label: "Réinitialiser"; onClicked: page.client.post(page.base + "lp/reset") }
                 ActionButton {
                     label: "Réinitialiser l'état du filtre"
                     visible: page.lp.model === "MoogFF"

@@ -98,6 +98,18 @@ export function setOutputStageCode(output, stage, value) {
   return `~mxSetOutputStage.(${symbols}, ${toScEvent(outputControls(stage, value))})`;
 }
 
+/** Tous les étages et toutes les bandes d'une source, en réglages de contrôles (aucune recréation de nœud). */
+export function sourceProcessingCode(id, processing) {
+  const stages = SOURCE_STAGES.map((stage) => setSourceStageCode(id, stage, processing[stage]));
+  const bands = BAND_GROUPS.map((band) => setSourceBandCode(id, band, processing.bandCompressor[band]));
+  return [...stages, ...bands].join('; ');
+}
+
+/** Tous les étages d'une sortie. */
+export function outputCode(output, value) {
+  return OUTPUT_STAGES.map((stage) => setOutputStageCode(output, stage, value[stage])).join('; ');
+}
+
 export function resetMoogCode(id) {
   return `~mxResetMoog.(${sourceId(id)})`;
 }

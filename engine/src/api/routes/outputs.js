@@ -2,8 +2,10 @@ import { route } from '../async-route.js';
 import { ApiError } from '../../contract/errors.js';
 import { assertModelsAvailable } from '../../contract/models.js';
 import { OUTPUT_STAGES } from '../../contract/schemas.js';
-import { setOutputStage, copyMasterToCue } from '../../session/session-model.js';
-import { setOutputStageCode } from '../../sc/commands.js';
+import {
+  setOutputStage, copyMasterToCue, resetOutputStage, resetOutput,
+} from '../../session/session-model.js';
+import { setOutputStageCode, outputCode } from '../../sc/commands.js';
 import { outputGraph } from '../../contract/chains.js';
 
 function checkOutput(name) {
@@ -21,10 +23,31 @@ export function registerOutputRoutes(api, engine) {
     const session = await engine.mutate((current) => {
       const next = copyMasterToCue(current);
       assertModelsAvailable({ cue: next.outputs.cue }, engine.state().models);
-      const code = OUTPUT_STAGES.map((stage) => setOutputStageCode('cue', stage, next.outputs.cue[stage])).join('; ');
-      return { session: next, code };
+      return { session: next, code: outputCode('cue', next.outputs.cue) };
     });
     res.json(session.outputs.cue);
+  }));
+
+  api.post('/outputs/:output/reset', route(async (req, res) => {
+    const output = checkOutput(req.params.output);
+    const session = await engine.mutate((current) => {
+      const next = resetOutput(current, output);
+      assertModelsAvailable({ [output]: next.outputs[output] }, engine.state().models);
+      return { session: next, code: outputCode(output, next.outputs[output]) };
+    });
+    res.json(session.outputs[output]);
+  }));
+
+  api.post('/outputs/:output/:stage/reset', route(async (req, res) => {
+    const { output, stage } = req.params;
+    checkOutput(output);
+    checkStage(OUTPUT_STAGES, stage, 'Étage de sortie');
+    const session = await engine.mutate((current) => {
+      const next = resetOutputStage(current, output, stage);
+      if (stage === 'compressor') assertModelsAvailable({ [output]: next.outputs[output] }, engine.state().models);
+      return { session: next, code: setOutputStageCode(output, stage, next.outputs[output][stage]) };
+    });
+    res.json(session.outputs[output]);
   }));
 
   api.put('/outputs/:output/:stage', route(async (req, res) => {

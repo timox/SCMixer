@@ -61,6 +61,7 @@ export function createServer({ engine, presets }) {
       state: (state) => send('engineStateChanged', state),
       runtime: (event) => send('engineRuntimeChanged', event.data),
       meter: (event) => send(event.type, event.data),
+      log: (line) => send('engineLog', line),
     };
     for (const [name, handler] of Object.entries(handlers)) engine.on(name, handler);
     wss.on('connection', (ws) => {

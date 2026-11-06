@@ -3,6 +3,7 @@
 #include <QtTest>
 
 #include "ApiClient.h"
+#include "StateStore.h"
 
 // Faux transport : garde les requêtes ; le test décide quand et comment chacune répond.
 class FakeTransport : public HttpTransport {
@@ -133,6 +134,35 @@ private slots:
         QCOMPARE(events.size(), 1);
         QCOMPARE(events[0][0].toString(), QString("sourceMeter"));
         QCOMPARE(events[0][1].toJsonObject().value("peakDb").toDouble(), -6.0);
+    }
+
+    // Réponses des remises à zéro : l'état confirmé est appliqué au magasin ; la requête du journal garde
+    // son paramètre et la réponse porte le chemin demandé.
+    void resetResponsesAndLogQuery()
+    {
+        FakeTransport transport;
+        FakeChannel channel;
+        ApiClient api(QUrl("http://127.0.0.1:3100"), &transport, &channel);
+        StateStore store;
+        store.attach(&api);
+
+        api.post("/api/outputs/cue/reset");
+        transport.reply(0, 200, R"({"mix":{"volume":0.5}})");
+        QCOMPARE(store.cue().value("mix").toMap().value("volume").toDouble(), 0.5);
+        api.post("/api/outputs/master/limiter/reset");
+        transport.reply(1, 200, R"({"mix":{"volume":0.25}})");
+        QCOMPARE(store.master().value("mix").toMap().value("volume").toDouble(), 0.25);
+        api.post("/api/processing/reset");
+        transport.reply(2, 200, R"({"engine":{"status":"running"},"sources":[],"outputs":{"master":{"mix":{"volume":1}},"cue":{"mix":{"volume":1}}}})");
+        QCOMPARE(store.engine().value("status").toString(), QString("running"));
+        QCOMPARE(store.cue().value("mix").toMap().value("volume").toDouble(), 1.0);
+
+        QSignalSpy ok(&api, &ApiClient::responseReceived);
+        api.get("/api/engine/log?after=12");
+        QCOMPARE(transport.requests[3].url.path(), QString("/api/engine/log"));
+        QCOMPARE(transport.requests[3].url.query(), QString("after=12"));
+        transport.reply(3, 200, R"({"lines":[],"lastSeq":12})");
+        QCOMPARE(ok[0][1].toString(), QString("/api/engine/log?after=12"));
     }
 };
 

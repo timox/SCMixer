@@ -98,3 +98,21 @@ test('anciens champs refusés (400 VALIDATION) : ceilingDb du clipper, ratio, ma
   assert.deepEqual(ok.body.clipper, { ...d.clipper, enabled: true, lo: -0.5, hi: 0.5 });
   assert.match(h.langs[0].commands().at(-1), /~mxSetOutputStage\.\(\\master, \\clipper, \(clipperEnabled: 1, clipperLo: -0.5, clipperHi: 0.5, clipperControlLag: 0\)\)/);
 });
+
+test('RAZ d\'un étage de sortie et de toute la sortie, volume compris', async (t) => {
+  const h = await startHarness(); t.after(() => h.close());
+  const D = defaultOutput();
+  await h.call('PUT', '/api/outputs/master/limiter', { ...D.limiter, ceilingDb: -6 });
+  await h.call('PUT', '/api/outputs/master/mix', { ...D.mix, volume: 0.2 });
+  const r = await h.call('POST', '/api/outputs/master/limiter/reset');
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.limiter, D.limiter);
+  assert.equal(r.body.mix.volume, 0.2);
+  assert.match(h.langs[0].commands().at(-1), /~mxSetOutputStage\.\(\\master, \\limiter, /);
+  const all = await h.call('POST', '/api/outputs/master/reset');
+  assert.equal(all.status, 200);
+  assert.deepEqual(all.body, D);
+  assert.equal((h.langs[0].commands().at(-1).match(/~mxSetOutputStage/g) ?? []).length, 7);
+  assert.equal((await h.call('POST', '/api/outputs/side/reset')).status, 404);
+  assert.equal((await h.call('POST', '/api/outputs/master/nope/reset')).status, 404);
+});

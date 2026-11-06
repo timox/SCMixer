@@ -241,12 +241,14 @@ server.waitForBoot({
     // dur du Limiter est fixé à la création du UGen : le changer bascule vers un nouveau processeur avec fondu.
     ~mxSetOutputStage.(\cue, \limiter, outStage.(\limiter, [\limiterEnabled, 1, \limiterCeilingDb, -2, \limiterDurMs, 20]));
     check.(~mxOutputs[\cue][\phase] == \warming, "changement de dur sans bascule : " ++ ~mxOutputs[\cue][\phase]);
-    raised = false;
-    try { ~mxSetOutputStage.(\cue, \limiter, outStage.(\limiter, [\limiterDurMs, 30])) } { |error| raised = error.errorString.find("en cours").notNil };
-    check.(raised, "bascule concurrente acceptée");
+    // Une seconde bascule pendant la première attend sa fin, puis s'applique (jamais refusée).
+    raised = Main.elapsedTime;
+    ~mxSetOutputStage.(\cue, \limiter, outStage.(\limiter, [\limiterEnabled, 1, \limiterCeilingDb, -2, \limiterDurMs, 30]));
+    check.(Main.elapsedTime - raised >= 0.5, "seconde bascule sans attente de la première");
+    check.(~mxOutputs[\cue][\phase] == \warming, "seconde bascule non lancée : " ++ ~mxOutputs[\cue][\phase]);
     1.2.wait;
     check.(~mxOutputs[\cue][\phase] == \stable, "bascule non terminée : " ++ ~mxOutputs[\cue][\phase]);
-    check.(getControl.(~mxOutputs[\cue][\synth], \limiterDurMs) == 20, "limiterDurMs du nouveau processeur");
+    check.(getControl.(~mxOutputs[\cue][\synth], \limiterDurMs) == 30, "limiterDurMs du nouveau processeur");
     check.(getControl.(~mxOutputs[\cue][\synth], \eqLowFreq) == 150, "les réglages précédents suivent la bascule");
 
     // Review Focus 5 : changer la largeur de src-2 laisse src-1 et src-3 intacts.

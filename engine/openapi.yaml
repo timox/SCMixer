@@ -95,6 +95,31 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/EngineState' }
         '409': { $ref: '#/components/responses/Error' }
+  /api/engine/log:
+    get:
+      tags: [Moteur]
+      summary: Journal du moteur (sortie de sclang et de scsynth, repères du service), moteur arrêté ou démarré
+      description: >
+        Une entrée par ligne, numérotée (seq croissant, jamais réutilisé pendant la vie du service). Les 5000
+        dernières lignes sont conservées. Les lignes suivantes sont diffusées par l'événement engineLog. Le
+        fichier logs/sclang.log du dossier de données reste écrit ; il n'est pas une interface.
+      parameters:
+        - name: after
+          in: query
+          required: false
+          description: Ne renvoie que les lignes de numéro strictement supérieur (0 par défaut, tout le journal conservé).
+          schema: { type: string, pattern: '^(0|[1-9][0-9]*)$' }
+      responses:
+        '200': { description: Journal, content: { application/json: { schema: { $ref: '#/components/schemas/EngineLog' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+  /api/processing/reset:
+    post:
+      tags: [Moteur]
+      summary: Rétablit les valeurs par défaut de tous les traitements de toutes les sources (mix compris) et des sorties Master et Cue (volumes compris)
+      description: Sources, noms et canaux inchangés. Une seule mutation ; même charge utile que GET /api/state.
+      responses:
+        '200': { description: État, content: { application/json: { schema: { $ref: '#/components/schemas/State' } } } }
+        '409': { $ref: '#/components/responses/Error' }
   /api/engine/runtime:
     get:
       tags: [Moteur]
@@ -236,20 +261,39 @@ paths:
         '400': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
-  /api/sources/{id}/processing/hp/reset:
+  /api/sources/{id}/processing/reset:
     parameters: [ { $ref: '#/components/parameters/SourceId' } ]
     post:
       tags: [Sources]
-      summary: Rétablit les valeurs par défaut du filtre passe-haut
+      summary: Rétablit les valeurs par défaut de toute la chaîne de la source, mix (volume, mute, panoramique) compris ; nom et canaux inchangés
       responses:
         '200': { $ref: '#/components/responses/Source' }
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
-  /api/sources/{id}/processing/lp/reset:
-    parameters: [ { $ref: '#/components/parameters/SourceId' } ]
+  /api/sources/{id}/processing/{stage}/reset:
+    parameters:
+      - { $ref: '#/components/parameters/SourceId' }
+      - name: stage
+        in: path
+        required: true
+        schema: { type: string, enum: [mix, input, inputCompressor, eq, hp, lp, pitch] }
     post:
       tags: [Sources]
-      summary: Rétablit les valeurs par défaut du filtre passe-bas
+      summary: Rétablit les valeurs par défaut d'un étage de la source
+      responses:
+        '200': { $ref: '#/components/responses/Source' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/sources/{id}/processing/bandCompressor/{band}/reset:
+    parameters:
+      - { $ref: '#/components/parameters/SourceId' }
+      - name: band
+        in: path
+        required: true
+        schema: { type: string, enum: [low, mid, high, crossover] }
+    post:
+      tags: [Sources]
+      summary: Rétablit les valeurs par défaut d'une bande du compresseur multibande ou de ses filtres de répartition
       responses:
         '200': { $ref: '#/components/responses/Source' }
         '404': { $ref: '#/components/responses/Error' }
@@ -271,6 +315,29 @@ paths:
       summary: Copie tous les étages de la sortie master vers la sortie cue
       responses:
         '200': { $ref: '#/components/responses/Output' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/outputs/{output}/reset:
+    parameters: [ { $ref: '#/components/parameters/Output' } ]
+    post:
+      tags: [Sorties]
+      summary: Rétablit les valeurs par défaut de tous les étages de la sortie, volume compris
+      responses:
+        '200': { $ref: '#/components/responses/Output' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/outputs/{output}/{stage}/reset:
+    parameters:
+      - { $ref: '#/components/parameters/Output' }
+      - name: stage
+        in: path
+        required: true
+        schema: { type: string, enum: [mix, eq, infraHpf, sideHpf, clipper, limiter, compressor] }
+    post:
+      tags: [Sorties]
+      summary: Rétablit les valeurs par défaut d'un étage de sortie
+      responses:
+        '200': { $ref: '#/components/responses/Output' }
+        '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
   /api/outputs/{output}/{stage}:
     parameters:
@@ -413,6 +480,9 @@ x-websocket:
     engineStateChanged:
       description: À chaque changement d'état du moteur.
       data: { $ref: '#/components/schemas/EngineState' }
+    engineLog:
+      description: Chaque nouvelle ligne du journal du moteur (voir GET /api/engine/log).
+      data: { $ref: '#/components/schemas/EngineLogLine' }
     engineRuntimeChanged:
       description: Statut d'exécution de sclang, environ une fois par seconde.
       data: { $ref: '#/components/schemas/Runtime' }
@@ -622,6 +692,23 @@ components:
                 ENGINE_NOT_RUNNING 409, ENGINE_BUSY 409, ENGINE_RESTART_REQUIRED 409, MODEL_UNAVAILABLE 409, TIMOXVASIO_NOT_READY 409, BENCH_RUNNING 409, BENCH_NOT_RUNNING 409,
                 SC_COMMAND_FAILED 502, INTERNAL 500.
             message: { type: string }
+    EngineLogLine:
+      type: object
+      required: [seq, time, stream, text]
+      properties:
+        seq: { type: integer, minimum: 1 }
+        time: { type: string, format: date-time }
+        stream:
+          type: string
+          enum: [stdout, stderr, error, service]
+          description: "stdout, stderr : sortie de sclang (qui relaie celle de scsynth) ; error : erreur du processus sclang ; service : changement d'état du moteur."
+        text: { type: string }
+    EngineLog:
+      type: object
+      required: [lines, lastSeq]
+      properties:
+        lines: { type: array, items: { $ref: '#/components/schemas/EngineLogLine' } }
+        lastSeq: { type: integer, minimum: 0, description: Numéro de la dernière ligne écrite (0 journal vide). }
     State:
       type: object
       required: [engine, sources, outputs]

@@ -118,6 +118,7 @@ Item {
                 value: page.value
                 descriptors: page.descriptors
                 keys: ["rangeDb", "controlLag"]
+                resettable: true
                 docs: page.docs
             }
         }

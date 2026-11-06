@@ -2,10 +2,10 @@ import { SOURCE_STAGES, BAND_GROUPS } from '../../contract/schemas.js';
 import { route } from '../async-route.js';
 import { ApiError } from '../../contract/errors.js';
 import {
-  addSource, patchSource, removeSource, setSourceStage, setSourceBand, resetSourceStage,
+  addSource, patchSource, removeSource, setSourceStage, setSourceBand, resetSourceStage, resetSourceBand, resetSource,
 } from '../../session/session-model.js';
 import {
-  addSourceCode, replaceSourceCode, removeSourceCode, setSourceStageCode, setSourceBandCode, resetMoogCode,
+  addSourceCode, replaceSourceCode, removeSourceCode, setSourceStageCode, setSourceBandCode, resetMoogCode, sourceProcessingCode,
 } from '../../sc/commands.js';
 import { sourceGraph } from '../../contract/chains.js';
 
@@ -73,16 +73,24 @@ export function registerSourceRoutes(api, engine) {
     res.json(sourceOf(session, id));
   }));
 
-  for (const stage of ['hp', 'lp']) {
-    api.post(`/sources/:id/processing/${stage}/reset`, route(async (req, res) => {
-      const { id } = req.params;
-      const session = await engine.mutate((current) => {
-        const next = resetSourceStage(current, id, stage);
-        return { session: next, code: setSourceStageCode(id, stage, find(next, id).processing[stage]) };
-      });
-      res.json(sourceOf(session, id));
-    }));
-  }
+  api.post('/sources/:id/processing/reset', route(async (req, res) => {
+    const { id } = req.params;
+    const session = await engine.mutate((current) => {
+      const next = resetSource(current, id);
+      return { session: next, code: sourceProcessingCode(id, find(next, id).processing) };
+    });
+    res.json(sourceOf(session, id));
+  }));
+
+  api.post('/sources/:id/processing/bandCompressor/:band/reset', route(async (req, res) => {
+    const { id, band } = req.params;
+    known(BAND_GROUPS, band, 'Bande');
+    const session = await engine.mutate((current) => {
+      const next = resetSourceBand(current, id, band);
+      return { session: next, code: setSourceBandCode(id, band, find(next, id).processing.bandCompressor[band]) };
+    });
+    res.json(sourceOf(session, id));
+  }));
 
   api.post('/sources/:id/processing/lp/reset-state', route(async (req, res) => {
     const { id } = req.params;
@@ -91,6 +99,16 @@ export function registerSourceRoutes(api, engine) {
         throw new ApiError('VALIDATION', 400, 'La réinitialisation d\'état ne concerne que le modèle MoogFF.');
       }
       return { session: current, code: resetMoogCode(id) };
+    });
+    res.json(sourceOf(session, id));
+  }));
+
+  api.post('/sources/:id/processing/:stage/reset', route(async (req, res) => {
+    const { id, stage } = req.params;
+    known(SOURCE_STAGES, stage, 'Étage de source');
+    const session = await engine.mutate((current) => {
+      const next = resetSourceStage(current, id, stage);
+      return { session: next, code: setSourceStageCode(id, stage, find(next, id).processing[stage]) };
     });
     res.json(sourceOf(session, id));
   }));

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { WebSocket } from 'ws';
 import { startHarness } from './helpers/api-harness.js';
+import { defaultSourceProcessing, defaultOutput } from '../src/contract/schemas.js';
 
 function collect(ws) {
   const messages = [];
@@ -109,4 +110,51 @@ test('erreur interne : message générique sans détail', async (t) => {
   assert.equal(r.status, 500);
   assert.equal(r.body.error.code, 'INTERNAL');
   assert.doesNotMatch(r.body.error.message, /secret/);
+});
+
+test('journal : lignes de sclang et repères du service, lecture après un numéro, événement engineLog', async (t) => {
+  const h = await startHarness(); t.after(() => h.close());
+  const ws = new WebSocket(`ws://127.0.0.1:${h.port}/api/ws`);
+  const messages = collect(ws);
+  await new Promise((resolve, reject) => { ws.once('open', resolve); ws.once('error', reject); });
+  const before = (await h.call('GET', '/api/engine/log')).body;
+  assert.ok(before.lines.some((l) => l.stream === 'service' && l.text === 'moteur running'));
+  assert.ok(before.lines.some((l) => l.stream === 'stdout' && l.text.startsWith('MX-SIZING ')));
+  h.langs[0].output('stdout', 'ligne 1\r\nligne 2\n');
+  h.langs[0].output('stderr', 'ERROR: x');
+  const after = (await h.call('GET', `/api/engine/log?after=${before.lastSeq}`)).body;
+  assert.deepEqual(after.lines.map((l) => [l.seq, l.stream, l.text]), [
+    [before.lastSeq + 1, 'stdout', 'ligne 1'], [before.lastSeq + 2, 'stdout', 'ligne 2'], [before.lastSeq + 3, 'stderr', 'ERROR: x'],
+  ]);
+  assert.equal(after.lastSeq, before.lastSeq + 3);
+  assert.match(after.lines[0].time, /^\d{4}-\d\d-\d\dT/);
+  await until(() => messages.filter((m) => m.type === 'engineLog').length >= 3);
+  assert.deepEqual(messages.filter((m) => m.type === 'engineLog').map((m) => m.data.text), ['ligne 1', 'ligne 2', 'ERROR: x']);
+  await h.call('POST', '/api/engine/stop');
+  const stopped = (await h.call('GET', `/api/engine/log?after=${after.lastSeq}`)).body;
+  assert.deepEqual(stopped.lines.map((l) => l.text), ['moteur stopping', 'moteur stopped']);
+  for (const bad of ['-1', 'x', '01']) assert.equal((await h.call('GET', `/api/engine/log?after=${bad}`)).status, 400);
+  ws.close();
+});
+
+test('RAZ globale : traitements de toutes les sources et des sorties, volumes compris ; sources et canaux gardés', async (t) => {
+  const h = await startHarness(); t.after(() => h.close());
+  await h.call('POST', '/api/sources', { name: 'A', firstChannel: 1, width: 2 });
+  await h.call('POST', '/api/sources', { name: 'B', firstChannel: 3, width: 1 });
+  const src = (await h.call('GET', '/api/sources/src-1')).body;
+  await h.call('PUT', '/api/sources/src-1/processing/mix', { ...src.processing.mix, volume: 0.2, mute: true });
+  await h.call('PUT', '/api/sources/src-2/processing/bandCompressor/low', { ...src.processing.bandCompressor.low, bypass: false });
+  const master = (await h.call('GET', '/api/state')).body.outputs.master;
+  await h.call('PUT', '/api/outputs/master/mix', { ...master.mix, volume: 0.1 });
+  const r = await h.call('POST', '/api/processing/reset');
+  assert.equal(r.status, 200);
+  const code = h.langs[0].commands().at(-1);
+  assert.match(code, /~mxSetSourceStage\.\("src-1", \\mix, /);
+  assert.match(code, /~mxSetSourceStage\.\("src-2", \\bandCompressor, \(.*band: \\low/);
+  assert.match(code, /~mxSetOutputStage\.\(\\cue, \\compressor, /);
+  assert.deepEqual(r.body.sources.map((s) => [s.id, s.name, s.firstChannel, s.width]), [['src-1', 'A', 1, 2], ['src-2', 'B', 3, 1]]);
+  for (const s of r.body.sources) assert.deepEqual(s.processing, defaultSourceProcessing());
+  assert.deepEqual(r.body.outputs, { master: defaultOutput(), cue: defaultOutput() });
+  const g = await startHarness({ running: false }); t.after(() => g.close());
+  assert.equal((await g.call('POST', '/api/processing/reset')).status, 409);
 });

@@ -4,8 +4,9 @@ import QtQuick.Layouts
 import Mixette.Api
 import "controls/Theme.js" as Theme
 
-// Fenêtre principale : bandeau de connexion et cinq onglets. Toute donnée affichée vient de l'API
-// (Api : requêtes, Engine : état confirmé) ; sans connexion, les contrôles sont désactivés.
+// Fenêtre principale : barre du moteur (connexion, état, commandes, remise à zéro globale) et six onglets.
+// Toute donnée affichée vient de l'API (Api : requêtes, Engine : état confirmé) ; sans connexion, les
+// contrôles sont désactivés.
 ApplicationWindow {
     id: window
     width: 1440
@@ -16,26 +17,20 @@ ApplicationWindow {
 
     header: ColumnLayout {
         spacing: 0
-        Rectangle {
+        EngineBar {
+            objectName: "engine-bar"
             Layout.fillWidth: true
-            implicitHeight: 30
-            color: Api.connected ? "#1f2a1f" : "#3a1f1f"
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                x: 12
-                color: Theme.text
-                font.pixelSize: Theme.fontNormal
-                text: Api.connected
-                      ? "API connectée : " + Api.baseUrl + " — moteur " + (Engine.engine.status || "")
-                      : "API indisponible : " + Api.baseUrl + " (nouvel essai toutes les 2 s)"
-            }
+            client: Api
+            store: Engine
+            connected: Api.connected
+            baseUrl: Api.baseUrl
         }
         TabBar {
             objectName: "tabs"
             id: tabs
             Layout.fillWidth: true
             Repeater {
-                model: ["Console", "Traitements", "Presets", "Routage", "Moteur"]
+                model: ["Console", "Traitements", "Presets", "Routage", "Moteur", "Journal"]
                 TabButton { required property string modelData; text: modelData }
             }
         }
@@ -55,5 +50,6 @@ ApplicationWindow {
         PresetsTab { client: Api }
         RoutingTab { store: Engine; vasio: Vasio }
         EngineTab { client: Api; store: Engine }
+        LogTab { client: Api; connected: Api.connected }
     }
 }

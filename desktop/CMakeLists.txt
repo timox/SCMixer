@@ -62,6 +62,8 @@ qt_add_qml_module(mixette-desktop
         qml/panels/NodeTree.qml
         qml/panels/BenchPanel.qml
         qml/tabs/RoutingTab.qml
+        qml/tabs/LogTab.qml
+        qml/panels/EngineBar.qml
 )
 target_link_libraries(mixette-desktop PRIVATE desktop_core Qt6::Gui Qt6::Quick Qt6::QuickControls2)
 set_target_properties(mixette-desktop PROPERTIES WIN32_EXECUTABLE ON)

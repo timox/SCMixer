@@ -97,6 +97,13 @@ Item {
                 font.pixelSize: 15
                 font.bold: true
             }
+            ConfirmButton {
+                objectName: "button-reset-target"
+                visible: ws.target !== ""
+                text: ws.isSource ? "Réinitialiser la source" : (ws.target === "master" ? "Réinitialiser Master" : "Réinitialiser Cue")
+                confirmText: ws.isSource ? "Confirmer : toute la chaîne, volume compris" : "Confirmer : tous les étages, volume compris"
+                onConfirmed: ws.client.post(ws.base + "reset")
+            }
             ActionButton {
                 objectName: "button-copy-master"
                 visible: !ws.isSource && ws.target === "cue"

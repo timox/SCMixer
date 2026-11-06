@@ -597,7 +597,9 @@
   args.pairsDo { |key, value|
     if(~mxOutputInitControls.includes(key) and: { params[key] != value }) { restructure = true };
   };
-  if(restructure and: { state[\phase] != \stable }) { Error("Bascule de compresseur en cours").throw };
+  // Une seule bascule à la fois (deux bus privés : synth courant et synth sortant). La commande tourne
+  // dans la Routine de la file (fork) : elle attend la fin de la bascule précédente au lieu d'être refusée.
+  if(restructure) { while { state[\phase] != \stable } { 0.05.wait } };
   if(writerArgs.notEmpty) {
     state[\writer].set(*writerArgs);
     writerArgs.pairsDo { |key, value| if(key == \compressorFadeSeconds) { state[\fadeSeconds] = value } };
