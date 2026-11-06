@@ -166,3 +166,14 @@ export function applyPresetCode(current, next, meterIdFor) {
   }
   return statements.join('; ');
 }
+
+/**
+ * Enregistrement de la sortie Master (sc/recording.scd). Le chemin est transmis avec des barres obliques.
+ * Réponses : « recording|<sampleRate> », « paused », « recording », « stopped » ou « refused|CODE ».
+ */
+export function recStartCode(file, sampleFormat) {
+  return `~mxRecStart.(${JSON.stringify(file.replaceAll('\\', '/'))}, ${JSON.stringify(sampleFormat)})`;
+}
+export const REC_PAUSE_CODE = '~mxRecPause.()';
+export const REC_RESUME_CODE = '~mxRecResume.()';
+export const REC_STOP_CODE = '~mxRecStop.()';
