@@ -46,7 +46,7 @@ ApplicationWindow {
         enabled: Api.connected
 
         SourcesTab { client: Api; store: Engine; curves: CurveMath }
-        Label { text: "Sorties : à venir"; color: Theme.dim }
+        OutputsTab { client: Api; store: Engine; curves: CurveMath }
         Label { text: "Presets : à venir"; color: Theme.dim }
         Label { text: "Moteur : à venir"; color: Theme.dim }
         Label { text: "Routage : à venir"; color: Theme.dim }
