@@ -1,6 +1,7 @@
 /**
  * Données de test de l'interface Qt, produites par l'API elle-même (service moteur avec faux sclang,
- * aucun SuperCollider démarré) : desktop/tests/fixtures/state.json et parameters.json.
+ * aucun SuperCollider démarré) : desktop/tests/fixtures/state.json, parameters.json et graphs.json
+ * (chaînes de traitement de chaque source et des sorties).
  *
  *   node tools/export-fixtures.mjs
  *
@@ -27,6 +28,11 @@ try {
   fs.mkdirSync(out, { recursive: true });
   fs.writeFileSync(path.join(out, 'state.json'), `${JSON.stringify(await ok('GET', '/api/state'), null, 2)}\n`);
   fs.writeFileSync(path.join(out, 'parameters.json'), `${JSON.stringify(await ok('GET', '/api/parameters'), null, 2)}\n`);
+  const graphs = { sources: {}, outputs: {} };
+  for (const id of ['src-1', 'src-2', 'src-3']) graphs.sources[id] = await ok('GET', `/api/sources/${id}/processing-graph`);
+  for (const name of ['master', 'cue']) graphs.outputs[name] = await ok('GET', `/api/outputs/${name}/processing-graph`);
+  fs.writeFileSync(path.join(out, 'graphs.json'), `${JSON.stringify(graphs, null, 2)}
+`);
   console.log(`Données de test écrites dans ${out}.`);
 } finally {
   await h.close();

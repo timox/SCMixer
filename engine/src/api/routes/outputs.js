@@ -4,9 +4,7 @@ import { assertModelsAvailable } from '../../contract/models.js';
 import { OUTPUT_STAGES } from '../../contract/schemas.js';
 import { setOutputStage, copyMasterToCue } from '../../session/session-model.js';
 import { setOutputStageCode } from '../../sc/commands.js';
-
-/** Ordre de traversée du signal sur une sortie, de l'entrée vers la compression finale. */
-const GRAPH_ORDER = ['infraHpf', 'sideHpf', 'eq', 'mix', 'clipper', 'limiter', 'compressor'];
+import { outputGraph } from '../../contract/chains.js';
 
 function checkOutput(name) {
   if (name !== 'master' && name !== 'cue') throw new ApiError('NOT_FOUND', 404, `Sortie inconnue : ${name}.`);
@@ -43,17 +41,6 @@ export function registerOutputRoutes(api, engine) {
 
   api.get('/outputs/:output/processing-graph', route((req, res) => {
     const output = engine.session().outputs[checkOutput(req.params.output)];
-    const { models } = engine.state();
-    res.json(GRAPH_ORDER.map((stage) => {
-      const settings = output[stage];
-      const requestedModel = stage === 'compressor' ? settings.model : null;
-      const loadedModel = requestedModel && models[requestedModel] ? requestedModel : null;
-      return {
-        stage,
-        enabled: stage === 'compressor' ? !settings.bypass : (settings.enabled ?? true),
-        requestedModel,
-        loadedModel,
-      };
-    }));
+    res.json(outputGraph(output, engine.state().models));
   }));
 }

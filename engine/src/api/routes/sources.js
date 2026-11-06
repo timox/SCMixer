@@ -7,6 +7,7 @@ import {
 import {
   addSourceCode, replaceSourceCode, removeSourceCode, setSourceStageCode, setSourceBandCode, resetMoogCode,
 } from '../../sc/commands.js';
+import { sourceGraph } from '../../contract/chains.js';
 
 /** Instruction sclang sans effet : une mutation de métadonnées ne touche pas le graphe audio. */
 const NO_OP = 'nil';
@@ -37,6 +38,8 @@ export function registerSourceRoutes(api, engine) {
   }));
 
   api.get('/sources/:id', route((req, res) => res.json(sourceOf(engine.session(), req.params.id))));
+
+  api.get('/sources/:id/processing-graph', route((req, res) => res.json(sourceGraph(find(engine.session(), req.params.id)))));
 
   api.patch('/sources/:id', route(async (req, res) => {
     const { id } = req.params;

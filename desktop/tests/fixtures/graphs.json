@@ -1,0 +1,734 @@
+{
+  "sources": {
+    "src-1": [
+      {
+        "stage": "input",
+        "label": "Entrée",
+        "enabled": true,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "SoundIn",
+            "url": "https://doc.sccode.org/Classes/SoundIn.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "inputCompressor",
+        "label": "Compresseur d'entrée",
+        "enabled": false,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "Compander",
+            "url": "https://doc.sccode.org/Classes/Compander.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "eq",
+        "label": "EQ 3 bandes",
+        "enabled": true,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "BLowShelf",
+            "url": "https://doc.sccode.org/Classes/BLowShelf.html"
+          },
+          {
+            "name": "BPeakEQ",
+            "url": "https://doc.sccode.org/Classes/BPeakEQ.html"
+          },
+          {
+            "name": "BHiShelf",
+            "url": "https://doc.sccode.org/Classes/BHiShelf.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "hp",
+        "label": "Passe-haut",
+        "enabled": false,
+        "requestedModel": "BHiPass",
+        "loadedModel": "BHiPass",
+        "docs": [
+          {
+            "name": "BHiPass",
+            "url": "https://doc.sccode.org/Classes/BHiPass.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "lp",
+        "label": "Passe-bas",
+        "enabled": false,
+        "requestedModel": "BLowPass",
+        "loadedModel": "BLowPass",
+        "docs": [
+          {
+            "name": "BLowPass",
+            "url": "https://doc.sccode.org/Classes/BLowPass.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "pitch",
+        "label": "Transposition",
+        "enabled": false,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "PitchShift",
+            "url": "https://doc.sccode.org/Classes/PitchShift.html"
+          },
+          {
+            "name": "XFade2",
+            "url": "https://doc.sccode.org/Classes/XFade2.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "bandCompressor",
+        "label": "Compresseur multibande",
+        "enabled": false,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "LPF",
+            "url": "https://doc.sccode.org/Classes/LPF.html"
+          },
+          {
+            "name": "HPF",
+            "url": "https://doc.sccode.org/Classes/HPF.html"
+          },
+          {
+            "name": "Compander",
+            "url": "https://doc.sccode.org/Classes/Compander.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "mix",
+        "label": "Mix",
+        "enabled": true,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "Pan2",
+            "url": "https://doc.sccode.org/Classes/Pan2.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      }
+    ],
+    "src-2": [
+      {
+        "stage": "input",
+        "label": "Entrée",
+        "enabled": true,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "SoundIn",
+            "url": "https://doc.sccode.org/Classes/SoundIn.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "inputCompressor",
+        "label": "Compresseur d'entrée",
+        "enabled": false,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "Compander",
+            "url": "https://doc.sccode.org/Classes/Compander.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "eq",
+        "label": "EQ 3 bandes",
+        "enabled": true,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "BLowShelf",
+            "url": "https://doc.sccode.org/Classes/BLowShelf.html"
+          },
+          {
+            "name": "BPeakEQ",
+            "url": "https://doc.sccode.org/Classes/BPeakEQ.html"
+          },
+          {
+            "name": "BHiShelf",
+            "url": "https://doc.sccode.org/Classes/BHiShelf.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "hp",
+        "label": "Passe-haut",
+        "enabled": false,
+        "requestedModel": "BHiPass",
+        "loadedModel": "BHiPass",
+        "docs": [
+          {
+            "name": "BHiPass",
+            "url": "https://doc.sccode.org/Classes/BHiPass.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "lp",
+        "label": "Passe-bas",
+        "enabled": false,
+        "requestedModel": "BLowPass",
+        "loadedModel": "BLowPass",
+        "docs": [
+          {
+            "name": "BLowPass",
+            "url": "https://doc.sccode.org/Classes/BLowPass.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "pitch",
+        "label": "Transposition",
+        "enabled": false,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "PitchShift",
+            "url": "https://doc.sccode.org/Classes/PitchShift.html"
+          },
+          {
+            "name": "XFade2",
+            "url": "https://doc.sccode.org/Classes/XFade2.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "bandCompressor",
+        "label": "Compresseur multibande",
+        "enabled": false,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "LPF",
+            "url": "https://doc.sccode.org/Classes/LPF.html"
+          },
+          {
+            "name": "HPF",
+            "url": "https://doc.sccode.org/Classes/HPF.html"
+          },
+          {
+            "name": "Compander",
+            "url": "https://doc.sccode.org/Classes/Compander.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "mix",
+        "label": "Mix",
+        "enabled": true,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "Balance2",
+            "url": "https://doc.sccode.org/Classes/Balance2.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      }
+    ],
+    "src-3": [
+      {
+        "stage": "input",
+        "label": "Entrée",
+        "enabled": true,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "SoundIn",
+            "url": "https://doc.sccode.org/Classes/SoundIn.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "inputCompressor",
+        "label": "Compresseur d'entrée",
+        "enabled": false,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "Compander",
+            "url": "https://doc.sccode.org/Classes/Compander.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "eq",
+        "label": "EQ 3 bandes",
+        "enabled": true,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "BLowShelf",
+            "url": "https://doc.sccode.org/Classes/BLowShelf.html"
+          },
+          {
+            "name": "BPeakEQ",
+            "url": "https://doc.sccode.org/Classes/BPeakEQ.html"
+          },
+          {
+            "name": "BHiShelf",
+            "url": "https://doc.sccode.org/Classes/BHiShelf.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "hp",
+        "label": "Passe-haut",
+        "enabled": false,
+        "requestedModel": "BHiPass",
+        "loadedModel": "BHiPass",
+        "docs": [
+          {
+            "name": "BHiPass",
+            "url": "https://doc.sccode.org/Classes/BHiPass.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "lp",
+        "label": "Passe-bas",
+        "enabled": false,
+        "requestedModel": "BLowPass",
+        "loadedModel": "BLowPass",
+        "docs": [
+          {
+            "name": "BLowPass",
+            "url": "https://doc.sccode.org/Classes/BLowPass.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "pitch",
+        "label": "Transposition",
+        "enabled": false,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "PitchShift",
+            "url": "https://doc.sccode.org/Classes/PitchShift.html"
+          },
+          {
+            "name": "XFade2",
+            "url": "https://doc.sccode.org/Classes/XFade2.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "bandCompressor",
+        "label": "Compresseur multibande",
+        "enabled": false,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "LPF",
+            "url": "https://doc.sccode.org/Classes/LPF.html"
+          },
+          {
+            "name": "HPF",
+            "url": "https://doc.sccode.org/Classes/HPF.html"
+          },
+          {
+            "name": "Compander",
+            "url": "https://doc.sccode.org/Classes/Compander.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "mix",
+        "label": "Mix",
+        "enabled": true,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "Splay",
+            "url": "https://doc.sccode.org/Classes/Splay.html"
+          },
+          {
+            "name": "Balance2",
+            "url": "https://doc.sccode.org/Classes/Balance2.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      }
+    ]
+  },
+  "outputs": {
+    "master": [
+      {
+        "stage": "infraHpf",
+        "label": "Passe-haut infra",
+        "enabled": false,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "HPF",
+            "url": "https://doc.sccode.org/Classes/HPF.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "sideHpf",
+        "label": "Passe-haut latéral",
+        "enabled": false,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "HPF",
+            "url": "https://doc.sccode.org/Classes/HPF.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "eq",
+        "label": "EQ 3 bandes",
+        "enabled": true,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "BLowShelf",
+            "url": "https://doc.sccode.org/Classes/BLowShelf.html"
+          },
+          {
+            "name": "BPeakEQ",
+            "url": "https://doc.sccode.org/Classes/BPeakEQ.html"
+          },
+          {
+            "name": "BHiShelf",
+            "url": "https://doc.sccode.org/Classes/BHiShelf.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "mix",
+        "label": "Volume",
+        "enabled": true,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "clipper",
+        "label": "Écrêteur",
+        "enabled": false,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "Clip",
+            "url": "https://doc.sccode.org/Classes/Clip.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "limiter",
+        "label": "Limiteur",
+        "enabled": false,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "Limiter",
+            "url": "https://doc.sccode.org/Classes/Limiter.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "compressor",
+        "label": "Compresseur",
+        "enabled": false,
+        "requestedModel": "Compander",
+        "loadedModel": "Compander",
+        "docs": [
+          {
+            "name": "Compander",
+            "url": "https://doc.sccode.org/Classes/Compander.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      }
+    ],
+    "cue": [
+      {
+        "stage": "infraHpf",
+        "label": "Passe-haut infra",
+        "enabled": false,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "HPF",
+            "url": "https://doc.sccode.org/Classes/HPF.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "sideHpf",
+        "label": "Passe-haut latéral",
+        "enabled": false,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "HPF",
+            "url": "https://doc.sccode.org/Classes/HPF.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "eq",
+        "label": "EQ 3 bandes",
+        "enabled": true,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "BLowShelf",
+            "url": "https://doc.sccode.org/Classes/BLowShelf.html"
+          },
+          {
+            "name": "BPeakEQ",
+            "url": "https://doc.sccode.org/Classes/BPeakEQ.html"
+          },
+          {
+            "name": "BHiShelf",
+            "url": "https://doc.sccode.org/Classes/BHiShelf.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "mix",
+        "label": "Volume",
+        "enabled": true,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "clipper",
+        "label": "Écrêteur",
+        "enabled": false,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "Clip",
+            "url": "https://doc.sccode.org/Classes/Clip.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "limiter",
+        "label": "Limiteur",
+        "enabled": false,
+        "requestedModel": null,
+        "loadedModel": null,
+        "docs": [
+          {
+            "name": "Limiter",
+            "url": "https://doc.sccode.org/Classes/Limiter.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      },
+      {
+        "stage": "compressor",
+        "label": "Compresseur",
+        "enabled": false,
+        "requestedModel": "Compander",
+        "loadedModel": "Compander",
+        "docs": [
+          {
+            "name": "Compander",
+            "url": "https://doc.sccode.org/Classes/Compander.html"
+          },
+          {
+            "name": "Lag",
+            "url": "https://doc.sccode.org/Classes/Lag.html"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -135,3 +135,47 @@ test('GET /api/parameters : 200 moteur arrêté, catalogue complet', async (t) =
   assert.equal(r.body.output.compressor.fields.find((f) => f.key === 'model').options.length, 3);
   assert.equal(flatten(r.body).size, SOURCE_PATHS.length + OUTPUT_PATHS.length + BENCH_PATHS.length);
 });
+
+test('étages : libellé non vide ; champ d\'état enabled (actif à true) ou bypass (actif à false)', () => {
+  const catalog = buildParameterCatalog();
+  const stages = [
+    ...Object.entries(catalog.source).flatMap(([name, v]) => (v.fields ? [[name, v]] : Object.entries(v))),
+    ...Object.entries(catalog.output),
+  ];
+  for (const [name, stage] of stages) {
+    assert.ok(stage.label && stage.label.length > 0, `libellé ${name}`);
+    const keys = stage.fields.map((f) => f.key);
+    if (keys.includes('enabled')) assert.deepEqual(stage.state, { field: 'enabled', active: true }, name);
+    else if (keys.includes('bypass')) assert.deepEqual(stage.state, { field: 'bypass', active: false }, name);
+    else assert.equal(stage.state, undefined, name);
+  }
+  assert.equal(catalog.source.bandCompressor.crossover.label, 'Répartition');
+  assert.equal(catalog.output.infraHpf.label, 'Passe-haut infra');
+});
+
+test('groupes : réglages principaux et avancés', () => {
+  const flat = flatten(buildParameterCatalog());
+  for (const [key, field] of flat) assert.ok(['main', 'advanced'].includes(field.group), key);
+  for (const key of ['source:hp.freq', 'source:eq.low', 'source:inputCompressor.thresholdDb', 'source:mix.volume',
+    'output:limiter.ceilingDb']) {
+    assert.equal(flat.get(key).group, 'main', key);
+  }
+  for (const key of ['source:hp.minHz', 'source:eq.lowMul', 'source:eq.controlLag', 'source:pitch.windowSize',
+    'source:pitch.mul', 'source:bandCompressor.crossover.lowLp1Mul', 'output:compressor.fadeSeconds', 'output:infraHpf.add']) {
+    assert.equal(flat.get(key).group, 'advanced', key);
+  }
+});
+
+test('conversions publiées : fréquence des filtres en linexp, gains d\'EQ en bipolaire ; rien sur le banc EQ', () => {
+  const flat = flatten(buildParameterCatalog());
+  const linexp = { kind: 'linexp', minField: 'minHz', maxField: 'maxHz', unit: 'Hz' };
+  const bipolar = { kind: 'bipolar', rangeField: 'rangeDb', unit: 'dB' };
+  assert.deepEqual(flat.get('source:hp.freq').display, linexp);
+  assert.deepEqual(flat.get('source:lp.freq').display, linexp);
+  for (const band of ['low', 'mid', 'high']) {
+    assert.deepEqual(flat.get(`source:eq.${band}`).display, bipolar);
+    assert.deepEqual(flat.get(`output:eq.${band}`).display, bipolar);
+    assert.equal(flat.get(`bench:eq.${band}`).display, undefined);
+  }
+  assert.equal([...flat.values()].filter((f) => f.display).length, 8);
+});

@@ -170,6 +170,21 @@ paths:
         '204': { description: Supprimée }
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
+  /api/sources/{id}/processing-graph:
+    parameters: [ { $ref: '#/components/parameters/SourceId' } ]
+    get:
+      tags: [Sources]
+      summary: Étages ordonnés de la source avec libellé, état, modèle et documentation des UGens utilisés
+      description: >
+        Les étages sont listés dans l'ordre de traversée du signal : input, inputCompressor, eq, hp, lp,
+        pitch, bandCompressor, mix. Le gain d'entrée (input.gain) agit après le compresseur d'entrée.
+        enabled vaut false pour un compresseur contourné, un filtre désactivé, une transposition sans signal
+        décalé (blend = -1), un multibande dont les trois bandes sont contournées et une source coupée.
+      responses:
+        '200':
+          description: Graphe de traitement
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/SourceGraphStage' } } } }
+        '404': { $ref: '#/components/responses/Error' }
   /api/sources/{id}/processing/{stage}:
     parameters:
       - { $ref: '#/components/parameters/SourceId' }
@@ -289,7 +304,7 @@ paths:
     parameters: [ { $ref: '#/components/parameters/Output' } ]
     get:
       tags: [Sorties]
-      summary: Étages ordonnés avec modèle demandé et modèle chargé (null si indisponible ou sans modèle)
+      summary: Étages ordonnés avec libellé, état, modèle demandé et modèle chargé (null si indisponible ou sans modèle), documentation des UGens utilisés
       description: >
         Les étages sont listés dans l'ordre de traversée du signal : infraHpf, sideHpf, eq,
         mix (volume), clipper, limiter, compressor. Le compresseur est le dernier étage.
@@ -537,16 +552,37 @@ components:
               allOf: [ { $ref: '#/components/schemas/ParameterStage' } ]
     ParameterStage:
       type: object
-      required: [fields]
+      required: [label, fields]
       properties:
+        label: { type: string }
+        state:
+          type: object
+          description: "Champ booléen qui active l'étage ; l'étage agit lorsque ce champ vaut active. Absent : l'étage agit toujours."
+          required: [field, active]
+          properties:
+            field: { type: string }
+            active: { type: boolean }
         fields:
           type: array
           description: Champs dans l'ordre du schéma.
           items: { $ref: '#/components/schemas/ParameterField' }
     ParameterField:
       type: object
-      required: [key, type, default, label, description, scale]
+      required: [key, type, default, label, description, group]
       properties:
+        group: { type: string, enum: [main, advanced], description: "main : réglage principal ; advanced : structure, lissage, décalage continu, gains de cellule." }
+        display:
+          type: object
+          description: >
+            Grandeur jouée par le moteur. linexp : valeur 0..1 vers minField..maxField (exponentiel, champs du même étage) ;
+            bipolar : (valeur * 2 - 1) * rangeField.
+          required: [kind, unit]
+          properties:
+            kind: { type: string, enum: [linexp, bipolar] }
+            minField: { type: string }
+            maxField: { type: string }
+            rangeField: { type: string }
+            unit: { type: string }
         key: { type: string }
         type: { type: string, enum: [number, integer, boolean, enum] }
         default: {}
@@ -963,12 +999,31 @@ components:
         fadeSeconds: { type: number, minimum: 0.005, maximum: 2, default: 0.05, description: "VarLag.time de l'écrivain de sortie : durée en secondes du fondu entre deux Synths lors d'un changement de modèle ou d'un argument fixé à la création (compressor.model, limiter.durMs)." }
     GraphStage:
       type: object
-      required: [stage, enabled, requestedModel, loadedModel]
+      required: [stage, label, enabled, requestedModel, loadedModel, docs]
       properties:
         stage: { type: string, enum: [infraHpf, sideHpf, eq, mix, clipper, limiter, compressor] }
+        label: { type: string }
         enabled: { type: boolean }
         requestedModel: { type: [string, 'null'] }
         loadedModel: { type: [string, 'null'] }
+        docs: { type: array, items: { $ref: '#/components/schemas/UGenDoc' } }
+    SourceGraphStage:
+      type: object
+      required: [stage, label, enabled, requestedModel, loadedModel, docs]
+      properties:
+        stage: { type: string, enum: [input, inputCompressor, eq, hp, lp, pitch, bandCompressor, mix] }
+        label: { type: string }
+        enabled: { type: boolean }
+        requestedModel: { type: [string, 'null'], description: "Modèle du filtre (hp, lp) ; null pour les autres étages." }
+        loadedModel: { type: [string, 'null'], description: "Égal à requestedModel : les modèles de filtre sont toujours chargés." }
+        docs: { type: array, items: { $ref: '#/components/schemas/UGenDoc' } }
+    UGenDoc:
+      type: object
+      description: "UGen SuperCollider utilisé par l'étage, selon le modèle et la largeur courants."
+      required: [name, url]
+      properties:
+        name: { type: string }
+        url: { type: [string, 'null'], description: "Page d'aide (https://doc.sccode.org/Classes/<nom>.html) ; null pour un UGen propre au projet." }
     SourceMeter:
       type: object
       required: [sourceId, peakDb, rmsDb]
