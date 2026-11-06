@@ -1,0 +1,1796 @@
+{
+  "source": {
+    "mix": {
+      "fields": [
+        {
+          "key": "volume",
+          "type": "number",
+          "default": 1,
+          "label": "Volume",
+          "description": "Volume",
+          "scale": "linear",
+          "min": 0,
+          "max": 1
+        },
+        {
+          "key": "cue",
+          "type": "number",
+          "default": 0,
+          "label": "Envoi Cue",
+          "description": "Envoi Cue",
+          "scale": "linear",
+          "min": 0,
+          "max": 1
+        },
+        {
+          "key": "mute",
+          "type": "boolean",
+          "default": false,
+          "label": "Coupure",
+          "description": "Coupure"
+        },
+        {
+          "key": "balance",
+          "type": "number",
+          "default": 0.5,
+          "label": "Balance",
+          "description": "Balance",
+          "scale": "linear",
+          "min": 0,
+          "max": 1
+        },
+        {
+          "key": "panLevel",
+          "type": "number",
+          "default": 1,
+          "label": "Niveau de panoramique",
+          "description": "Niveau de panoramique",
+          "scale": "linear",
+          "min": 0,
+          "max": 2,
+          "appliesTo": {
+            "width": {
+              "min": 1,
+              "max": 1
+            }
+          }
+        },
+        {
+          "key": "balanceLevel",
+          "type": "number",
+          "default": 1,
+          "label": "Niveau de balance",
+          "description": "Niveau de balance",
+          "scale": "linear",
+          "min": 0,
+          "max": 2,
+          "appliesTo": {
+            "width": {
+              "min": 2
+            }
+          }
+        },
+        {
+          "key": "spread",
+          "type": "number",
+          "default": 1,
+          "label": "Écartement",
+          "description": "Écartement",
+          "scale": "linear",
+          "min": 0,
+          "max": 1,
+          "appliesTo": {
+            "width": {
+              "min": 3
+            }
+          }
+        },
+        {
+          "key": "splayLevel",
+          "type": "number",
+          "default": 1,
+          "label": "Niveau de répartition",
+          "description": "Niveau de répartition",
+          "scale": "linear",
+          "min": 0,
+          "max": 2,
+          "appliesTo": {
+            "width": {
+              "min": 3
+            }
+          }
+        },
+        {
+          "key": "center",
+          "type": "number",
+          "default": 0,
+          "label": "Centre de répartition",
+          "description": "Centre de répartition",
+          "scale": "linear",
+          "min": -1,
+          "max": 1,
+          "appliesTo": {
+            "width": {
+              "min": 3
+            }
+          }
+        },
+        {
+          "key": "levelComp",
+          "type": "number",
+          "default": 0.5,
+          "label": "Compensation de niveau",
+          "description": "Compensation de niveau",
+          "scale": "linear",
+          "min": 0,
+          "max": 1,
+          "appliesTo": {
+            "width": {
+              "min": 3
+            }
+          }
+        },
+        {
+          "key": "controlLag",
+          "type": "number",
+          "default": 0,
+          "label": "Lissage",
+          "description": "Lissage (s)",
+          "scale": "linear",
+          "min": 0,
+          "max": 2,
+          "unit": "s"
+        }
+      ]
+    },
+    "input": {
+      "fields": [
+        {
+          "key": "gain",
+          "type": "number",
+          "default": 1,
+          "label": "Gain d'entrée",
+          "description": "Gain d'entrée",
+          "scale": "linear",
+          "min": 0,
+          "max": 1
+        },
+        {
+          "key": "mul",
+          "type": "number",
+          "default": 1,
+          "label": "Multiplicateur d'entrée",
+          "description": "Multiplicateur d'entrée",
+          "scale": "linear",
+          "min": 0,
+          "max": 4
+        },
+        {
+          "key": "add",
+          "type": "number",
+          "default": 0,
+          "label": "Décalage d'entrée",
+          "description": "Décalage d'entrée",
+          "scale": "linear",
+          "min": -1,
+          "max": 1
+        },
+        {
+          "key": "controlLag",
+          "type": "number",
+          "default": 0,
+          "label": "Lissage",
+          "description": "Lissage (s)",
+          "scale": "linear",
+          "min": 0,
+          "max": 2,
+          "unit": "s"
+        }
+      ]
+    },
+    "inputCompressor": {
+      "fields": [
+        {
+          "key": "thresholdDb",
+          "type": "number",
+          "default": -20,
+          "label": "Seuil",
+          "description": "Seuil (dB)",
+          "scale": "linear",
+          "min": -80,
+          "max": 0,
+          "unit": "dB"
+        },
+        {
+          "key": "slopeBelow",
+          "type": "number",
+          "default": 1,
+          "label": "Pente sous le seuil",
+          "description": "Pente sous le seuil",
+          "scale": "linear",
+          "min": 0.05,
+          "max": 10
+        },
+        {
+          "key": "slopeAbove",
+          "type": "number",
+          "default": 0.25,
+          "label": "Pente au-dessus du seuil",
+          "description": "Pente au-dessus du seuil",
+          "scale": "linear",
+          "min": 0.05,
+          "max": 10
+        },
+        {
+          "key": "attackMs",
+          "type": "number",
+          "default": 10,
+          "label": "Attaque",
+          "description": "Attaque (ms)",
+          "scale": "linear",
+          "min": 1,
+          "max": 100,
+          "unit": "ms"
+        },
+        {
+          "key": "releaseMs",
+          "type": "number",
+          "default": 100,
+          "label": "Relâchement",
+          "description": "Relâchement (ms)",
+          "scale": "linear",
+          "min": 10,
+          "max": 1000,
+          "unit": "ms"
+        },
+        {
+          "key": "mul",
+          "type": "number",
+          "default": 1,
+          "label": "Gain de sortie",
+          "description": "Gain de sortie",
+          "scale": "linear",
+          "min": 0,
+          "max": 16
+        },
+        {
+          "key": "add",
+          "type": "number",
+          "default": 0,
+          "label": "Décalage",
+          "description": "Décalage",
+          "scale": "linear",
+          "min": -1,
+          "max": 1
+        },
+        {
+          "key": "bypass",
+          "type": "boolean",
+          "default": true,
+          "label": "Contournement",
+          "description": "Contournement"
+        },
+        {
+          "key": "controlLag",
+          "type": "number",
+          "default": 0,
+          "label": "Lissage",
+          "description": "Lissage (s)",
+          "scale": "linear",
+          "min": 0,
+          "max": 2,
+          "unit": "s"
+        }
+      ]
+    },
+    "eq": {
+      "fields": [
+        {
+          "key": "low",
+          "type": "number",
+          "default": 0.5,
+          "label": "Grave",
+          "description": "Grave",
+          "scale": "linear",
+          "min": 0,
+          "max": 1
+        },
+        {
+          "key": "mid",
+          "type": "number",
+          "default": 0.5,
+          "label": "Médium",
+          "description": "Médium",
+          "scale": "linear",
+          "min": 0,
+          "max": 1
+        },
+        {
+          "key": "high",
+          "type": "number",
+          "default": 0.5,
+          "label": "Aigu",
+          "description": "Aigu",
+          "scale": "linear",
+          "min": 0,
+          "max": 1
+        },
+        {
+          "key": "rangeDb",
+          "type": "number",
+          "default": 12,
+          "label": "Plage",
+          "description": "Plage (dB)",
+          "scale": "linear",
+          "min": 0,
+          "max": 24,
+          "unit": "dB"
+        },
+        {
+          "key": "lowFreq",
+          "type": "number",
+          "default": 80,
+          "label": "Fréquence grave",
+          "description": "Fréquence grave (Hz)",
+          "scale": "log",
+          "min": 20,
+          "max": 20000,
+          "unit": "Hz"
+        },
+        {
+          "key": "lowRs",
+          "type": "number",
+          "default": 0.5,
+          "label": "Pente grave",
+          "description": "Pente grave",
+          "scale": "linear",
+          "min": 0.1,
+          "max": 10
+        },
+        {
+          "key": "lowMul",
+          "type": "number",
+          "default": 1,
+          "label": "Gain grave",
+          "description": "Gain grave",
+          "scale": "linear",
+          "min": 0,
+          "max": 4
+        },
+        {
+          "key": "lowAdd",
+          "type": "number",
+          "default": 0,
+          "label": "Décalage grave",
+          "description": "Décalage grave",
+          "scale": "linear",
+          "min": -1,
+          "max": 1
+        },
+        {
+          "key": "midFreq",
+          "type": "number",
+          "default": 1000,
+          "label": "Fréquence médium",
+          "description": "Fréquence médium (Hz)",
+          "scale": "log",
+          "min": 20,
+          "max": 20000,
+          "unit": "Hz"
+        },
+        {
+          "key": "midRq",
+          "type": "number",
+          "default": 0.7,
+          "label": "Largeur médium",
+          "description": "Largeur médium",
+          "scale": "linear",
+          "min": 0.05,
+          "max": 10
+        },
+        {
+          "key": "midMul",
+          "type": "number",
+          "default": 1,
+          "label": "Gain médium",
+          "description": "Gain médium",
+          "scale": "linear",
+          "min": 0,
+          "max": 4
+        },
+        {
+          "key": "midAdd",
+          "type": "number",
+          "default": 0,
+          "label": "Décalage médium",
+          "description": "Décalage médium",
+          "scale": "linear",
+          "min": -1,
+          "max": 1
+        },
+        {
+          "key": "highFreq",
+          "type": "number",
+          "default": 8000,
+          "label": "Fréquence aigu",
+          "description": "Fréquence aigu (Hz)",
+          "scale": "log",
+          "min": 20,
+          "max": 20000,
+          "unit": "Hz"
+        },
+        {
+          "key": "highRs",
+          "type": "number",
+          "default": 0.5,
+          "label": "Pente aigu",
+          "description": "Pente aigu",
+          "scale": "linear",
+          "min": 0.1,
+          "max": 10
+        },
+        {
+          "key": "highMul",
+          "type": "number",
+          "default": 1,
+          "label": "Gain aigu",
+          "description": "Gain aigu",
+          "scale": "linear",
+          "min": 0,
+          "max": 4
+        },
+        {
+          "key": "highAdd",
+          "type": "number",
+          "default": 0,
+          "label": "Décalage aigu",
+          "description": "Décalage aigu",
+          "scale": "linear",
+          "min": -1,
+          "max": 1
+        },
+        {
+          "key": "controlLag",
+          "type": "number",
+          "default": 0,
+          "label": "Lissage",
+          "description": "Lissage (s)",
+          "scale": "linear",
+          "min": 0,
+          "max": 2,
+          "unit": "s"
+        }
+      ]
+    },
+    "hp": {
+      "fields": [
+        {
+          "key": "enabled",
+          "type": "boolean",
+          "default": false,
+          "label": "Activé",
+          "description": "Activé"
+        },
+        {
+          "key": "model",
+          "type": "enum",
+          "default": "BHiPass",
+          "label": "Modèle",
+          "description": "Modèle",
+          "options": [
+            "BHiPass",
+            "RHPF",
+            "BHiPass4"
+          ]
+        },
+        {
+          "key": "freq",
+          "type": "number",
+          "default": 0,
+          "label": "Fréquence",
+          "description": "Fréquence",
+          "scale": "linear",
+          "min": 0,
+          "max": 1
+        },
+        {
+          "key": "minHz",
+          "type": "number",
+          "default": 20,
+          "label": "Fréquence minimale",
+          "description": "Fréquence minimale (Hz)",
+          "scale": "log",
+          "min": 20,
+          "max": 20000,
+          "unit": "Hz"
+        },
+        {
+          "key": "maxHz",
+          "type": "number",
+          "default": 20000,
+          "label": "Fréquence maximale",
+          "description": "Fréquence maximale (Hz)",
+          "scale": "log",
+          "min": 20,
+          "max": 20000,
+          "unit": "Hz"
+        },
+        {
+          "key": "q",
+          "type": "number",
+          "default": 1,
+          "label": "Facteur de qualité",
+          "description": "Facteur de qualité",
+          "scale": "linear",
+          "min": 0.5,
+          "max": 10
+        },
+        {
+          "key": "mul",
+          "type": "number",
+          "default": 1,
+          "label": "Gain",
+          "description": "Gain",
+          "scale": "linear",
+          "min": 0,
+          "max": 2
+        },
+        {
+          "key": "add",
+          "type": "number",
+          "default": 0,
+          "label": "Décalage",
+          "description": "Décalage",
+          "scale": "linear",
+          "min": -1,
+          "max": 1
+        },
+        {
+          "key": "floorHz",
+          "type": "number",
+          "default": 40,
+          "label": "Plancher",
+          "description": "Plancher (Hz)",
+          "scale": "log",
+          "min": 20,
+          "max": 20000,
+          "unit": "Hz",
+          "appliesTo": {
+            "model": [
+              "RHPF"
+            ]
+          }
+        },
+        {
+          "key": "controlLag",
+          "type": "number",
+          "default": 0,
+          "label": "Lissage",
+          "description": "Lissage (s)",
+          "scale": "linear",
+          "min": 0,
+          "max": 2,
+          "unit": "s"
+        }
+      ]
+    },
+    "lp": {
+      "fields": [
+        {
+          "key": "enabled",
+          "type": "boolean",
+          "default": false,
+          "label": "Activé",
+          "description": "Activé"
+        },
+        {
+          "key": "model",
+          "type": "enum",
+          "default": "BLowPass",
+          "label": "Modèle",
+          "description": "Modèle",
+          "options": [
+            "BLowPass",
+            "RLPF",
+            "BLowPass4",
+            "MoogFF"
+          ]
+        },
+        {
+          "key": "freq",
+          "type": "number",
+          "default": 1,
+          "label": "Fréquence",
+          "description": "Fréquence",
+          "scale": "linear",
+          "min": 0,
+          "max": 1
+        },
+        {
+          "key": "minHz",
+          "type": "number",
+          "default": 20,
+          "label": "Fréquence minimale",
+          "description": "Fréquence minimale (Hz)",
+          "scale": "log",
+          "min": 20,
+          "max": 20000,
+          "unit": "Hz"
+        },
+        {
+          "key": "maxHz",
+          "type": "number",
+          "default": 20000,
+          "label": "Fréquence maximale",
+          "description": "Fréquence maximale (Hz)",
+          "scale": "log",
+          "min": 20,
+          "max": 20000,
+          "unit": "Hz"
+        },
+        {
+          "key": "q",
+          "type": "number",
+          "default": 1,
+          "label": "Facteur de qualité",
+          "description": "Facteur de qualité",
+          "scale": "linear",
+          "min": 0.5,
+          "max": 10,
+          "appliesTo": {
+            "model": [
+              "BLowPass",
+              "RLPF",
+              "BLowPass4"
+            ]
+          }
+        },
+        {
+          "key": "gain",
+          "type": "number",
+          "default": 2,
+          "label": "Résonance",
+          "description": "Résonance",
+          "scale": "linear",
+          "min": 0,
+          "max": 4,
+          "appliesTo": {
+            "model": [
+              "MoogFF"
+            ]
+          }
+        },
+        {
+          "key": "mul",
+          "type": "number",
+          "default": 1,
+          "label": "Gain",
+          "description": "Gain",
+          "scale": "linear",
+          "min": 0,
+          "max": 2
+        },
+        {
+          "key": "add",
+          "type": "number",
+          "default": 0,
+          "label": "Décalage",
+          "description": "Décalage",
+          "scale": "linear",
+          "min": -1,
+          "max": 1
+        },
+        {
+          "key": "controlLag",
+          "type": "number",
+          "default": 0,
+          "label": "Lissage",
+          "description": "Lissage (s)",
+          "scale": "linear",
+          "min": 0,
+          "max": 2,
+          "unit": "s"
+        }
+      ]
+    },
+    "pitch": {
+      "fields": [
+        {
+          "key": "semitones",
+          "type": "integer",
+          "default": 0,
+          "label": "Transposition",
+          "description": "Transposition (demi-tons)",
+          "scale": "linear",
+          "min": -12,
+          "max": 12,
+          "step": 1,
+          "unit": "demi-tons"
+        },
+        {
+          "key": "blend",
+          "type": "number",
+          "default": -1,
+          "label": "Mélange",
+          "description": "Mélange",
+          "scale": "linear",
+          "min": -1,
+          "max": 1
+        },
+        {
+          "key": "level",
+          "type": "number",
+          "default": 1,
+          "label": "Niveau",
+          "description": "Niveau",
+          "scale": "linear",
+          "min": 0,
+          "max": 2
+        },
+        {
+          "key": "windowSize",
+          "type": "number",
+          "default": 0.2,
+          "label": "Taille de fenêtre",
+          "description": "Taille de fenêtre (s)",
+          "scale": "linear",
+          "min": 0.01,
+          "max": 0.2,
+          "unit": "s"
+        },
+        {
+          "key": "pitchDispersion",
+          "type": "number",
+          "default": 0,
+          "label": "Dispersion de hauteur",
+          "description": "Dispersion de hauteur",
+          "scale": "linear",
+          "min": 0,
+          "max": 1
+        },
+        {
+          "key": "timeDispersion",
+          "type": "number",
+          "default": 0.01,
+          "label": "Dispersion temporelle",
+          "description": "Dispersion temporelle (s)",
+          "scale": "linear",
+          "min": 0,
+          "max": 0.2,
+          "unit": "s"
+        },
+        {
+          "key": "mul",
+          "type": "number",
+          "default": 1,
+          "label": "Gain",
+          "description": "Gain",
+          "scale": "linear",
+          "min": 0,
+          "max": 4
+        },
+        {
+          "key": "add",
+          "type": "number",
+          "default": 0,
+          "label": "Décalage",
+          "description": "Décalage",
+          "scale": "linear",
+          "min": -1,
+          "max": 1
+        },
+        {
+          "key": "controlLag",
+          "type": "number",
+          "default": 0,
+          "label": "Lissage",
+          "description": "Lissage (s)",
+          "scale": "linear",
+          "min": 0,
+          "max": 2,
+          "unit": "s"
+        }
+      ]
+    },
+    "bandCompressor": {
+      "low": {
+        "fields": [
+          {
+            "key": "thresholdDb",
+            "type": "number",
+            "default": -20,
+            "label": "Seuil",
+            "description": "Seuil (dB)",
+            "scale": "linear",
+            "min": -80,
+            "max": 0,
+            "unit": "dB"
+          },
+          {
+            "key": "slopeBelow",
+            "type": "number",
+            "default": 1,
+            "label": "Pente sous le seuil",
+            "description": "Pente sous le seuil",
+            "scale": "linear",
+            "min": 0.05,
+            "max": 10
+          },
+          {
+            "key": "slopeAbove",
+            "type": "number",
+            "default": 0.25,
+            "label": "Pente au-dessus du seuil",
+            "description": "Pente au-dessus du seuil",
+            "scale": "linear",
+            "min": 0.05,
+            "max": 10
+          },
+          {
+            "key": "attackMs",
+            "type": "number",
+            "default": 10,
+            "label": "Attaque",
+            "description": "Attaque (ms)",
+            "scale": "linear",
+            "min": 1,
+            "max": 100,
+            "unit": "ms"
+          },
+          {
+            "key": "releaseMs",
+            "type": "number",
+            "default": 100,
+            "label": "Relâchement",
+            "description": "Relâchement (ms)",
+            "scale": "linear",
+            "min": 10,
+            "max": 1000,
+            "unit": "ms"
+          },
+          {
+            "key": "mul",
+            "type": "number",
+            "default": 1,
+            "label": "Gain de sortie",
+            "description": "Gain de sortie",
+            "scale": "linear",
+            "min": 0,
+            "max": 16
+          },
+          {
+            "key": "add",
+            "type": "number",
+            "default": 0,
+            "label": "Décalage",
+            "description": "Décalage",
+            "scale": "linear",
+            "min": -1,
+            "max": 1
+          },
+          {
+            "key": "bypass",
+            "type": "boolean",
+            "default": true,
+            "label": "Contournement",
+            "description": "Contournement"
+          },
+          {
+            "key": "controlLag",
+            "type": "number",
+            "default": 0,
+            "label": "Lissage",
+            "description": "Lissage (s)",
+            "scale": "linear",
+            "min": 0,
+            "max": 2,
+            "unit": "s"
+          }
+        ]
+      },
+      "mid": {
+        "fields": [
+          {
+            "key": "thresholdDb",
+            "type": "number",
+            "default": -20,
+            "label": "Seuil",
+            "description": "Seuil (dB)",
+            "scale": "linear",
+            "min": -80,
+            "max": 0,
+            "unit": "dB"
+          },
+          {
+            "key": "slopeBelow",
+            "type": "number",
+            "default": 1,
+            "label": "Pente sous le seuil",
+            "description": "Pente sous le seuil",
+            "scale": "linear",
+            "min": 0.05,
+            "max": 10
+          },
+          {
+            "key": "slopeAbove",
+            "type": "number",
+            "default": 0.25,
+            "label": "Pente au-dessus du seuil",
+            "description": "Pente au-dessus du seuil",
+            "scale": "linear",
+            "min": 0.05,
+            "max": 10
+          },
+          {
+            "key": "attackMs",
+            "type": "number",
+            "default": 10,
+            "label": "Attaque",
+            "description": "Attaque (ms)",
+            "scale": "linear",
+            "min": 1,
+            "max": 100,
+            "unit": "ms"
+          },
+          {
+            "key": "releaseMs",
+            "type": "number",
+            "default": 100,
+            "label": "Relâchement",
+            "description": "Relâchement (ms)",
+            "scale": "linear",
+            "min": 10,
+            "max": 1000,
+            "unit": "ms"
+          },
+          {
+            "key": "mul",
+            "type": "number",
+            "default": 1,
+            "label": "Gain de sortie",
+            "description": "Gain de sortie",
+            "scale": "linear",
+            "min": 0,
+            "max": 16
+          },
+          {
+            "key": "add",
+            "type": "number",
+            "default": 0,
+            "label": "Décalage",
+            "description": "Décalage",
+            "scale": "linear",
+            "min": -1,
+            "max": 1
+          },
+          {
+            "key": "bypass",
+            "type": "boolean",
+            "default": true,
+            "label": "Contournement",
+            "description": "Contournement"
+          },
+          {
+            "key": "controlLag",
+            "type": "number",
+            "default": 0,
+            "label": "Lissage",
+            "description": "Lissage (s)",
+            "scale": "linear",
+            "min": 0,
+            "max": 2,
+            "unit": "s"
+          }
+        ]
+      },
+      "high": {
+        "fields": [
+          {
+            "key": "thresholdDb",
+            "type": "number",
+            "default": -20,
+            "label": "Seuil",
+            "description": "Seuil (dB)",
+            "scale": "linear",
+            "min": -80,
+            "max": 0,
+            "unit": "dB"
+          },
+          {
+            "key": "slopeBelow",
+            "type": "number",
+            "default": 1,
+            "label": "Pente sous le seuil",
+            "description": "Pente sous le seuil",
+            "scale": "linear",
+            "min": 0.05,
+            "max": 10
+          },
+          {
+            "key": "slopeAbove",
+            "type": "number",
+            "default": 0.25,
+            "label": "Pente au-dessus du seuil",
+            "description": "Pente au-dessus du seuil",
+            "scale": "linear",
+            "min": 0.05,
+            "max": 10
+          },
+          {
+            "key": "attackMs",
+            "type": "number",
+            "default": 10,
+            "label": "Attaque",
+            "description": "Attaque (ms)",
+            "scale": "linear",
+            "min": 1,
+            "max": 100,
+            "unit": "ms"
+          },
+          {
+            "key": "releaseMs",
+            "type": "number",
+            "default": 100,
+            "label": "Relâchement",
+            "description": "Relâchement (ms)",
+            "scale": "linear",
+            "min": 10,
+            "max": 1000,
+            "unit": "ms"
+          },
+          {
+            "key": "mul",
+            "type": "number",
+            "default": 1,
+            "label": "Gain de sortie",
+            "description": "Gain de sortie",
+            "scale": "linear",
+            "min": 0,
+            "max": 16
+          },
+          {
+            "key": "add",
+            "type": "number",
+            "default": 0,
+            "label": "Décalage",
+            "description": "Décalage",
+            "scale": "linear",
+            "min": -1,
+            "max": 1
+          },
+          {
+            "key": "bypass",
+            "type": "boolean",
+            "default": true,
+            "label": "Contournement",
+            "description": "Contournement"
+          },
+          {
+            "key": "controlLag",
+            "type": "number",
+            "default": 0,
+            "label": "Lissage",
+            "description": "Lissage (s)",
+            "scale": "linear",
+            "min": 0,
+            "max": 2,
+            "unit": "s"
+          }
+        ]
+      },
+      "crossover": {
+        "fields": [
+          {
+            "key": "lowMidFreq",
+            "type": "number",
+            "default": 250,
+            "label": "Fréquence grave / médium",
+            "description": "Fréquence grave / médium (Hz)",
+            "scale": "log",
+            "min": 20,
+            "max": 20000,
+            "unit": "Hz"
+          },
+          {
+            "key": "midHighFreq",
+            "type": "number",
+            "default": 4000,
+            "label": "Fréquence médium / aigu",
+            "description": "Fréquence médium / aigu (Hz)",
+            "scale": "log",
+            "min": 20,
+            "max": 20000,
+            "unit": "Hz"
+          },
+          {
+            "key": "controlLag",
+            "type": "number",
+            "default": 0,
+            "label": "Lissage",
+            "description": "Lissage (s)",
+            "scale": "linear",
+            "min": 0,
+            "max": 2,
+            "unit": "s"
+          },
+          {
+            "key": "lowLp1Mul",
+            "type": "number",
+            "default": 1,
+            "label": "Gain passe-bas grave, cellule 1",
+            "description": "Gain passe-bas grave, cellule 1",
+            "scale": "linear",
+            "min": 0,
+            "max": 4
+          },
+          {
+            "key": "lowLp1Add",
+            "type": "number",
+            "default": 0,
+            "label": "Décalage passe-bas grave, cellule 1",
+            "description": "Décalage passe-bas grave, cellule 1",
+            "scale": "linear",
+            "min": -1,
+            "max": 1
+          },
+          {
+            "key": "lowLp2Mul",
+            "type": "number",
+            "default": 1,
+            "label": "Gain passe-bas grave, cellule 2",
+            "description": "Gain passe-bas grave, cellule 2",
+            "scale": "linear",
+            "min": 0,
+            "max": 4
+          },
+          {
+            "key": "lowLp2Add",
+            "type": "number",
+            "default": 0,
+            "label": "Décalage passe-bas grave, cellule 2",
+            "description": "Décalage passe-bas grave, cellule 2",
+            "scale": "linear",
+            "min": -1,
+            "max": 1
+          },
+          {
+            "key": "midHp1Mul",
+            "type": "number",
+            "default": 1,
+            "label": "Gain passe-haut médium, cellule 1",
+            "description": "Gain passe-haut médium, cellule 1",
+            "scale": "linear",
+            "min": 0,
+            "max": 4
+          },
+          {
+            "key": "midHp1Add",
+            "type": "number",
+            "default": 0,
+            "label": "Décalage passe-haut médium, cellule 1",
+            "description": "Décalage passe-haut médium, cellule 1",
+            "scale": "linear",
+            "min": -1,
+            "max": 1
+          },
+          {
+            "key": "midHp2Mul",
+            "type": "number",
+            "default": 1,
+            "label": "Gain passe-haut médium, cellule 2",
+            "description": "Gain passe-haut médium, cellule 2",
+            "scale": "linear",
+            "min": 0,
+            "max": 4
+          },
+          {
+            "key": "midHp2Add",
+            "type": "number",
+            "default": 0,
+            "label": "Décalage passe-haut médium, cellule 2",
+            "description": "Décalage passe-haut médium, cellule 2",
+            "scale": "linear",
+            "min": -1,
+            "max": 1
+          },
+          {
+            "key": "midLp1Mul",
+            "type": "number",
+            "default": 1,
+            "label": "Gain passe-bas médium, cellule 1",
+            "description": "Gain passe-bas médium, cellule 1",
+            "scale": "linear",
+            "min": 0,
+            "max": 4
+          },
+          {
+            "key": "midLp1Add",
+            "type": "number",
+            "default": 0,
+            "label": "Décalage passe-bas médium, cellule 1",
+            "description": "Décalage passe-bas médium, cellule 1",
+            "scale": "linear",
+            "min": -1,
+            "max": 1
+          },
+          {
+            "key": "midLp2Mul",
+            "type": "number",
+            "default": 1,
+            "label": "Gain passe-bas médium, cellule 2",
+            "description": "Gain passe-bas médium, cellule 2",
+            "scale": "linear",
+            "min": 0,
+            "max": 4
+          },
+          {
+            "key": "midLp2Add",
+            "type": "number",
+            "default": 0,
+            "label": "Décalage passe-bas médium, cellule 2",
+            "description": "Décalage passe-bas médium, cellule 2",
+            "scale": "linear",
+            "min": -1,
+            "max": 1
+          },
+          {
+            "key": "highHp1Mul",
+            "type": "number",
+            "default": 1,
+            "label": "Gain passe-haut aigu, cellule 1",
+            "description": "Gain passe-haut aigu, cellule 1",
+            "scale": "linear",
+            "min": 0,
+            "max": 4
+          },
+          {
+            "key": "highHp1Add",
+            "type": "number",
+            "default": 0,
+            "label": "Décalage passe-haut aigu, cellule 1",
+            "description": "Décalage passe-haut aigu, cellule 1",
+            "scale": "linear",
+            "min": -1,
+            "max": 1
+          },
+          {
+            "key": "highHp2Mul",
+            "type": "number",
+            "default": 1,
+            "label": "Gain passe-haut aigu, cellule 2",
+            "description": "Gain passe-haut aigu, cellule 2",
+            "scale": "linear",
+            "min": 0,
+            "max": 4
+          },
+          {
+            "key": "highHp2Add",
+            "type": "number",
+            "default": 0,
+            "label": "Décalage passe-haut aigu, cellule 2",
+            "description": "Décalage passe-haut aigu, cellule 2",
+            "scale": "linear",
+            "min": -1,
+            "max": 1
+          }
+        ]
+      }
+    }
+  },
+  "output": {
+    "mix": {
+      "fields": [
+        {
+          "key": "volume",
+          "type": "number",
+          "default": 1,
+          "label": "Volume",
+          "description": "Volume",
+          "scale": "linear",
+          "min": 0,
+          "max": 1
+        },
+        {
+          "key": "controlLag",
+          "type": "number",
+          "default": 0,
+          "label": "Lissage",
+          "description": "Lissage (s)",
+          "scale": "linear",
+          "min": 0,
+          "max": 2,
+          "unit": "s"
+        }
+      ]
+    },
+    "eq": {
+      "fields": [
+        {
+          "key": "low",
+          "type": "number",
+          "default": 0.5,
+          "label": "Grave",
+          "description": "Grave",
+          "scale": "linear",
+          "min": 0,
+          "max": 1
+        },
+        {
+          "key": "mid",
+          "type": "number",
+          "default": 0.5,
+          "label": "Médium",
+          "description": "Médium",
+          "scale": "linear",
+          "min": 0,
+          "max": 1
+        },
+        {
+          "key": "high",
+          "type": "number",
+          "default": 0.5,
+          "label": "Aigu",
+          "description": "Aigu",
+          "scale": "linear",
+          "min": 0,
+          "max": 1
+        },
+        {
+          "key": "rangeDb",
+          "type": "number",
+          "default": 12,
+          "label": "Plage",
+          "description": "Plage (dB)",
+          "scale": "linear",
+          "min": 0,
+          "max": 24,
+          "unit": "dB"
+        },
+        {
+          "key": "lowFreq",
+          "type": "number",
+          "default": 200,
+          "label": "Fréquence grave",
+          "description": "Fréquence grave (Hz)",
+          "scale": "log",
+          "min": 20,
+          "max": 20000,
+          "unit": "Hz"
+        },
+        {
+          "key": "lowRs",
+          "type": "number",
+          "default": 0.5,
+          "label": "Pente grave",
+          "description": "Pente grave",
+          "scale": "linear",
+          "min": 0.1,
+          "max": 10
+        },
+        {
+          "key": "lowMul",
+          "type": "number",
+          "default": 1,
+          "label": "Gain grave",
+          "description": "Gain grave",
+          "scale": "linear",
+          "min": 0,
+          "max": 4
+        },
+        {
+          "key": "lowAdd",
+          "type": "number",
+          "default": 0,
+          "label": "Décalage grave",
+          "description": "Décalage grave",
+          "scale": "linear",
+          "min": -1,
+          "max": 1
+        },
+        {
+          "key": "midFreq",
+          "type": "number",
+          "default": 1000,
+          "label": "Fréquence médium",
+          "description": "Fréquence médium (Hz)",
+          "scale": "log",
+          "min": 20,
+          "max": 20000,
+          "unit": "Hz"
+        },
+        {
+          "key": "midRq",
+          "type": "number",
+          "default": 0.7,
+          "label": "Largeur médium",
+          "description": "Largeur médium",
+          "scale": "linear",
+          "min": 0.05,
+          "max": 10
+        },
+        {
+          "key": "midMul",
+          "type": "number",
+          "default": 1,
+          "label": "Gain médium",
+          "description": "Gain médium",
+          "scale": "linear",
+          "min": 0,
+          "max": 4
+        },
+        {
+          "key": "midAdd",
+          "type": "number",
+          "default": 0,
+          "label": "Décalage médium",
+          "description": "Décalage médium",
+          "scale": "linear",
+          "min": -1,
+          "max": 1
+        },
+        {
+          "key": "highFreq",
+          "type": "number",
+          "default": 8000,
+          "label": "Fréquence aigu",
+          "description": "Fréquence aigu (Hz)",
+          "scale": "log",
+          "min": 20,
+          "max": 20000,
+          "unit": "Hz"
+        },
+        {
+          "key": "highRs",
+          "type": "number",
+          "default": 0.5,
+          "label": "Pente aigu",
+          "description": "Pente aigu",
+          "scale": "linear",
+          "min": 0.1,
+          "max": 10
+        },
+        {
+          "key": "highMul",
+          "type": "number",
+          "default": 1,
+          "label": "Gain aigu",
+          "description": "Gain aigu",
+          "scale": "linear",
+          "min": 0,
+          "max": 4
+        },
+        {
+          "key": "highAdd",
+          "type": "number",
+          "default": 0,
+          "label": "Décalage aigu",
+          "description": "Décalage aigu",
+          "scale": "linear",
+          "min": -1,
+          "max": 1
+        },
+        {
+          "key": "controlLag",
+          "type": "number",
+          "default": 0,
+          "label": "Lissage",
+          "description": "Lissage (s)",
+          "scale": "linear",
+          "min": 0,
+          "max": 2,
+          "unit": "s"
+        }
+      ]
+    },
+    "infraHpf": {
+      "fields": [
+        {
+          "key": "enabled",
+          "type": "boolean",
+          "default": false,
+          "label": "Activé",
+          "description": "Activé"
+        },
+        {
+          "key": "hz",
+          "type": "number",
+          "default": 25,
+          "label": "Fréquence",
+          "description": "Fréquence (Hz)",
+          "scale": "log",
+          "min": 20,
+          "max": 200,
+          "unit": "Hz"
+        },
+        {
+          "key": "mul",
+          "type": "number",
+          "default": 1,
+          "label": "Gain",
+          "description": "Gain",
+          "scale": "linear",
+          "min": 0,
+          "max": 4
+        },
+        {
+          "key": "add",
+          "type": "number",
+          "default": 0,
+          "label": "Décalage",
+          "description": "Décalage",
+          "scale": "linear",
+          "min": -1,
+          "max": 1
+        },
+        {
+          "key": "controlLag",
+          "type": "number",
+          "default": 0,
+          "label": "Lissage",
+          "description": "Lissage (s)",
+          "scale": "linear",
+          "min": 0,
+          "max": 2,
+          "unit": "s"
+        }
+      ]
+    },
+    "sideHpf": {
+      "fields": [
+        {
+          "key": "enabled",
+          "type": "boolean",
+          "default": false,
+          "label": "Activé",
+          "description": "Activé"
+        },
+        {
+          "key": "hz",
+          "type": "number",
+          "default": 100,
+          "label": "Fréquence",
+          "description": "Fréquence (Hz)",
+          "scale": "log",
+          "min": 20,
+          "max": 1000,
+          "unit": "Hz"
+        },
+        {
+          "key": "mul",
+          "type": "number",
+          "default": 1,
+          "label": "Gain",
+          "description": "Gain",
+          "scale": "linear",
+          "min": 0,
+          "max": 4
+        },
+        {
+          "key": "add",
+          "type": "number",
+          "default": 0,
+          "label": "Décalage",
+          "description": "Décalage",
+          "scale": "linear",
+          "min": -1,
+          "max": 1
+        },
+        {
+          "key": "controlLag",
+          "type": "number",
+          "default": 0,
+          "label": "Lissage",
+          "description": "Lissage (s)",
+          "scale": "linear",
+          "min": 0,
+          "max": 2,
+          "unit": "s"
+        }
+      ]
+    },
+    "clipper": {
+      "fields": [
+        {
+          "key": "enabled",
+          "type": "boolean",
+          "default": false,
+          "label": "Activé",
+          "description": "Activé"
+        },
+        {
+          "key": "lo",
+          "type": "number",
+          "default": -1,
+          "label": "Seuil bas",
+          "description": "Seuil bas",
+          "scale": "linear",
+          "min": -4,
+          "max": 4
+        },
+        {
+          "key": "hi",
+          "type": "number",
+          "default": 1,
+          "label": "Seuil haut",
+          "description": "Seuil haut",
+          "scale": "linear",
+          "min": -4,
+          "max": 4
+        },
+        {
+          "key": "controlLag",
+          "type": "number",
+          "default": 0,
+          "label": "Lissage",
+          "description": "Lissage (s)",
+          "scale": "linear",
+          "min": 0,
+          "max": 2,
+          "unit": "s"
+        }
+      ]
+    },
+    "limiter": {
+      "fields": [
+        {
+          "key": "enabled",
+          "type": "boolean",
+          "default": false,
+          "label": "Activé",
+          "description": "Activé"
+        },
+        {
+          "key": "ceilingDb",
+          "type": "number",
+          "default": -1,
+          "label": "Plafond",
+          "description": "Plafond (dB)",
+          "scale": "linear",
+          "min": -24,
+          "max": 0,
+          "unit": "dB"
+        },
+        {
+          "key": "durMs",
+          "type": "number",
+          "default": 10,
+          "label": "Anticipation",
+          "description": "Anticipation (ms)",
+          "scale": "linear",
+          "min": 1,
+          "max": 50,
+          "unit": "ms"
+        },
+        {
+          "key": "controlLag",
+          "type": "number",
+          "default": 0,
+          "label": "Lissage",
+          "description": "Lissage (s)",
+          "scale": "linear",
+          "min": 0,
+          "max": 2,
+          "unit": "s"
+        }
+      ]
+    },
+    "compressor": {
+      "fields": [
+        {
+          "key": "model",
+          "type": "enum",
+          "default": "Compander",
+          "label": "Modèle",
+          "description": "Modèle",
+          "options": [
+            "Compander",
+            "CompanderD",
+            "FaustRMS"
+          ]
+        },
+        {
+          "key": "thresholdDb",
+          "type": "number",
+          "default": -20,
+          "label": "Seuil",
+          "description": "Seuil (dB)",
+          "scale": "linear",
+          "min": -80,
+          "max": 0,
+          "unit": "dB"
+        },
+        {
+          "key": "slopeBelow",
+          "type": "number",
+          "default": 1,
+          "label": "Pente sous le seuil",
+          "description": "Pente sous le seuil",
+          "scale": "linear",
+          "min": 0.05,
+          "max": 10
+        },
+        {
+          "key": "slopeAbove",
+          "type": "number",
+          "default": 0.25,
+          "label": "Pente au-dessus du seuil",
+          "description": "Pente au-dessus du seuil",
+          "scale": "linear",
+          "min": 0.05,
+          "max": 10
+        },
+        {
+          "key": "attackMs",
+          "type": "number",
+          "default": 10,
+          "label": "Attaque",
+          "description": "Attaque (ms)",
+          "scale": "linear",
+          "min": 1,
+          "max": 100,
+          "unit": "ms"
+        },
+        {
+          "key": "releaseMs",
+          "type": "number",
+          "default": 100,
+          "label": "Relâchement",
+          "description": "Relâchement (ms)",
+          "scale": "linear",
+          "min": 10,
+          "max": 1000,
+          "unit": "ms"
+        },
+        {
+          "key": "mul",
+          "type": "number",
+          "default": 1,
+          "label": "Gain de sortie",
+          "description": "Gain de sortie",
+          "scale": "linear",
+          "min": 0,
+          "max": 16
+        },
+        {
+          "key": "add",
+          "type": "number",
+          "default": 0,
+          "label": "Décalage",
+          "description": "Décalage",
+          "scale": "linear",
+          "min": -1,
+          "max": 1
+        },
+        {
+          "key": "bypass",
+          "type": "boolean",
+          "default": true,
+          "label": "Contournement",
+          "description": "Contournement"
+        },
+        {
+          "key": "controlLag",
+          "type": "number",
+          "default": 0,
+          "label": "Lissage",
+          "description": "Lissage (s)",
+          "scale": "linear",
+          "min": 0,
+          "max": 2,
+          "unit": "s"
+        },
+        {
+          "key": "fadeSeconds",
+          "type": "number",
+          "default": 0.05,
+          "label": "Durée du fondu",
+          "description": "Durée du fondu (s)",
+          "scale": "linear",
+          "min": 0.005,
+          "max": 2,
+          "unit": "s"
+        }
+      ]
+    }
+  }
+}

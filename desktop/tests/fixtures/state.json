@@ -1,0 +1,600 @@
+{
+  "engine": {
+    "status": "running",
+    "error": null,
+    "scsynthPid": 7003,
+    "timoxVasio": {
+      "apiUrl": "http://127.0.0.1:52525",
+      "apiVersion": "1.1",
+      "hostPid": 4242,
+      "launchedByEngine": false,
+      "physicalDriverId": "drv",
+      "state": "running"
+    },
+    "audioClock": {
+      "sampleRate": 48000,
+      "bufferFrames": 2048
+    },
+    "models": {
+      "Compander": true,
+      "CompanderD": true,
+      "FaustRMS": false
+    }
+  },
+  "sources": [
+    {
+      "id": "src-1",
+      "name": "Source mono",
+      "firstChannel": 1,
+      "width": 1,
+      "processing": {
+        "mix": {
+          "volume": 1,
+          "cue": 0,
+          "mute": false,
+          "balance": 0.5,
+          "panLevel": 1,
+          "balanceLevel": 1,
+          "spread": 1,
+          "splayLevel": 1,
+          "center": 0,
+          "levelComp": 0.5,
+          "controlLag": 0
+        },
+        "input": {
+          "gain": 1,
+          "mul": 1,
+          "add": 0,
+          "controlLag": 0
+        },
+        "inputCompressor": {
+          "thresholdDb": -20,
+          "slopeBelow": 1,
+          "slopeAbove": 0.25,
+          "attackMs": 10,
+          "releaseMs": 100,
+          "mul": 1,
+          "add": 0,
+          "bypass": true,
+          "controlLag": 0
+        },
+        "eq": {
+          "low": 0.5,
+          "mid": 0.5,
+          "high": 0.5,
+          "rangeDb": 12,
+          "lowFreq": 80,
+          "lowRs": 0.5,
+          "lowMul": 1,
+          "lowAdd": 0,
+          "midFreq": 1000,
+          "midRq": 0.7,
+          "midMul": 1,
+          "midAdd": 0,
+          "highFreq": 8000,
+          "highRs": 0.5,
+          "highMul": 1,
+          "highAdd": 0,
+          "controlLag": 0
+        },
+        "hp": {
+          "enabled": false,
+          "model": "BHiPass",
+          "freq": 0,
+          "minHz": 20,
+          "maxHz": 20000,
+          "q": 1,
+          "mul": 1,
+          "add": 0,
+          "floorHz": 40,
+          "controlLag": 0
+        },
+        "lp": {
+          "enabled": false,
+          "model": "BLowPass",
+          "freq": 1,
+          "minHz": 20,
+          "maxHz": 20000,
+          "q": 1,
+          "gain": 2,
+          "mul": 1,
+          "add": 0,
+          "controlLag": 0
+        },
+        "pitch": {
+          "semitones": 0,
+          "blend": -1,
+          "level": 1,
+          "windowSize": 0.2,
+          "pitchDispersion": 0,
+          "timeDispersion": 0.01,
+          "mul": 1,
+          "add": 0,
+          "controlLag": 0
+        },
+        "bandCompressor": {
+          "low": {
+            "thresholdDb": -20,
+            "slopeBelow": 1,
+            "slopeAbove": 0.25,
+            "attackMs": 10,
+            "releaseMs": 100,
+            "mul": 1,
+            "add": 0,
+            "bypass": true,
+            "controlLag": 0
+          },
+          "mid": {
+            "thresholdDb": -20,
+            "slopeBelow": 1,
+            "slopeAbove": 0.25,
+            "attackMs": 10,
+            "releaseMs": 100,
+            "mul": 1,
+            "add": 0,
+            "bypass": true,
+            "controlLag": 0
+          },
+          "high": {
+            "thresholdDb": -20,
+            "slopeBelow": 1,
+            "slopeAbove": 0.25,
+            "attackMs": 10,
+            "releaseMs": 100,
+            "mul": 1,
+            "add": 0,
+            "bypass": true,
+            "controlLag": 0
+          },
+          "crossover": {
+            "lowMidFreq": 250,
+            "midHighFreq": 4000,
+            "controlLag": 0,
+            "lowLp1Mul": 1,
+            "lowLp1Add": 0,
+            "lowLp2Mul": 1,
+            "lowLp2Add": 0,
+            "midHp1Mul": 1,
+            "midHp1Add": 0,
+            "midHp2Mul": 1,
+            "midHp2Add": 0,
+            "midLp1Mul": 1,
+            "midLp1Add": 0,
+            "midLp2Mul": 1,
+            "midLp2Add": 0,
+            "highHp1Mul": 1,
+            "highHp1Add": 0,
+            "highHp2Mul": 1,
+            "highHp2Add": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "src-2",
+      "name": "Source stéréo",
+      "firstChannel": 2,
+      "width": 2,
+      "processing": {
+        "mix": {
+          "volume": 1,
+          "cue": 0,
+          "mute": false,
+          "balance": 0.5,
+          "panLevel": 1,
+          "balanceLevel": 1,
+          "spread": 1,
+          "splayLevel": 1,
+          "center": 0,
+          "levelComp": 0.5,
+          "controlLag": 0
+        },
+        "input": {
+          "gain": 1,
+          "mul": 1,
+          "add": 0,
+          "controlLag": 0
+        },
+        "inputCompressor": {
+          "thresholdDb": -20,
+          "slopeBelow": 1,
+          "slopeAbove": 0.25,
+          "attackMs": 10,
+          "releaseMs": 100,
+          "mul": 1,
+          "add": 0,
+          "bypass": true,
+          "controlLag": 0
+        },
+        "eq": {
+          "low": 0.5,
+          "mid": 0.5,
+          "high": 0.5,
+          "rangeDb": 12,
+          "lowFreq": 80,
+          "lowRs": 0.5,
+          "lowMul": 1,
+          "lowAdd": 0,
+          "midFreq": 1000,
+          "midRq": 0.7,
+          "midMul": 1,
+          "midAdd": 0,
+          "highFreq": 8000,
+          "highRs": 0.5,
+          "highMul": 1,
+          "highAdd": 0,
+          "controlLag": 0
+        },
+        "hp": {
+          "enabled": false,
+          "model": "BHiPass",
+          "freq": 0,
+          "minHz": 20,
+          "maxHz": 20000,
+          "q": 1,
+          "mul": 1,
+          "add": 0,
+          "floorHz": 40,
+          "controlLag": 0
+        },
+        "lp": {
+          "enabled": false,
+          "model": "BLowPass",
+          "freq": 1,
+          "minHz": 20,
+          "maxHz": 20000,
+          "q": 1,
+          "gain": 2,
+          "mul": 1,
+          "add": 0,
+          "controlLag": 0
+        },
+        "pitch": {
+          "semitones": 0,
+          "blend": -1,
+          "level": 1,
+          "windowSize": 0.2,
+          "pitchDispersion": 0,
+          "timeDispersion": 0.01,
+          "mul": 1,
+          "add": 0,
+          "controlLag": 0
+        },
+        "bandCompressor": {
+          "low": {
+            "thresholdDb": -20,
+            "slopeBelow": 1,
+            "slopeAbove": 0.25,
+            "attackMs": 10,
+            "releaseMs": 100,
+            "mul": 1,
+            "add": 0,
+            "bypass": true,
+            "controlLag": 0
+          },
+          "mid": {
+            "thresholdDb": -20,
+            "slopeBelow": 1,
+            "slopeAbove": 0.25,
+            "attackMs": 10,
+            "releaseMs": 100,
+            "mul": 1,
+            "add": 0,
+            "bypass": true,
+            "controlLag": 0
+          },
+          "high": {
+            "thresholdDb": -20,
+            "slopeBelow": 1,
+            "slopeAbove": 0.25,
+            "attackMs": 10,
+            "releaseMs": 100,
+            "mul": 1,
+            "add": 0,
+            "bypass": true,
+            "controlLag": 0
+          },
+          "crossover": {
+            "lowMidFreq": 250,
+            "midHighFreq": 4000,
+            "controlLag": 0,
+            "lowLp1Mul": 1,
+            "lowLp1Add": 0,
+            "lowLp2Mul": 1,
+            "lowLp2Add": 0,
+            "midHp1Mul": 1,
+            "midHp1Add": 0,
+            "midHp2Mul": 1,
+            "midHp2Add": 0,
+            "midLp1Mul": 1,
+            "midLp1Add": 0,
+            "midLp2Mul": 1,
+            "midLp2Add": 0,
+            "highHp1Mul": 1,
+            "highHp1Add": 0,
+            "highHp2Mul": 1,
+            "highHp2Add": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "src-3",
+      "name": "Source cinq canaux",
+      "firstChannel": 4,
+      "width": 5,
+      "processing": {
+        "mix": {
+          "volume": 1,
+          "cue": 0,
+          "mute": false,
+          "balance": 0.5,
+          "panLevel": 1,
+          "balanceLevel": 1,
+          "spread": 1,
+          "splayLevel": 1,
+          "center": 0,
+          "levelComp": 0.5,
+          "controlLag": 0
+        },
+        "input": {
+          "gain": 1,
+          "mul": 1,
+          "add": 0,
+          "controlLag": 0
+        },
+        "inputCompressor": {
+          "thresholdDb": -20,
+          "slopeBelow": 1,
+          "slopeAbove": 0.25,
+          "attackMs": 10,
+          "releaseMs": 100,
+          "mul": 1,
+          "add": 0,
+          "bypass": true,
+          "controlLag": 0
+        },
+        "eq": {
+          "low": 0.5,
+          "mid": 0.5,
+          "high": 0.5,
+          "rangeDb": 12,
+          "lowFreq": 80,
+          "lowRs": 0.5,
+          "lowMul": 1,
+          "lowAdd": 0,
+          "midFreq": 1000,
+          "midRq": 0.7,
+          "midMul": 1,
+          "midAdd": 0,
+          "highFreq": 8000,
+          "highRs": 0.5,
+          "highMul": 1,
+          "highAdd": 0,
+          "controlLag": 0
+        },
+        "hp": {
+          "enabled": false,
+          "model": "BHiPass",
+          "freq": 0,
+          "minHz": 20,
+          "maxHz": 20000,
+          "q": 1,
+          "mul": 1,
+          "add": 0,
+          "floorHz": 40,
+          "controlLag": 0
+        },
+        "lp": {
+          "enabled": false,
+          "model": "BLowPass",
+          "freq": 1,
+          "minHz": 20,
+          "maxHz": 20000,
+          "q": 1,
+          "gain": 2,
+          "mul": 1,
+          "add": 0,
+          "controlLag": 0
+        },
+        "pitch": {
+          "semitones": 0,
+          "blend": -1,
+          "level": 1,
+          "windowSize": 0.2,
+          "pitchDispersion": 0,
+          "timeDispersion": 0.01,
+          "mul": 1,
+          "add": 0,
+          "controlLag": 0
+        },
+        "bandCompressor": {
+          "low": {
+            "thresholdDb": -20,
+            "slopeBelow": 1,
+            "slopeAbove": 0.25,
+            "attackMs": 10,
+            "releaseMs": 100,
+            "mul": 1,
+            "add": 0,
+            "bypass": true,
+            "controlLag": 0
+          },
+          "mid": {
+            "thresholdDb": -20,
+            "slopeBelow": 1,
+            "slopeAbove": 0.25,
+            "attackMs": 10,
+            "releaseMs": 100,
+            "mul": 1,
+            "add": 0,
+            "bypass": true,
+            "controlLag": 0
+          },
+          "high": {
+            "thresholdDb": -20,
+            "slopeBelow": 1,
+            "slopeAbove": 0.25,
+            "attackMs": 10,
+            "releaseMs": 100,
+            "mul": 1,
+            "add": 0,
+            "bypass": true,
+            "controlLag": 0
+          },
+          "crossover": {
+            "lowMidFreq": 250,
+            "midHighFreq": 4000,
+            "controlLag": 0,
+            "lowLp1Mul": 1,
+            "lowLp1Add": 0,
+            "lowLp2Mul": 1,
+            "lowLp2Add": 0,
+            "midHp1Mul": 1,
+            "midHp1Add": 0,
+            "midHp2Mul": 1,
+            "midHp2Add": 0,
+            "midLp1Mul": 1,
+            "midLp1Add": 0,
+            "midLp2Mul": 1,
+            "midLp2Add": 0,
+            "highHp1Mul": 1,
+            "highHp1Add": 0,
+            "highHp2Mul": 1,
+            "highHp2Add": 0
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "master": {
+      "mix": {
+        "volume": 1,
+        "controlLag": 0
+      },
+      "eq": {
+        "low": 0.5,
+        "mid": 0.5,
+        "high": 0.5,
+        "rangeDb": 12,
+        "lowFreq": 200,
+        "lowRs": 0.5,
+        "lowMul": 1,
+        "lowAdd": 0,
+        "midFreq": 1000,
+        "midRq": 0.7,
+        "midMul": 1,
+        "midAdd": 0,
+        "highFreq": 8000,
+        "highRs": 0.5,
+        "highMul": 1,
+        "highAdd": 0,
+        "controlLag": 0
+      },
+      "infraHpf": {
+        "enabled": false,
+        "hz": 25,
+        "mul": 1,
+        "add": 0,
+        "controlLag": 0
+      },
+      "sideHpf": {
+        "enabled": false,
+        "hz": 100,
+        "mul": 1,
+        "add": 0,
+        "controlLag": 0
+      },
+      "clipper": {
+        "enabled": false,
+        "lo": -1,
+        "hi": 1,
+        "controlLag": 0
+      },
+      "limiter": {
+        "enabled": false,
+        "ceilingDb": -1,
+        "durMs": 10,
+        "controlLag": 0
+      },
+      "compressor": {
+        "model": "Compander",
+        "thresholdDb": -20,
+        "slopeBelow": 1,
+        "slopeAbove": 0.25,
+        "attackMs": 10,
+        "releaseMs": 100,
+        "mul": 1,
+        "add": 0,
+        "bypass": true,
+        "controlLag": 0,
+        "fadeSeconds": 0.05
+      }
+    },
+    "cue": {
+      "mix": {
+        "volume": 1,
+        "controlLag": 0
+      },
+      "eq": {
+        "low": 0.5,
+        "mid": 0.5,
+        "high": 0.5,
+        "rangeDb": 12,
+        "lowFreq": 200,
+        "lowRs": 0.5,
+        "lowMul": 1,
+        "lowAdd": 0,
+        "midFreq": 1000,
+        "midRq": 0.7,
+        "midMul": 1,
+        "midAdd": 0,
+        "highFreq": 8000,
+        "highRs": 0.5,
+        "highMul": 1,
+        "highAdd": 0,
+        "controlLag": 0
+      },
+      "infraHpf": {
+        "enabled": false,
+        "hz": 25,
+        "mul": 1,
+        "add": 0,
+        "controlLag": 0
+      },
+      "sideHpf": {
+        "enabled": false,
+        "hz": 100,
+        "mul": 1,
+        "add": 0,
+        "controlLag": 0
+      },
+      "clipper": {
+        "enabled": false,
+        "lo": -1,
+        "hi": 1,
+        "controlLag": 0
+      },
+      "limiter": {
+        "enabled": false,
+        "ceilingDb": -1,
+        "durMs": 10,
+        "controlLag": 0
+      },
+      "compressor": {
+        "model": "Compander",
+        "thresholdDb": -20,
+        "slopeBelow": 1,
+        "slopeAbove": 0.25,
+        "attackMs": 10,
+        "releaseMs": 100,
+        "mul": 1,
+        "add": 0,
+        "bypass": true,
+        "controlLag": 0,
+        "fadeSeconds": 0.05
+      }
+    }
+  }
+}
