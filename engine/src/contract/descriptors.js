@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  SourceProcessing, Output, CROSSOVER_CASCADES, defaultSourceProcessing, defaultOutput,
+  SourceProcessing, Output, EqBench, CROSSOVER_CASCADES, defaultSourceProcessing, defaultOutput, defaultEqBench,
 } from './schemas.js';
 
 /**
@@ -160,6 +160,14 @@ const OUTPUT_META = {
   },
 };
 
+/** Banc EQ : la méthode et les trois bandes, à plat (corps de requête : { method, parameters: { low, mid, high } }). */
+const EQ_BENCH_META = {
+  method: ['Méthode'],
+  low: ['Grave'],
+  mid: ['Médium'],
+  high: ['Aigu'],
+};
+
 /** Conditions d'usage (openapi.yaml : « seulement », « sans effet pour », « largeurs 3 et plus »). */
 const SOURCE_APPLIES = {
   'mix.panLevel': { width: { min: 1, max: 1 } },
@@ -232,6 +240,16 @@ function buildCatalog() {
       name,
       stage(out[name], OUTPUT_META[name], outDefaults[name], name),
     ])),
+    bench: {
+      eq: {
+        fields: [
+          describe(EqBench.shape.method, EQ_BENCH_META.method, defaultEqBench().method, 'eq.method'),
+          ...Object.keys(EqBench.shape.parameters.shape).map((key) => describe(
+            EqBench.shape.parameters.shape[key], EQ_BENCH_META[key], defaultEqBench().parameters[key], `eq.${key}`,
+          )),
+        ],
+      },
+    },
   };
 }
 

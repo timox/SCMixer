@@ -1792,5 +1792,52 @@
         }
       ]
     }
+  },
+  "bench": {
+    "eq": {
+      "fields": [
+        {
+          "key": "method",
+          "type": "enum",
+          "default": "threeBand",
+          "label": "Méthode",
+          "description": "Méthode",
+          "options": [
+            "legacyStack",
+            "threeBand"
+          ]
+        },
+        {
+          "key": "low",
+          "type": "number",
+          "default": 0.5,
+          "label": "Grave",
+          "description": "Grave",
+          "scale": "linear",
+          "min": 0,
+          "max": 1
+        },
+        {
+          "key": "mid",
+          "type": "number",
+          "default": 0.5,
+          "label": "Médium",
+          "description": "Médium",
+          "scale": "linear",
+          "min": 0,
+          "max": 1
+        },
+        {
+          "key": "high",
+          "type": "number",
+          "default": 0.5,
+          "label": "Aigu",
+          "description": "Aigu",
+          "scale": "linear",
+          "min": 0,
+          "max": 1
+        }
+      ]
+    }
   }
 }

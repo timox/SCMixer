@@ -159,6 +159,11 @@ export const PresetCreate = z.strictObject({ name: name() });
 /** Bancs de mesure : méthodes du banc EQ (bruit rose à la place de Master) et durée du banc compresseur. */
 export const EQ_BENCH_METHODS = ['legacyStack', 'threeBand'];
 export const COMPRESSOR_BENCH_SECONDS = 3;
+/** Réglages initiaux du banc EQ (méthode à trois bandes, bandes neutres). */
+export function defaultEqBench() {
+  return { method: 'threeBand', parameters: { low: 0.5, mid: 0.5, high: 0.5 } };
+}
+
 export const EqBench = z.strictObject({
   method: z.enum(EQ_BENCH_METHODS),
   parameters: z.strictObject({ low: unit(), mid: unit(), high: unit() }),

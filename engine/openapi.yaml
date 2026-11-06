@@ -503,7 +503,7 @@ components:
               rmsDb: { type: [number, 'null'], description: "RMS en dBFS (plancher -120), null sans mesure." }
     ParameterCatalog:
       type: object
-      required: [source, output]
+      required: [source, output, bench]
       properties:
         source:
           type: object
@@ -528,6 +528,13 @@ components:
           type: object
           description: Un ParameterStage par étage de sortie (mix, eq, infraHpf, sideHpf, clipper, limiter, compressor).
           additionalProperties: { $ref: '#/components/schemas/ParameterStage' }
+        bench:
+          type: object
+          required: [eq]
+          properties:
+            eq:
+              description: "Banc EQ : champs method, low, mid, high (corps de requête { method, parameters: { low, mid, high } })."
+              allOf: [ { $ref: '#/components/schemas/ParameterStage' } ]
     ParameterStage:
       type: object
       required: [fields]

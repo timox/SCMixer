@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { z } from 'zod';
 import { startHarness } from './helpers/api-harness.js';
-import { SourceProcessing, Output, defaultSourceProcessing, defaultOutput } from '../src/contract/schemas.js';
+import {
+  SourceProcessing, Output, EqBench, defaultSourceProcessing, defaultOutput, defaultEqBench,
+} from '../src/contract/schemas.js';
 import { buildParameterCatalog } from '../src/contract/descriptors.js';
 
 /** Chemins feuilles d'un schéma zod objet, sous la forme « a.b.c ». */
@@ -38,10 +40,26 @@ function flatten(catalog) {
 
 const SOURCE_PATHS = leaves(SourceProcessing).map((p) => `source:${p}`);
 const OUTPUT_PATHS = leaves(Output).map((p) => `output:${p}`);
+const BENCH_PATHS = ['bench:eq.method', 'bench:eq.low', 'bench:eq.mid', 'bench:eq.high'];
 
 test('chaque champ du contrat a un descripteur, et aucun descripteur ne désigne un champ absent', () => {
   const flat = flatten(buildParameterCatalog());
-  assert.deepEqual([...flat.keys()].sort(), [...SOURCE_PATHS, ...OUTPUT_PATHS].sort());
+  assert.deepEqual([...flat.keys()].sort(), [...SOURCE_PATHS, ...OUTPUT_PATHS, ...BENCH_PATHS].sort());
+});
+
+test('banc EQ : méthode et bandes tirées du schéma EqBench et de defaultEqBench', () => {
+  const flat = flatten(buildParameterCatalog());
+  const method = flat.get('bench:eq.method');
+  assert.equal(method.type, 'enum');
+  assert.deepEqual(method.options, EqBench.shape.method.options);
+  assert.equal(method.default, defaultEqBench().method);
+  for (const band of ['low', 'mid', 'high']) {
+    const field = flat.get(`bench:eq.${band}`);
+    const json = z.toJSONSchema(EqBench.shape.parameters.shape[band]);
+    assert.equal(field.min, json.minimum);
+    assert.equal(field.max, json.maximum);
+    assert.equal(field.default, defaultEqBench().parameters[band]);
+  }
 });
 
 test('bornes, options et défauts égaux au schéma zod et aux fonctions de défaut', () => {
@@ -115,5 +133,5 @@ test('GET /api/parameters : 200 moteur arrêté, catalogue complet', async (t) =
   assert.equal(Object.keys(r.body.source).length, 8);
   assert.ok(r.body.source.bandCompressor.crossover.fields.length > 0);
   assert.equal(r.body.output.compressor.fields.find((f) => f.key === 'model').options.length, 3);
-  assert.equal(flatten(r.body).size, SOURCE_PATHS.length + OUTPUT_PATHS.length);
+  assert.equal(flatten(r.body).size, SOURCE_PATHS.length + OUTPUT_PATHS.length + BENCH_PATHS.length);
 });
