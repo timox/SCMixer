@@ -15,6 +15,15 @@ Item {
     property real sampleRate: 0
     property var docs: []
     property string note: ""
+    property string stageName: ""
+
+    readonly property var chainPreviewOverrides: {
+        if (!controls.dragging || page.stageName === "")
+            return {};
+        var values = {};
+        values[page.stageName] = controls.preview;
+        return values;
+    }
 
     function response(v) { return curves && sampleRate > 0 ? curves.highPassResponse(v, sampleRate, 160) : []; }
 

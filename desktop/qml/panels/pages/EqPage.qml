@@ -31,6 +31,7 @@ Item {
         }
         return common.dragging ? common : null;
     }
+    readonly property var chainPreviewOverrides: dragging ? ({ eq: dragging.preview }) : ({})
     function response(v) { return curves && sampleRate > 0 ? curves.eqResponse(v, sampleRate, 160) : []; }
     function fieldLabel(key) {
         var list = descriptors && descriptors.fields ? descriptors.fields : [];

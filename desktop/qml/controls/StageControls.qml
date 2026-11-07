@@ -64,7 +64,11 @@ Rectangle {
     readonly property var barFields: {
         var list = fields.filter(function (f) { return panel.inBar(f) && panel.applicable(f); });
         // Le champ d'état en premier.
-        return list.sort(function (a, b) { return (b.key === panel.stateKey) - (a.key === panel.stateKey); });
+        return list.sort(function (a, b) {
+            if (a.key === "inserted") return -1;
+            if (b.key === "inserted") return 1;
+            return (b.key === panel.stateKey) - (a.key === panel.stateKey);
+        });
     }
     readonly property var mainFields: pick("main")
     readonly property var advancedFields: pick("advanced")

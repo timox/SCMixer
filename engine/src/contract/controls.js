@@ -6,7 +6,7 @@
  * (première lettre du champ en majuscule). Il n'existe aucune table de correspondance : la règle
  * est ce seul calcul, et tests/parameters.test.js la compare aux SynthDefs construites par sclang.
  *
- * Le champ `model` n'est pas un contrôle : il choisit la SynthDef (opération de structure).
+ * Les champs `model` et `inserted` sont structurels : ils choisissent la SynthDef et sa présence dans le graphe.
  */
 
 /** Groupes du contrat portés par chaque SynthDef de source. */
@@ -20,8 +20,8 @@ export const SOURCE_SYNTH_GROUPS = Object.freeze({
   mix: ['mix'],
 });
 
-/** Groupes portés par la SynthDef de traitement de sortie (un seul synth par sortie). */
-export const OUTPUT_GROUPS = Object.freeze(['mix', 'eq', 'infraHpf', 'sideHpf', 'clipper', 'limiter', 'compressor']);
+/** Objets de sortie : base composite fixe ou SynthDef d'insert selon l'étage. */
+export const OUTPUT_GROUPS = Object.freeze(['mix', 'eq', 'infraHpf', 'sideHpf', 'clipper', 'compressor', 'limiter']);
 
 export function controlName(prefixed, group, field) {
   return prefixed ? `${group}${field[0].toUpperCase()}${field.slice(1)}` : field;
@@ -30,6 +30,7 @@ export function controlName(prefixed, group, field) {
 function flatten(prefixed, group, object) {
   const out = {};
   for (const [field, value] of Object.entries(object)) {
+    if (prefixed && field === 'inserted') continue;
     out[field === 'model' ? 'model' : controlName(prefixed, group, field)] = value;
   }
   return out;
@@ -42,7 +43,7 @@ export function sourceControls(group, object) {
   return flatten(SOURCE_SYNTH_GROUPS[synth].length > 1, group, object);
 }
 
-/** Champs d'un étage de sortie -> noms de contrôles (préfixés : un seul synth porte tous les étages). */
+/** Champs d'un étage de sortie -> noms préfixés ; les inserts reçoivent uniquement les contrôles de leur étape. */
 export function outputControls(stage, object) {
   if (!OUTPUT_GROUPS.includes(stage)) throw new Error(`Étage de sortie inconnu : ${stage}`);
   return flatten(true, stage, object);

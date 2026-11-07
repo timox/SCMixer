@@ -69,6 +69,8 @@ function played(descriptor, stageValue, v) {
 
 // L'étage agit-il ? state publié par le catalogue (champ et valeur active) ; absent : toujours actif.
 function active(stageDescriptor, value) {
+    if (value && value.inserted === false)
+        return false;
     var s = stageDescriptor ? stageDescriptor.state : null;
     if (!s || !value)
         return true;

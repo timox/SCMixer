@@ -44,6 +44,8 @@ qt_add_qml_module(scmixer
         qml/controls/ActionButton.qml
         qml/controls/ChainStrip.qml
         qml/graphs/FrequencyGraph.qml
+        qml/graphs/ChainResponseGraph.qml
+        qml/graphs/ChainResponse.js
         qml/graphs/TransferGraph.qml
         qml/graphs/StereoPosition.qml
         qml/panels/pages/CompressorView.qml

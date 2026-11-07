@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Session } from '../contract/schemas.js';
-import { emptySession, validateChannels } from './session-model.js';
+import { emptySession, migrateLegacyOutputFields, validateChannels } from './session-model.js';
 import { writeJsonAtomic } from './atomic-file.js';
 
 export class SessionStore {
@@ -30,7 +30,7 @@ export class SessionStore {
     if (json?.version === 2) {
       throw unreadable('session de version 2 (champs de traitement ratio, makeupDb, ceilingDb remplacés par les arguments réels des UGens) ; le contrat est passé à la version 3, sans migration. Supprimer ce fichier pour repartir d’une session vide');
     }
-    const r = Session.safeParse(json);
+    const r = Session.safeParse(migrateLegacyOutputFields(json));
     if (!r.success) {
       const detail = r.error.issues.map((i) => `${i.path.join('.') || '(racine)'} : ${i.message}`).join(' ; ');
       throw unreadable(detail);

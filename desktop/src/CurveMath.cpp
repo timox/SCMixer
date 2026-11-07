@@ -126,7 +126,8 @@ double CurveMath::eqBandDb(const QVariantMap &eq, const QString &band) const
 
 double CurveMath::stageDb(const QVariantMap &stage, bool highPass, double hz, double sampleRate) const
 {
-    if (!stage.value(QStringLiteral("enabled")).toBool())
+    if (!stage.value(QStringLiteral("enabled")).toBool()
+        || (stage.contains(QStringLiteral("inserted")) && !stage.value(QStringLiteral("inserted")).toBool()))
         return 0.0;
     const QString model = stage.value(QStringLiteral("model")).toString();
     const double cutoff = cutoffHz(stage);

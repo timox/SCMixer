@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import "Theme.js" as Theme
 
 // Bouton à deux états : affiche l'état confirmé par l'API, émet toggled(nouvel état) au clic.
@@ -6,6 +7,7 @@ Rectangle {
     id: toggle
     property bool checked: false
     property string label: ""
+    property string hint: ""
     property color onColor: Theme.accent
     signal toggled(bool value)
 
@@ -25,8 +27,13 @@ Rectangle {
         font.bold: true
     }
     MouseArea {
+        id: mouse
         anchors.fill: parent
         enabled: toggle.enabled
+        hoverEnabled: true
         onClicked: toggle.toggled(!toggle.checked)
     }
+    ToolTip.visible: toggle.hint !== "" && mouse.hovered
+    ToolTip.text: toggle.hint
+    ToolTip.delay: 500
 }
