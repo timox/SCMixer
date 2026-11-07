@@ -20,6 +20,8 @@ Item {
     readonly property var hp: processing.hp || ({})
     readonly property var lp: processing.lp || ({})
     readonly property bool dragging: hpControls.dragging || lpControls.dragging
+    readonly property var chainPreviewOverrides: dragging ? ({ hp: hpControls.dragging ? hpControls.preview : hp,
+                                                               lp: lpControls.dragging ? lpControls.preview : lp }) : ({})
     function response(h, l) { return curves && sampleRate > 0 ? curves.filterResponse(h, l, sampleRate, 160) : []; }
     function cutoffLabel(name, stage) { return name + " " + Theme.formatValue(curves ? curves.cutoffHz(stage) : 0, "Hz", 0); }
 
@@ -41,7 +43,8 @@ Item {
                 anchors.margins: 8
                 topDb: 12
                 bottomDb: -48
-                active: page.hp.enabled === true || page.lp.enabled === true
+                active: (page.hp.inserted !== false && page.hp.enabled === true)
+                        || (page.lp.inserted !== false && page.lp.enabled === true)
                 emptyText: page.sampleRate > 0 ? "" : "Fréquence d'échantillonnage inconnue (moteur arrêté)"
                 series: {
                     var confirmed = page.response(page.hp, page.lp);
@@ -56,9 +59,9 @@ Item {
                 }
                 markers: {
                     var list = [];
-                    if (page.hp.enabled)
+                    if (page.hp.inserted !== false && page.hp.enabled)
                         list.push({ hz: page.curves.cutoffHz(page.hp), label: page.cutoffLabel("HP", page.hp), color: Theme.bandLow });
-                    if (page.lp.enabled)
+                    if (page.lp.inserted !== false && page.lp.enabled)
                         list.push({ hz: page.curves.cutoffHz(page.lp), label: page.cutoffLabel("LP", page.lp), color: Theme.bandHigh });
                     if (hpControls.dragging)
                         list.push({ hz: page.curves.cutoffHz(hpControls.preview), label: "aperçu " + page.cutoffLabel("HP", hpControls.preview), color: Theme.preview });

@@ -60,13 +60,15 @@ export class MeterRelay {
   }
 
   #runtime(args) {
-    if (args.length < 11) return null;
+    if (args.length < 12) return null;
     const num = (v) => Number(v);
-    const [cpuAvg, cpuPeak, synths, ugens, groups, req, actual, blockSize, hw, latencyMs, fail] = args;
+    const [cpuAvg, cpuPeak, synths, ugens, groups, req, actual, blockSize, hw, latencyMs, fail, replyAge] = args;
     return { type: 'engineRuntimeChanged', data: {
       cpuAvg: num(cpuAvg), cpuPeak: num(cpuPeak), synths: num(synths), ugens: num(ugens), groups: num(groups),
       sampleRateRequested: num(req), sampleRateActual: num(actual), blockSize: num(blockSize),
       hardwareBufferFrames: num(hw), latencyMs: num(latencyMs), lastFail: fail === '' || fail == null ? null : String(fail),
+      // Secondes depuis la dernière réponse /status.reply de scsynth, converties en ms.
+      scsynthReplyAgeMs: Math.round(num(replyAge) * 1000),
     } };
   }
 }

@@ -32,7 +32,7 @@ Item {
                     id: cell
                     required property var modelData
                     required property int index
-                    readonly property bool mismatch: !!modelData.requestedModel && modelData.loadedModel !== modelData.requestedModel
+                    readonly property bool mismatch: !!modelData.requestedModel && modelData.inserted !== false && modelData.loadedModel !== modelData.requestedModel
                     readonly property bool current: strip.pageOf(modelData.stage) === strip.currentPage
                     height: row.height
                     Text {
@@ -73,8 +73,8 @@ Item {
                         Text {
                             x: 22; y: 26
                             text: cell.modelData.requestedModel
-                                  ? (cell.modelData.loadedModel || "non chargé")
-                                  : (cell.modelData.enabled ? "actif" : "inactif")
+                                  ? (cell.modelData.inserted === false ? "retiré" : (cell.modelData.loadedModel || "non chargé"))
+                                  : (cell.modelData.inserted === false ? "retiré" : (cell.modelData.enabled ? "actif" : "inactif"))
                             color: cell.mismatch ? Theme.warn : Theme.dim
                             font.pixelSize: Theme.fontSmall
                         }

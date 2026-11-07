@@ -19,6 +19,7 @@ Item {
 
     readonly property var stages: parameters.source ? parameters.source.bandCompressor : ({})
     readonly property var value: processing.bandCompressor || ({})
+    readonly property var chainPreviewOverrides: crossover.dragging ? ({ bandCompressor: { crossover: crossover.preview } }) : ({})
     readonly property var bands: [
         { band: "low", color: Theme.bandLow },
         { band: "mid", color: Theme.bandMid },

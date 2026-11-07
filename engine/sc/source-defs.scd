@@ -233,7 +233,7 @@
     // vérifié côté serveur ; une largeur n'est marquée construite que si tous ses SynthDefs existent.
     defs = ~mxBuildSourceDefs.(w);
     defs.do { |def| def.add };
-    ~mxServer.sync;
+    ~mxSync.(~mxServer);
     missing = defs.reject { |def| ~mxSynthDefLoaded.(~mxServer, def.name, ~mxSynthDefTimeout) };
     if(missing.notEmpty) {
       Error("Échec serveur à la création des SynthDefs de largeur " ++ w ++ " : "

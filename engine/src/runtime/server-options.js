@@ -10,14 +10,13 @@ import { ATTACK_MS_MAX, LIMITER_DUR_MAX_MS, MAX_CHANNELS, PITCH_WINDOW_MAX_SECON
  * Besoins (audit d'architecture ; interconnexions mesurées par sclang sans serveur :
  * tests/sc/wirebufs.scd) :
  *  - bus audio : sorties matérielles 0..3, entrées 4..259, premier bus privé 260 ; bus privés =
- *    master 2 + cue 2 + 2 sorties x 2 slots x 2 canaux = 12, plus la somme des largeurs de
- *    source. Les plages de canaux des sources ne se chevauchent pas (session-model), donc la
- *    somme des largeurs est au plus numInputBusChannels (256) : 260 + 12 + 256 = 528.
+ *    somme Master/Cue 4 + un bus de traitement stéréo par sortie 4 = 8, plus les largeurs des
+ *    sources. La somme des sources est au plus numInputBusChannels (256) : 260 + 8 + 256 = 524.
  *  - interconnexions (numWireBufs) : maximum de sorties audio vivantes d'un SynthDef. Mesuré :
  *    mx_dyn_w = 5 w + 3 (w = 2 : 13, 3 : 18, 8 : 43, 64 : 323, 256 : 1283) ; hp/lp 4 w + 1,
  *    pitch/eq/hp4/lp4/lpmoog 2 w + 1, in/mix environ w + 26 ; SynthDefs de sortie : 5 ou 6.
- *  - nœuds : 1 groupe + 7 Synths par source = 8, plus root, groupe par défaut, 3 groupes du
- *    moteur, 4 Synths de sortie (processeurs et écrivains) = 12.
+ *  - nœuds : 1 groupe + 7 Synths par source = 8 ; moteur : root, groupe par défaut, 3 groupes,
+ *    2 bases, 2 compresseurs, 2 limiteurs, 2 écrivains et 1 sonde = 14.
  *  - mémoire temps réel : tampons de lignes à retard des UGens (PitchShift, DelayN, Limiter) et
  *    structures des Synths, mesurés par saturation de memSize sur un scsynth de test.
  */
@@ -29,11 +28,9 @@ const NUM_INPUTS = MAX_CHANNELS;
 const NUM_OUTPUTS = 4;
 const BLOCK_SIZE = 64; // défaut de ServerOptions.blockSize, non modifié : 64 images par bloc de contrôle
 const FIRST_PRIVATE_BUS = NUM_INPUTS + NUM_OUTPUTS;
-const ENGINE_PRIVATE_BUSES = 12;
-// Nœuds du moteur hors sources : root (1), groupe par défaut (1), groupes sources, bancs et sorties (3),
-// 2 processeurs de sortie et 2 écrivains (4), 2 processeurs de sortie supplémentaires vivants pendant un
-// fondu de compresseur, un par sortie (2), Synth de test de ~mxSynthDefLoaded (1) : 1 + 1 + 3 + 4 + 2 + 1 = 12.
-const ENGINE_NODES = 12;
+const ENGINE_PRIVATE_BUSES = 8;
+// Hors sources : root/default/groups (5), base + compresseur + limiteur + writer pour Master/Cue (8), sonde (1).
+const ENGINE_NODES = 14;
 const NODES_PER_SOURCE = 8;
 
 /** Plancher : défauts de ServerOptions (maxNodes 1024, numWireBufs 64). */
@@ -43,7 +40,7 @@ const OUTPUT_WIRE_BUFS = 6; // SynthDefs de sortie (mesure : 5, écrivain 6)
 
 /** Marges explicites. Les échecs de mémoire ou de tampons sont silencieux côté scsynth. */
 export const WIRE_MARGIN = 1.25; // numWireBufs ne peut pas croître : 25 % pour un SynthDef plus complexe ajouté plus tard
-export const NODES_MARGIN = 1.5; // synths temporaires (compresseur de sortie en fondu), bancs de mesure
+export const NODES_MARGIN = 1.5; // bancs de mesure et nœuds temporaires de diagnostic
 export const MEMORY_MARGIN = 1.5; // fragmentation de l'allocateur temps réel et UGens futurs
 const MEMORY_STEP_KB = 8192; // arrondi de memSize au multiple de 8 Mo (défaut ServerOptions : 8192 Ko)
 
@@ -64,7 +61,7 @@ export const SYNTHDEF_TIMEOUT_SECONDS = 5;
 const DELAYN_OVERHEAD = 1.28; // mesuré : 82 Ko pour 2 x 32 Ko de tampon
 const LIMITER_BYTES_PER_48K = 24 * 1024; // mesuré : 19,3 Ko pour deux canaux, dur = 0,01 s
 const LIMITER_MEASURED_DUR_MS = 10; // le tampon est proportionnel à dur (Limiter.schelp : tampon de retard de dur secondes)
-const OUTPUT_SYNTH_BYTES = 64 * 1024; // structure d'un Synth de sortie
+const OUTPUT_SYNTH_BYTES = 64 * 1024; // estimation par Synth de sortie (base ou insert)
 const FIXED_BYTES = 1024 * 1024;
 
 const pow2ceil = (n) => 2 ** Math.ceil(Math.log2(Math.max(1, n)));
@@ -90,8 +87,8 @@ function outputBytes(sampleRate) {
   const delay = Math.ceil(2 * pow2ceil(Math.ceil(DELAYN_MAX_SECONDS * sampleRate)) * 4 * DELAYN_OVERHEAD);
   // dur du contrat jusqu'à LIMITER_DUR_MAX_MS : dimensionné pour le maximum (le tampon est fixé à la création du Synth).
   const limiter = LIMITER_BYTES_PER_48K * Math.ceil(sampleRate / 48000) * Math.ceil(LIMITER_DUR_MAX_MS / LIMITER_MEASURED_DUR_MS);
-  // 2 sorties, chacune avec deux processeurs vivants pendant un fondu.
-  return 4 * (delay + limiter + OUTPUT_SYNTH_BYTES);
+  // Deux sorties ; chacune peut porter un CompanderD, un Limiter et le Synth de base.
+  return 2 * (delay + limiter + 3 * OUTPUT_SYNTH_BYTES);
 }
 
 /** Besoins bruts (sans marge) pour un dimensionnement donné. */

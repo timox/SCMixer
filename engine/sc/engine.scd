@@ -77,7 +77,7 @@ if(options.firstPrivateBus != (options.numInputBusChannels + options.numOutputBu
 ~mxStopRelay = {
   ~mxRuntimeRoutine !? { ~mxRuntimeRoutine.stop };
   ~mxRuntimeRoutine = nil;
-  [\mxSourceMeterRelay, \mxOutputMeterRelay, \mxFailCapture].do { |name| OSCdef.all[name] !? { |def| def.free } };
+  [\mxSourceMeterRelay, \mxOutputMeterRelay, \mxFailCapture, \mxStatusSeen].do { |name| OSCdef.all[name] !? { |def| def.free } };
 };
 ~mxStartRelay = {
   var relay = NetAddr("127.0.0.1", ~mxRelayPort);
@@ -85,6 +85,10 @@ if(options.firstPrivateBus != (options.numInputBusChannels + options.numOutputBu
   OSCdef(\mxSourceMeterRelay, { |msg| relay.sendMsg(*msg) }, '/mx/source-meter', s.addr);
   OSCdef(\mxOutputMeterRelay, { |msg| relay.sendMsg(*msg) }, '/mx/output-meter', s.addr);
   OSCdef(\mxFailCapture, { |msg| ~mxLastFail = msg.drop(1).join(" ") }, '/fail', s.addr);
+  // Heure de la dernière réponse /status.reply : son âge est envoyé avec chaque statut. scsynth répond au
+  // rythme des appels audio ; sans audio, l'âge grandit et le service déclare le moteur en échec.
+  ~mxLastStatusReply = Main.elapsedTime;
+  OSCdef(\mxStatusSeen, { ~mxLastStatusReply = Main.elapsedTime }, '/status.reply', s.addr);
   ~mxRuntimeRoutine = Routine({
     loop {
       s.status;
@@ -92,7 +96,7 @@ if(options.firstPrivateBus != (options.numInputBusChannels + options.numOutputBu
       if([s.avgCPU, s.peakCPU, s.numUGens, s.numSynths, s.numGroups, s.sampleRate, s.actualSampleRate, s.latency].every { |v| v.isNumber }) {
         relay.sendMsg('/mx/runtime', s.avgCPU, s.peakCPU, s.numSynths, s.numUGens, s.numGroups,
           s.options.sampleRate ? s.sampleRate, s.actualSampleRate, s.options.blockSize ? 64,
-          s.options.hardwareBufferSize ? -1, s.latency * 1000, ~mxLastFail);
+          s.options.hardwareBufferSize ? -1, s.latency * 1000, ~mxLastFail, Main.elapsedTime - ~mxLastStatusReply);
       };
       0.75.wait;
     }

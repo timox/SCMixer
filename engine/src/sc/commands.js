@@ -95,7 +95,9 @@ export function setSourceBandCode(id, band, value) {
 
 export function setOutputStageCode(output, stage, value) {
   const symbols = `${oneOf(OUTPUTS, output, 'Sortie')}, ${oneOf(OUTPUT_STAGES, stage, 'Étage de sortie')}`;
-  return `~mxSetOutputStage.(${symbols}, ${toScEvent(outputControls(stage, value))})`;
+  const controls = outputControls(stage, value);
+  if (stage === 'compressor' || stage === 'limiter') controls.inserted = value.inserted;
+  return `~mxSetOutputStage.(${symbols}, ${toScEvent(controls)})`;
 }
 
 /** Tous les étages et toutes les bandes d'une source, en réglages de contrôles (aucune recréation de nœud). */

@@ -61,6 +61,7 @@ Item {
         Toggle {
             enabled: control.enabled
             label: control.descriptor.label || control.key
+            hint: control.descriptor.description || ""
             checked: control.confirmedValue === true
             onToggled: function (value) { control.edited(value) }
         }
@@ -71,6 +72,7 @@ Item {
             enabled: control.enabled
             label: control.descriptor.label || control.key
             options: control.descriptor.options || []
+            optionInfo: control.descriptor.optionInfo || []
             unavailable: control.unavailable
             confirmedValue: String(control.confirmedValue)
             onSelected: function (value) { control.edited(value) }

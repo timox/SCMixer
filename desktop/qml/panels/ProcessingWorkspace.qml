@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../controls"
+import "../graphs"
 import "pages"
 import "../controls/Theme.js" as Theme
 
@@ -20,6 +21,7 @@ Item {
     property var sourceMeter: ({ peakDb: -120, rmsDb: -120 })
     property string page: ""
     property var chain: []
+    property bool showChainResponse: true
 
     readonly property var parameters: store ? store.parameters : ({})
     readonly property bool isSource: scope === "source"
@@ -57,6 +59,9 @@ Item {
         return parameters[scopeKey] && parameters[scopeKey][name] ? parameters[scopeKey][name] : ({ fields: [] });
     }
     function refresh() { if (client && target !== "") client.get(graphPath); }
+    function pagePreviewOverrides() {
+        return pageLoader.item ? (pageLoader.item["chainPreviewOverrides"] || ({})) : ({});
+    }
     function pick(stage) { page = pageOf(stage); }
     function ensurePage() {
         for (var i = 0; i < chain.length; ++i)
@@ -110,6 +115,11 @@ Item {
                 label: "Copier Master → Cue"
                 onClicked: ws.client.post("/api/outputs/cue/copy-master")
             }
+            ActionButton {
+                objectName: "button-chain-response"
+                label: ws.showChainResponse ? "Masquer la réponse cumulée" : "Réponse cumulée"
+                onClicked: ws.showChainResponse = !ws.showChainResponse
+            }
         }
 
         ChainStrip {
@@ -119,6 +129,18 @@ Item {
             currentPage: ws.page
             pageOf: ws.pageOf
             onPicked: function (stage) { ws.pick(stage) }
+        }
+
+        ChainResponseGraph {
+            objectName: "panel-chain-response"
+            Layout.fillWidth: true
+            Layout.preferredHeight: ws.showChainResponse ? 260 : 0
+            visible: ws.showChainResponse
+            processing: ws.processing
+            curves: ws.curves
+            sampleRate: ws.sampleRate
+            isSource: ws.isSource
+            previewOverrides: ws.pagePreviewOverrides()
         }
 
         RowLayout {
@@ -221,6 +243,7 @@ Item {
         HighPassPage {
             client: ws.client; curves: ws.curves; descriptors: ws.stageDescriptor(ws.page); path: ws.base + ws.page
             value: ws.processing[ws.page] || ({}); sampleRate: ws.sampleRate; docs: ws.docsOf(ws.page)
+            stageName: ws.page
             note: ws.page === "sideHpf" ? "sur le signal latéral (S)" : ""
         }
     }

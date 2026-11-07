@@ -19,6 +19,19 @@ export function parse(schema, value, what) {
 
 const clone = (v) => structuredClone(v);
 
+/** Retire le réglage de fondu de l'ancien writer ; les défauts Zod insèrent les anciens inserts. */
+export function migrateLegacyOutputFields(value) {
+  if (value === null || typeof value !== 'object') return value;
+  const next = clone(value);
+  const outputs = next.outputs ?? next.content?.outputs;
+  if (outputs) {
+    for (const output of Object.values(outputs)) {
+      if (output?.compressor) delete output.compressor.fadeSeconds;
+    }
+  }
+  return next;
+}
+
 export function emptySession() {
   return {
     version: 3,
@@ -180,7 +193,7 @@ export function copyMasterToCue(session) {
 export function replaceSessionContent(session, content) {
   const shape = Session.shape;
   const sources = parse(shape.sources, content?.sources, 'Sources');
-  const outputs = parse(shape.outputs, content?.outputs, 'Sorties');
+  const outputs = parse(shape.outputs, migrateLegacyOutputFields({ outputs: content?.outputs }).outputs, 'Sorties');
   const seq = parse(shape.nextSourceSeq, content?.nextSourceSeq, 'nextSourceSeq');
   const ids = new Set(sources.map((s) => s.id));
   if (ids.size !== sources.length) throw fail('VALIDATION', 'Identifiants de source en double.');

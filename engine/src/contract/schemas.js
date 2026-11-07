@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { outputSynthDefModelIds, synthDefModelIds } from './synthdef-catalog.js';
 
 export const MAX_CHANNELS = 256;
 /** Maximum de la plage d'attaque (ms) : borne unique du contrat, dont dérive le délai maximal de CompanderD. */
@@ -12,7 +13,7 @@ export const PITCH_WINDOW_MAX_SECONDS = 0.2;
 /** Maximum de la durée d'anticipation du Limiter (ms) : même principe (Limiter.schelp : dur « cannot be modulated »). */
 export const LIMITER_DUR_MAX_MS = 50;
 export const SOURCE_STAGES = ['mix', 'input', 'inputCompressor', 'eq', 'hp', 'lp', 'pitch'];
-export const OUTPUT_STAGES = ['mix', 'eq', 'infraHpf', 'sideHpf', 'clipper', 'limiter', 'compressor'];
+export const OUTPUT_STAGES = ['mix', 'eq', 'infraHpf', 'sideHpf', 'clipper', 'compressor', 'limiter'];
 export const BANDS = ['low', 'mid', 'high'];
 /** Objets adressables sous bandCompressor : les trois bandes et les filtres de répartition. */
 export const BAND_GROUPS = [...BANDS, 'crossover'];
@@ -74,8 +75,10 @@ export const SourceProcessing = z.strictObject({
   inputCompressor: CompBand,
   eq: SourceEq,
   hp: hzOrder(z.strictObject({
+    // Missing in saved v3 sessions means “existing filter node”; new sessions set false explicitly below.
+    inserted: z.boolean().default(true),
     enabled: z.boolean(),
-    model: z.enum(['BHiPass', 'RHPF', 'BHiPass4']),
+    model: z.enum(synthDefModelIds('hp')),
     freq: unit(), minHz: hz(), maxHz: hz(),
     q: range(0.5, 10),
     mul: range(0, 2),
@@ -84,8 +87,10 @@ export const SourceProcessing = z.strictObject({
     controlLag: controlLag(),
   })),
   lp: hzOrder(z.strictObject({
+    // Preserve the old graph for saved sessions; new sessions set false explicitly below.
+    inserted: z.boolean().default(true),
     enabled: z.boolean(),
-    model: z.enum(['BLowPass', 'RLPF', 'BLowPass4', 'MoogFF']),
+    model: z.enum(synthDefModelIds('lp')),
     freq: unit(), minHz: hz(), maxHz: hz(),
     q: range(0.5, 10),
     gain: range(0, 4),
@@ -131,9 +136,9 @@ export const Output = z.strictObject({
   sideHpf: z.strictObject({ enabled: z.boolean(), hz: range(20, 1000), mul: mul(), add: add(), controlLag: controlLag() }),
   clipper: z.strictObject({ enabled: z.boolean(), lo: range(-4, 4), hi: range(-4, 4), controlLag: controlLag() })
     .refine((v) => v.lo < v.hi, { message: 'lo doit être inférieur à hi (Clip.schelp)' }),
-  limiter: z.strictObject({ enabled: z.boolean(), ceilingDb: range(-24, 0), durMs: range(1, LIMITER_DUR_MAX_MS), controlLag: controlLag() }),
   compressor: z.strictObject({
-    model: z.enum(['Compander', 'CompanderD', 'FaustRMS']),
+    inserted: z.boolean().default(true),
+    model: z.enum(outputSynthDefModelIds('compressor')),
     thresholdDb: range(-80, 0),
     slopeBelow: slope(),
     slopeAbove: slope(),
@@ -143,7 +148,10 @@ export const Output = z.strictObject({
     add: add(),
     bypass: z.boolean(),
     controlLag: controlLag(),
-    fadeSeconds: range(0.005, 2),
+  }),
+  limiter: z.strictObject({
+    inserted: z.boolean().default(true), enabled: z.boolean(), ceilingDb: range(-24, 0),
+    durMs: range(1, LIMITER_DUR_MAX_MS), controlLag: controlLag(),
   }),
 });
 
@@ -210,10 +218,10 @@ export function defaultSourceProcessing() {
     inputCompressor: defaultCompBand(),
     eq: defaultEq(80),
     hp: {
-      enabled: false, model: 'BHiPass', freq: 0, minHz: 20, maxHz: 20000, q: 1, mul: 1, add: 0, floorHz: 40, controlLag: 0,
+      inserted: false, enabled: false, model: 'BHiPass', freq: 0, minHz: 20, maxHz: 20000, q: 1, mul: 1, add: 0, floorHz: 40, controlLag: 0,
     },
     lp: {
-      enabled: false, model: 'BLowPass', freq: 1, minHz: 20, maxHz: 20000, q: 1, gain: 2, mul: 1, add: 0, controlLag: 0,
+      inserted: false, enabled: false, model: 'BLowPass', freq: 1, minHz: 20, maxHz: 20000, q: 1, gain: 2, mul: 1, add: 0, controlLag: 0,
     },
     pitch: {
       semitones: 0, blend: -1, level: 1, windowSize: PITCH_WINDOW_MAX_SECONDS, pitchDispersion: 0,
@@ -230,10 +238,10 @@ export function defaultOutput() {
     infraHpf: { enabled: false, hz: 25, mul: 1, add: 0, controlLag: 0 },
     sideHpf: { enabled: false, hz: 100, mul: 1, add: 0, controlLag: 0 },
     clipper: { enabled: false, lo: -1, hi: 1, controlLag: 0 },
-    limiter: { enabled: false, ceilingDb: -1, durMs: 10, controlLag: 0 },
     compressor: {
-      model: 'Compander', thresholdDb: -20, slopeBelow: 1, slopeAbove: 0.25,
-      attackMs: 10, releaseMs: 100, mul: 1, add: 0, bypass: true, controlLag: 0, fadeSeconds: 0.05,
+      inserted: false, model: 'Compander', thresholdDb: -20, slopeBelow: 1, slopeAbove: 0.25,
+      attackMs: 10, releaseMs: 100, mul: 1, add: 0, bypass: true, controlLag: 0,
     },
+    limiter: { inserted: false, enabled: false, ceilingDb: -1, durMs: 10, controlLag: 0 },
   };
 }

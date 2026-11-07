@@ -43,14 +43,17 @@ test('outputMeter : ID 0..3 vers master/cue et left/right', () => {
   });
 });
 
-test('engineRuntimeChanged : champs mappés, lastFail vide devient null', () => {
-  const args = [12.5, 20, 7, 300, 4, 48000, 47999.5, 64, 256, 11.2, ''];
+test('engineRuntimeChanged : champs mappés, lastFail vide devient null, âge de la dernière réponse de scsynth en ms', () => {
+  const args = [12.5, 20, 7, 300, 4, 48000, 47999.5, 64, 256, 11.2, '', 0.2504];
   const ev = relay().handle({ address: '/mx/runtime', args });
   assert.deepEqual(ev, { type: 'engineRuntimeChanged', data: {
     cpuAvg: 12.5, cpuPeak: 20, synths: 7, ugens: 300, groups: 4, sampleRateRequested: 48000,
     sampleRateActual: 47999.5, blockSize: 64, hardwareBufferFrames: 256, latencyMs: 11.2, lastFail: null,
+    scsynthReplyAgeMs: 250,
   } });
-  const fail = relay().handle({ address: '/mx/runtime', args: [...args.slice(0, 10), '/s_new : erreur'] });
+  const fail = relay().handle({ address: '/mx/runtime', args: [...args.slice(0, 10), '/s_new : erreur', 0] });
   assert.equal(fail.data.lastFail, '/s_new : erreur');
+  // Ancien format sans âge de réponse : refusé.
+  assert.equal(relay().handle({ address: '/mx/runtime', args: args.slice(0, 11) }), null);
   assert.equal(relay().handle({ address: '/mx/runtime', args: [1, 2] }), null);
 });

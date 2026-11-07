@@ -457,12 +457,40 @@ test('relais : meter et runtime émis depuis le récepteur OSC, runtime() remis 
   assert.deepEqual(meters.map((m) => m.type), ['sourceMeter', 'outputMeter']);
   assert.equal(meters[0].data.sourceId, 'src-1');
   assert.equal(meters[1].data.output, 'cue');
-  listener.emit('message', { address: '/mx/runtime', args: [1, 2, 3, 4, 5, 48000, 48000, 64, 256, 10, ''] });
+  listener.emit('message', { address: '/mx/runtime', args: [1, 2, 3, 4, 5, 48000, 48000, 64, 256, 10, '', 0.25] });
   assert.equal(runtimes.length, 1);
   assert.equal(runtimes[0].type, 'engineRuntimeChanged');
   assert.equal(engine.runtime().cpuAvg, 1);
   await engine.stop();
   assert.equal(engine.runtime(), null);
+});
+
+const runtimeWithAge = (seconds) => ({ address: '/mx/runtime', args: [1, 2, 3, 4, 5, 48000, 48000, 64, 256, 10, '', seconds] });
+
+test('scsynth muet : trois statuts consécutifs sans réponse depuis plus de 5 s -> failed avec message explicite', async () => {
+  const { engine, listener } = setup({ session: sessionWithSource() });
+  await engine.start();
+  listener.emit('message', runtimeWithAge(6));
+  listener.emit('message', runtimeWithAge(7));
+  assert.equal(engine.state().status, 'running', 'deux statuts en retard ne suffisent pas');
+  listener.emit('message', runtimeWithAge(8));
+  const state = engine.state();
+  assert.equal(state.status, 'failed');
+  assert.match(state.error, /scsynth ne répond plus depuis 8 s/);
+  assert.match(state.error, /TimoxVasio/);
+  assert.match(state.error, /redémarrer le moteur/i);
+});
+
+test('retard isolé (sclang occupé) : un statut à jour remet le compte à zéro', async () => {
+  const { engine, listener } = setup({ session: sessionWithSource() });
+  await engine.start();
+  listener.emit('message', runtimeWithAge(9));
+  listener.emit('message', runtimeWithAge(9.5));
+  listener.emit('message', runtimeWithAge(0.25));
+  listener.emit('message', runtimeWithAge(6));
+  listener.emit('message', runtimeWithAge(7));
+  assert.equal(engine.state().status, 'running');
+  await engine.stop();
 });
 
 test('scDir est transmis à la fabrique sclang', async () => {

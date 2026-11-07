@@ -17,21 +17,20 @@ info:
     (remplacés par slopeAbove, mul et lo/hi). Chaque étage porte controlLag (lissage Lag.kr de ses
     contrôles continus, défaut 0 : aucun lissage). Les sessions de version 2 sont refusées (version 3).
 
-    Noms de contrôles de SynthDef (pour un futur /n_set direct). Le nom du contrôle est le nom du
-    champ. Une SynthDef qui porte plusieurs objets du contrat préfixe le champ par le nom de l'objet,
+    Noms de contrôles de SynthDef. Le nom du contrôle est le nom du champ. Une SynthDef qui porte
+    plusieurs objets du contrat préfixe le champ par le nom de l'objet,
     premier caractère du champ en majuscule : mx_in_<largeur> (input, inputCompressor : inputGain,
     inputCompressorThresholdDb), mx_dyn_<largeur> (low, mid, high, crossover : lowThresholdDb,
-    crossoverLowMidFreq) et la SynthDef de sortie (mix, eq, infraHpf, sideHpf, clipper, limiter,
-    compressor : mixVolume, eqLowFreq, limiterDurMs). Les autres SynthDefs de source (eq, hp, lp, pitch,
+    crossoverLowMidFreq). Les sorties utilisent une SynthDef de base et des inserts distincts ; leurs contrôles
+    sont préfixés par l'étage (mixVolume, eqLowFreq, limiterDurMs). Les autres SynthDefs de source (eq, hp, lp, pitch,
     mix) portent un seul objet : champ seul. Le champ model n'est pas un contrôle : il choisit la
     SynthDef (BHiPass, RHPF, BHiPass4 ; BLowPass, RLPF, BLowPass4, MoogFF ; Compander, CompanderD,
     FaustRMS). Les conversions (dB vers amplitude, 0..1 vers Hz, demi-tons vers rapport, ms vers s) sont
-    dans les SynthDefs. compressor.fadeSeconds est le contrôle compressorFadeSeconds de l'écrivain de
-    sortie.
+    dans les SynthDefs. Les filtres HP/LP, le compresseur et le limiteur sont insérables à leurs emplacements fixes.
 
     Arguments fixés à la création du UGen (pitch.windowSize, limiter.durMs) : PitchShift.schelp et
-    Limiter.schelp précisent qu'ils ne peuvent pas être modulés ; leur changement recrée le Synth
-    (opération de structure traitée par sclang). VarLag.warp et VarLag.curvature du fondu de sortie sont fixés à la construction du SynthDef (rampe linéaire) : Filter.sc évalue warp dans sclang pour choisir l'implémentation, il ne peut donc pas être un contrôle. Tous les autres changements de valeur sont des
+    Limiter.schelp précisent qu'ils ne peuvent pas être modulés ; changer limiter.durMs recrée ce nœud.
+    Les ajouts et retraits de traitements reconstruisent immédiatement le graphe et peuvent interrompre l'audio. Tous les autres changements de valeur sont des
     réglages de contrôles.
 
     Vumètres : replyRate (10 Hz) et peakLag (0.25 s) de SendPeakRMS sont des propriétés de mesure fixes, pas des paramètres de traitement (décision du contrôleur) ; le nom de commande et l'identifiant de réponse sont internes.
@@ -331,7 +330,7 @@ paths:
       - name: stage
         in: path
         required: true
-        schema: { type: string, enum: [mix, eq, infraHpf, sideHpf, clipper, limiter, compressor] }
+        schema: { type: string, enum: [mix, eq, infraHpf, sideHpf, clipper, compressor, limiter] }
     post:
       tags: [Sorties]
       summary: Rétablit les valeurs par défaut d'un étage de sortie
@@ -345,10 +344,10 @@ paths:
       - name: stage
         in: path
         required: true
-        schema: { type: string, enum: [mix, eq, infraHpf, sideHpf, clipper, limiter, compressor] }
+        schema: { type: string, enum: [mix, eq, infraHpf, sideHpf, clipper, compressor, limiter] }
     put:
       tags: [Sorties]
-      summary: Remplace un étage de sortie (objet complet) ; modèle indisponible, 409 MODEL_UNAVAILABLE et état inchangé
+      summary: Remplace un étage de sortie (objet complet) ; un modèle indisponible est refusé s'il est inséré
       requestBody:
         required: true
         content:
@@ -373,8 +372,8 @@ paths:
       tags: [Sorties]
       summary: Étages ordonnés avec libellé, état, modèle demandé et modèle chargé (null si indisponible ou sans modèle), documentation des UGens utilisés
       description: >
-        Les étages sont listés dans l'ordre de traversée du signal : infraHpf, sideHpf, eq,
-        mix (volume), clipper, limiter, compressor. Le compresseur est le dernier étage.
+        Les étages sont listés dans l'ordre du signal : infraHpf, sideHpf, eq, mix (volume),
+        clipper, compressor, limiter. Compresseur et limiteur sont des inserts séparés.
       responses:
         '200':
           description: Graphe de traitement
@@ -683,6 +682,26 @@ components:
       required: [label, fields]
       properties:
         label: { type: string }
+        slot: { type: string, description: "Emplacement fixe du SynthDef dans le graphe SCMixer." }
+        position: { type: string, description: "Étages précédant et suivant cet insert." }
+        channels: { type: string, description: "Largeur de canal prise en charge." }
+        structural: { type: array, items: { type: string }, description: "Contrôles de câblage gérés par SCMixer, sans widget DSP (par exemple bus)." }
+        synthDefs:
+          type: array
+          description: "Choix explicites du catalogue interne ; aucun modèle n'est choisi implicitement."
+          items:
+            type: object
+            required: [id, def, ugen, args, gui]
+            properties:
+              id: { type: string }
+              def: { type: string, description: "Nom du SynthDef généré ; {width} est remplacé par la largeur de la source." }
+              ugen: { type: string, description: "Classe SuperCollider dont la documentation décrit le traitement." }
+              implementation: { type: array, items: { type: string }, description: "UGens réellement assemblés par le SynthDef interne, si le modèle reproduit un traitement composite." }
+              availability: { type: string, description: "Motif d'indisponibilité lorsque le modèle dépend d'un UGen optionnel." }
+              args: { type: array, items: { type: string }, description: "Arguments DSP de l'UGen ; le bus de câblage est structurel." }
+              gui: { type: array, items: { type: string }, description: "Contrôles GUI couverts par le contrat pour ce modèle." }
+              mapping: { type: object, additionalProperties: { type: string }, description: "Conversions entre contrôles GUI et arguments DSP." }
+              actions: { type: array, items: { type: string }, description: "Actions GUI complémentaires aux contrôles continus." }
         state:
           type: object
           description: "Champ booléen qui active l'étage ; l'étage agit lorsque ce champ vaut active. Absent : l'étage agit toujours."
@@ -722,6 +741,21 @@ components:
         max: { type: number }
         step: { type: integer }
         options: { type: array, items: { type: string } }
+        optionInfo:
+          type: array
+          description: "SynthDef, arguments et conversions documentés pour chaque modèle sélectionnable."
+          items:
+            type: object
+            required: [value, synthDef, ugen, args, mapping, doc]
+            properties:
+              value: { type: string }
+              synthDef: { type: string }
+              ugen: { type: string }
+              implementation: { type: array, items: { type: string } }
+              availability: { type: string, description: "Disponibilité ou motif d'indisponibilité du modèle." }
+              args: { type: array, items: { type: string } }
+              mapping: { type: object, additionalProperties: { type: string } }
+              doc: { type: string, format: uri }
         appliesTo:
           type: object
           description: "width {min, max} et/ou model [valeurs] : le champ n'est applicable que si toutes les conditions présentes sont remplies."
@@ -848,7 +882,7 @@ components:
             FaustRMS: { type: boolean }
     Runtime:
       type: object
-      required: [cpuAvg, cpuPeak, synths, ugens, groups, sampleRateRequested, sampleRateActual, blockSize, hardwareBufferFrames, latencyMs, lastFail]
+      required: [cpuAvg, cpuPeak, synths, ugens, groups, sampleRateRequested, sampleRateActual, blockSize, hardwareBufferFrames, latencyMs, lastFail, scsynthReplyAgeMs]
       properties:
         cpuAvg: { type: number }
         cpuPeak: { type: number }
@@ -861,6 +895,9 @@ components:
         hardwareBufferFrames: { type: integer }
         latencyMs: { type: number }
         lastFail: { type: [string, 'null'] }
+        scsynthReplyAgeMs:
+          type: integer
+          description: Millisecondes depuis la dernière réponse de scsynth à /status. Au-delà de 5000 ms sur trois statuts de suite, scsynth ne reçoit plus d'audio et le moteur passe en échec.
     NodeTree:
       type: object
       required: [rootId, nodes]
@@ -930,15 +967,15 @@ components:
     Output:
       type: object
       additionalProperties: false
-      required: [mix, eq, infraHpf, sideHpf, clipper, limiter, compressor]
+      required: [mix, eq, infraHpf, sideHpf, clipper, compressor, limiter]
       properties:
         mix: { $ref: '#/components/schemas/OutputMix' }
         eq: { $ref: '#/components/schemas/OutputEq' }
         infraHpf: { $ref: '#/components/schemas/InfraHpf' }
         sideHpf: { $ref: '#/components/schemas/SideHpf' }
         clipper: { $ref: '#/components/schemas/Clipper' }
-        limiter: { $ref: '#/components/schemas/Limiter' }
         compressor: { $ref: '#/components/schemas/OutputCompressor' }
+        limiter: { $ref: '#/components/schemas/Limiter' }
     SourceMix:
       type: object
       description: "Étage mix de source : fader, envoi Cue, répartition stéréo (Pan2 pour la largeur 1, Balance2 pour 2, Splay puis Balance2 pour 3 et plus). Contrôles de la SynthDef mx_mix_<largeur> : champ seul."
@@ -1006,10 +1043,11 @@ components:
         controlLag: { type: number, minimum: 0, maximum: 2, default: 0, description: "Temps de lissage en secondes des contrôles continus de l'étage (Lag.kr, Lag.schelp : lagTime). 0 = application immédiate (défaut : aucun lissage, décision du 05/11)." }
     Hp:
       type: object
-      description: "Passe-haut de source. Champs applicables par modèle : BHiPass et BHiPass4 : enabled, freq, minHz, maxHz, q, mul, add, controlLag ; RHPF : les mêmes et floorHz. Les champs non applicables au modèle chargé sont mémorisés et ignorés. Contrôles : champ seul."
+      description: "Passe-haut de source. inserted ajoute ou retire un vrai nœud à l'emplacement fixe ; les réglages restent mémorisés lorsqu'il est retiré. Champs applicables par modèle : BHiPass et BHiPass4 : enabled, freq, minHz, maxHz, q, mul, add, controlLag ; RHPF : les mêmes et floorHz. Les champs non applicables au modèle chargé sont mémorisés et ignorés. Contrôles : champ seul."
       additionalProperties: false
-      required: [enabled, model, freq, minHz, maxHz, q, mul, add, floorHz, controlLag]
+      required: [inserted, enabled, model, freq, minHz, maxHz, q, mul, add, floorHz, controlLag]
       properties:
+        inserted: { type: boolean, default: false, description: "Insère le SynthDef choisi dans le graphe de source ou le retire sans effacer ses réglages." }
         enabled: { type: boolean, default: false, description: "Mélange sec/filtré : 0 = signal sec, 1 = signal filtré (lissé par controlLag)." }
         model: { type: string, enum: [BHiPass, RHPF, BHiPass4], default: BHiPass, description: "Modèle de filtre : choisit la SynthDef (BHiPass, RHPF ou BHiPass4) ; un changement de modèle remplace le Synth (opération de structure)." }
         freq: { type: number, minimum: 0, maximum: 1, default: 0, description: "Position 0..1 convertie en fréquence : freq = linexp(position, 0, 1, minHz, maxHz) (UGen.freq)." }
@@ -1022,10 +1060,11 @@ components:
         controlLag: { type: number, minimum: 0, maximum: 2, default: 0, description: "Temps de lissage en secondes des contrôles continus de l'étage (Lag.kr, Lag.schelp : lagTime). 0 = application immédiate (défaut : aucun lissage, décision du 05/11)." }
     Lp:
       type: object
-      description: "Passe-bas de source. Champs applicables par modèle : BLowPass, RLPF et BLowPass4 : enabled, freq, minHz, maxHz, q, mul, add, controlLag ; MoogFF : enabled, freq, minHz, maxHz, gain, mul, add, controlLag (et le déclencheur reset de POST .../lp/reset-state). Les champs non applicables au modèle chargé sont mémorisés et ignorés."
+      description: "Passe-bas de source. inserted ajoute ou retire un vrai nœud à l'emplacement fixe ; les réglages restent mémorisés lorsqu'il est retiré. Champs applicables par modèle : BLowPass, RLPF et BLowPass4 : enabled, freq, minHz, maxHz, q, mul, add, controlLag ; MoogFF : les mêmes sauf q, avec gain à la place (et le déclencheur reset de POST .../lp/reset-state). Les champs non applicables au modèle chargé sont mémorisés et ignorés."
       additionalProperties: false
-      required: [enabled, model, freq, minHz, maxHz, q, gain, mul, add, controlLag]
+      required: [inserted, enabled, model, freq, minHz, maxHz, q, gain, mul, add, controlLag]
       properties:
+        inserted: { type: boolean, default: false, description: "Insère le SynthDef choisi dans le graphe de source ou le retire sans effacer ses réglages." }
         enabled: { type: boolean, default: false, description: "Mélange sec/filtré : 0 = signal sec, 1 = signal filtré (lissé par controlLag)." }
         model: { type: string, enum: [BLowPass, RLPF, BLowPass4, MoogFF], default: BLowPass, description: "Modèle de filtre : choisit la SynthDef (BLowPass, RLPF, BLowPass4 ou MoogFF) ; un changement de modèle remplace le Synth (opération de structure)." }
         freq: { type: number, minimum: 0, maximum: 1, default: 1, description: "Position 0..1 convertie en fréquence : freq = linexp(position, 0, 1, minHz, maxHz) (UGen.freq)." }
@@ -1141,21 +1180,23 @@ components:
         controlLag: { type: number, minimum: 0, maximum: 2, default: 0, description: "Temps de lissage en secondes des contrôles continus de l'étage (Lag.kr, Lag.schelp : lagTime). 0 = application immédiate (défaut : aucun lissage, décision du 05/11)." }
     Limiter:
       type: object
-      description: "Limiteur de sortie (Limiter.ar : level, dur)."
+      description: "Insert stéréo Limiter après le compresseur ; inserted ajoute ou retire un vrai nœud."
       additionalProperties: false
-      required: [enabled, ceilingDb, durMs, controlLag]
+      required: [inserted, enabled, ceilingDb, durMs, controlLag]
       properties:
+        inserted: { type: boolean, default: false, description: "Insère le Limiter à la fin de la chaîne ou le retire sans effacer ses réglages." }
         enabled: { type: boolean, default: false, description: "Mélange sec/limité (0 = désactivé)." }
         ceilingDb: { type: number, minimum: -24, maximum: 0, default: -1, description: "Limiter.level = dbamp(ceilingDb) : niveau de crête de sortie (Limiter.schelp : level)." }
-        durMs: { type: number, minimum: 1, maximum: 50, default: 10, description: "Limiter.dur = durMs / 1000 : durée d'anticipation. Argument fixé à la création du UGen (Limiter.schelp : « cannot be modulated ») : un changement bascule vers un nouveau Synth avec fondu. Borne maximale = dimensionnement de memSize (LIMITER_DUR_MAX_MS)." }
+        durMs: { type: number, minimum: 1, maximum: 50, default: 10, description: "Limiter.dur = durMs / 1000 : durée de regard en avant ; induit 2 × dur de délai. Argument fixé à la création (Limiter.schelp : cannot be modulated) ; un changement recrée ce nœud et peut interrompre le signal. Borne maximale = dimensionnement de memSize (LIMITER_DUR_MAX_MS)." }
         controlLag: { type: number, minimum: 0, maximum: 2, default: 0, description: "Temps de lissage en secondes des contrôles continus de l'étage (Lag.kr, Lag.schelp : lagTime). 0 = application immédiate (défaut : aucun lissage, décision du 05/11)." }
     OutputCompressor:
       type: object
-      description: "Compresseur de sortie, dernier étage audio. Champs communs aux trois modèles (Compander, CompanderD, FaustRMS)."
+      description: "Insert compresseur Master/Cue, placé avant Limiter. inserted ajoute ou retire un vrai nœud."
       additionalProperties: false
-      required: [model, thresholdDb, slopeBelow, slopeAbove, attackMs, releaseMs, mul, add, bypass, controlLag, fadeSeconds]
+      required: [inserted, model, thresholdDb, slopeBelow, slopeAbove, attackMs, releaseMs, mul, add, bypass, controlLag]
       properties:
-        model: { type: string, enum: [Compander, CompanderD, FaustRMS], default: Compander, description: "Modèle de compresseur : choisit la SynthDef (Compander, CompanderD ou FaustRMS) ; un changement de modèle bascule vers un nouveau Synth avec fondu. Indisponible : 409 MODEL_UNAVAILABLE." }
+        inserted: { type: boolean, default: false, description: "Insère le compresseur avant le limiteur ou le retire sans effacer ses réglages." }
+        model: { type: string, enum: [Compander, CompanderD, FaustRMS], default: Compander, description: "Choisit explicitement le modèle. Un changement remplace ce nœud ; FaustRMS renvoie 409 MODEL_UNAVAILABLE si le plug-in requis manque." }
         thresholdDb: { type: number, minimum: -80, maximum: 0, default: -20, description: "Seuil en dB : thresh = dbamp(thresholdDb) pour Compander et CompanderD ; en dB tel quel pour FaustRMS." }
         slopeBelow: { type: number, minimum: 0.05, maximum: 10, default: 1, description: "slopeBelow du modèle (Compander.schelp : 1 = inchangé)." }
         slopeAbove: { type: number, minimum: 0.05, maximum: 10, default: 0.25, description: "slopeAbove du modèle (inférieure à 1 = compression, 0.25 = 4:1)." }
@@ -1165,14 +1206,14 @@ components:
         add: { type: number, minimum: -1, maximum: 1, default: 0, description: "add du modèle (Compander.add, CompanderD.add ; addition à la sortie pour FaustRMS)." }
         bypass: { type: boolean, default: true, description: "Select.which : true = signal non compressé." }
         controlLag: { type: number, minimum: 0, maximum: 2, default: 0, description: "Temps de lissage en secondes des contrôles continus de l'étage (Lag.kr, Lag.schelp : lagTime). 0 = application immédiate (défaut : aucun lissage, décision du 05/11)." }
-        fadeSeconds: { type: number, minimum: 0.005, maximum: 2, default: 0.05, description: "VarLag.time de l'écrivain de sortie : durée en secondes du fondu entre deux Synths lors d'un changement de modèle ou d'un argument fixé à la création (compressor.model, limiter.durMs)." }
     GraphStage:
       type: object
-      required: [stage, label, enabled, requestedModel, loadedModel, docs]
+      required: [stage, label, enabled, inserted, requestedModel, loadedModel, docs]
       properties:
-        stage: { type: string, enum: [infraHpf, sideHpf, eq, mix, clipper, limiter, compressor] }
+        stage: { type: string, enum: [infraHpf, sideHpf, eq, mix, clipper, compressor, limiter] }
         label: { type: string }
         enabled: { type: boolean }
+        inserted: { type: [boolean, 'null'], description: "État d'insertion des plugs compresseur/limiteur ; null pour les étages fixes." }
         requestedModel: { type: [string, 'null'] }
         loadedModel: { type: [string, 'null'] }
         docs: { type: array, items: { $ref: '#/components/schemas/UGenDoc' } }
@@ -1183,8 +1224,9 @@ components:
         stage: { type: string, enum: [input, inputCompressor, eq, hp, lp, pitch, bandCompressor, mix] }
         label: { type: string }
         enabled: { type: boolean }
+        inserted: { type: [boolean, 'null'], description: "Pour HP/LP, indique si le nœud de filtre est présent dans la chaîne." }
         requestedModel: { type: [string, 'null'], description: "Modèle du filtre (hp, lp) ; null pour les autres étages." }
-        loadedModel: { type: [string, 'null'], description: "Égal à requestedModel : les modèles de filtre sont toujours chargés." }
+        loadedModel: { type: [string, 'null'], description: "Modèle réellement inséré ; null si le filtre est retiré." }
         docs: { type: array, items: { $ref: '#/components/schemas/UGenDoc' } }
     UGenDoc:
       type: object

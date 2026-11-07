@@ -1,4 +1,5 @@
 import { STAGE_LABELS } from './descriptors.js';
+import { outputSynthDefEntry, synthDefEntry } from './synthdef-catalog.js';
 
 /**
  * Chaînes de traitement publiées par GET /api/sources/{id}/processing-graph et
@@ -10,7 +11,7 @@ import { STAGE_LABELS } from './descriptors.js';
 export const SOURCE_GRAPH_ORDER = ['input', 'inputCompressor', 'eq', 'hp', 'lp', 'pitch', 'bandCompressor', 'mix'];
 
 /** Ordre du signal d'une sortie (sc/graph.scd, SynthDef de traitement de sortie). */
-export const OUTPUT_GRAPH_ORDER = ['infraHpf', 'sideHpf', 'eq', 'mix', 'clipper', 'limiter', 'compressor'];
+export const OUTPUT_GRAPH_ORDER = ['infraHpf', 'sideHpf', 'eq', 'mix', 'clipper', 'compressor', 'limiter'];
 
 /** Page d'aide d'une classe de la bibliothèque standard de SuperCollider. */
 export const SC_DOC_BASE = 'https://doc.sccode.org/Classes/';
@@ -28,7 +29,7 @@ function sourceDocs(stage, settings, width) {
     case 'inputCompressor': return [doc('Compander'), LAG];
     case 'eq': return EQ_DOCS;
     case 'hp':
-    case 'lp': return [doc(settings.model), LAG];
+    case 'lp': return [doc(synthDefEntry(stage, settings.model).ugen), LAG];
     case 'pitch': return [doc('PitchShift'), doc('XFade2'), LAG];
     case 'bandCompressor': return [doc('LPF'), doc('HPF'), doc('Compander'), LAG];
     case 'mix':
@@ -39,12 +40,6 @@ function sourceDocs(stage, settings, width) {
   }
 }
 
-const OUTPUT_COMPRESSOR_DOCS = {
-  Compander: [doc('Compander')],
-  CompanderD: [doc('CompanderD'), doc('DelayN')],
-  FaustRMS: [localDoc('MixetteFaustRMS')],
-};
-
 function outputDocs(stage, settings) {
   switch (stage) {
     case 'infraHpf':
@@ -53,7 +48,14 @@ function outputDocs(stage, settings) {
     case 'mix': return [LAG];
     case 'clipper': return [doc('Clip'), LAG];
     case 'limiter': return [doc('Limiter'), LAG];
-    case 'compressor': return [...OUTPUT_COMPRESSOR_DOCS[settings.model], LAG];
+    case 'compressor': {
+      const entry = outputSynthDefEntry('compressor', settings.model);
+      const docs = (entry.implementation || [entry.ugen]).map((ugen) => (
+        ugen === 'MixetteFaustRMS' ? localDoc(ugen) : doc(ugen)
+      ));
+      if (entry.implementation) docs.unshift(doc(entry.ugen));
+      return [...docs, LAG];
+    }
     default: throw new Error(`Étage de sortie sans documentation : ${stage}.`);
   }
 }
@@ -71,7 +73,7 @@ function sourceEnabled(stage, settings) {
   }
 }
 
-/** Chaîne d'une source. Les modèles HP et LP sont toujours disponibles : chargé = demandé. */
+/** Chaîne d'une source ; un filtre retiré n'a pas de modèle chargé. */
 export function sourceGraph(source) {
   return SOURCE_GRAPH_ORDER.map((stage) => {
     const settings = source.processing[stage];
@@ -79,9 +81,10 @@ export function sourceGraph(source) {
     return {
       stage,
       label: STAGE_LABELS.source[stage],
-      enabled: sourceEnabled(stage, settings),
+      enabled: (stage === 'hp' || stage === 'lp') ? settings.inserted && settings.enabled : sourceEnabled(stage, settings),
+      inserted: stage === 'hp' || stage === 'lp' ? settings.inserted : null,
       requestedModel,
-      loadedModel: requestedModel,
+      loadedModel: requestedModel && settings.inserted ? requestedModel : null,
       docs: sourceDocs(stage, settings, source.width),
     };
   });
@@ -92,12 +95,17 @@ export function outputGraph(output, models) {
   return OUTPUT_GRAPH_ORDER.map((stage) => {
     const settings = output[stage];
     const requestedModel = stage === 'compressor' ? settings.model : null;
+    const plugin = stage === 'compressor' || stage === 'limiter';
+    const inserted = plugin ? settings.inserted : null;
     return {
       stage,
       label: STAGE_LABELS.output[stage],
-      enabled: stage === 'compressor' ? !settings.bypass : (settings.enabled ?? true),
+      enabled: stage === 'compressor' ? inserted && !settings.bypass
+        : stage === 'limiter' ? inserted && settings.enabled : (settings.enabled ?? true),
+      inserted,
       requestedModel,
-      loadedModel: requestedModel && models[requestedModel] ? requestedModel : null,
+      loadedModel: stage === 'limiter' ? (inserted ? 'Limiter' : null)
+        : requestedModel && inserted && models[requestedModel] ? requestedModel : null,
       docs: outputDocs(stage, settings),
     };
   });

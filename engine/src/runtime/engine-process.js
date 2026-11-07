@@ -25,6 +25,9 @@ export const DEFAULT_LANG_PORT = 57131;
 
 /** Nombre de lignes conservées par le journal du moteur (GET /api/engine/log). */
 export const JOURNAL_CAPACITY = 5000;
+/** scsynth est déclaré muet après SCSYNTH_STALL_STATUSES statuts de suite sans réponse depuis plus de SCSYNTH_STALL_MS. */
+export const SCSYNTH_STALL_MS = 5000;
+export const SCSYNTH_STALL_STATUSES = 3;
 
 const fwd = (p) => p.replaceAll('\\', '/');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -345,6 +348,7 @@ export class EngineProcess extends EventEmitter {
     this.#rebuildMeterIds();
     ctx.listener = this.#listenerFactory();
     const relay = new MeterRelay((meterId) => this.resolveSourceId(meterId) ?? null);
+    let staleStatuses = 0;
     ctx.listener.on('message', (message) => {
       if (this.#ctx !== ctx) return;
       const event = relay.handle(message);
@@ -352,6 +356,14 @@ export class EngineProcess extends EventEmitter {
       if (event.type === 'engineRuntimeChanged') {
         this.#runtime = event.data;
         this.emit('runtime', event);
+        // scsynth traite ses commandes au rythme des appels audio : s'il ne répond plus à /status, il ne
+        // reçoit plus d'audio. Un retard isolé (sclang occupé) ne compte pas ; trois statuts de suite, si.
+        staleStatuses = event.data.scsynthReplyAgeMs > SCSYNTH_STALL_MS ? staleStatuses + 1 : 0;
+        if (staleStatuses >= SCSYNTH_STALL_STATUSES && this.#status === 'running') {
+          const seconds = Math.round(event.data.scsynthReplyAgeMs / 1000);
+          this.#failInternal(new Error(`scsynth ne répond plus depuis ${seconds} s : il ne reçoit plus d'audio `
+            + '(client TimoxVasio arrêté, par exemple après un redémarrage de TimoxVasio). Redémarrer le moteur.'));
+        }
       } else {
         this.emit('meter', event);
       }

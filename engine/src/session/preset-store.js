@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Source, Output, PresetCreate } from '../contract/schemas.js';
 import { ApiError, codes } from '../contract/errors.js';
-import { validateChannels } from './session-model.js';
+import { migrateLegacyOutputFields, validateChannels } from './session-model.js';
 import { writeJsonAtomic } from './atomic-file.js';
 import { z } from 'zod';
 
@@ -41,7 +41,7 @@ export class PresetStore {
     } catch (e) {
       throw invalid(e.message);
     }
-    const r = PresetFile.safeParse(json);
+    const r = PresetFile.safeParse(migrateLegacyOutputFields(json));
     if (!r.success) {
       throw invalid(r.error.issues.map((i) => `${i.path.join('.') || '(racine)'} : ${i.message}`).join(' ; '));
     }
