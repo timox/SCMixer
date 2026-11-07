@@ -7,7 +7,7 @@ import path from 'node:path';
 import { TimoxVasioClient } from '../src/runtime/timoxvasio-client.js';
 import { ProcessRegistry } from '../src/runtime/process-registry.js';
 
-const EXE = 'C:\\Program Files\\TimoxVSSC\\resources\\backend\\TimoxVirtualAsioEngine.exe';
+const EXE = 'C:\\Program Files\\TimoxVasio\\resources\\backend\\TimoxVirtualAsioEngine.exe';
 const body = (engine = {}, apiVersion = '1.1') => ({
   apiVersion,
   engine: { state: 'running', physicalDriverId: 'drv', sampleRate: 48000, bufferFrames: 2048, lastError: null, ...engine },
@@ -95,7 +95,7 @@ test('hôte absent : lancé sans argument, port lu dans api.ready, enregistré, 
   assert.equal(w.spawns.length, 1);
   assert.equal(w.spawns[0].exe, EXE);
   assert.deepEqual(w.spawns[0].args, []);
-  assert.equal(w.spawns[0].opts.cwd, 'C:\\Program Files\\TimoxVSSC\\resources\\backend');
+  assert.equal(w.spawns[0].opts.cwd, 'C:\\Program Files\\TimoxVasio\\resources\\backend');
   assert.deepEqual(w.spawns[0].opts.stdio, ['ignore', 'pipe', 'pipe']);
   assert.equal(res.info.apiUrl, 'http://127.0.0.1:53001');
   assert.equal(res.info.hostPid, 9100);

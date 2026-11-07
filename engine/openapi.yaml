@@ -846,7 +846,7 @@ components:
         scsynthPid: { type: [integer, 'null'] }
         timoxVasio:
           description: >
-            Supervision de TimoxVasio (API 1.1, dépôt TimoxVAudioEngine). Au démarrage, le moteur lance l'hôte
+            Supervision de TimoxVasio (API 1.1). Au démarrage, le moteur lance l'hôte
             TimoxVirtualAsioEngine.exe s'il est absent (port lu dans l'événement api.ready), envoie engine.start si le
             transport est arrêté avec un pilote physique configuré, puis lit l'horloge. Il ne crée aucune route
             (TimoxVasio ajoute scsynth à son graphe) et n'arrête jamais l'hôte ni son transport. Champs null tant que le

@@ -8,7 +8,7 @@ import { listProcessesWindows } from './process-registry.js';
 /** Version de l'API TimoxVasio visée (GET /api/v1/state, champ apiVersion). Aucune autre version n'est acceptée. */
 export const TIMOXVASIO_API_VERSION = '1.1';
 export const DEFAULT_TIMOXVASIO_URL = 'http://127.0.0.1:52525';
-export const DEFAULT_TIMOXVASIO_ENGINE_EXE = 'C:\\Program Files\\TimoxVSSC\\resources\\backend\\TimoxVirtualAsioEngine.exe';
+export const DEFAULT_TIMOXVASIO_ENGINE_EXE = 'C:\\Program Files\\TimoxVasio\\resources\\backend\\TimoxVirtualAsioEngine.exe';
 export const HOST_ROLE = 'timoxvasio-host';
 
 const notReady = (message) => new ApiError('TIMOXVASIO_NOT_READY', 409, message);
@@ -244,7 +244,7 @@ export class TimoxVasioClient {
       engine = this.#checkBody(body);
       if (engine.state === 'error') throw notReady(`TimoxVasio est en erreur après engine.start : ${engine.lastError ?? 'cause non renseignée'}.`);
       if (engine.state === 'stopped') {
-        throw notReady(`TimoxVasio reste arrêté après engine.start${engine.lastError ? ` (${engine.lastError})` : ' : aucune route configurée, le moteur ne démarre pas sans route (API.md)'}. Configurer le pilote maître et les routes dans Timox VASIO Control.`);
+        throw notReady(`TimoxVasio reste arrêté après engine.start${engine.lastError ? ` (${engine.lastError})` : ' : aucune route configurée, le moteur ne démarre pas sans route'}. Configurer le pilote maître et au moins une route vers ou depuis scsynth dans Timox VASIO Control.`);
       }
     }
     if (engine.state !== 'running') {

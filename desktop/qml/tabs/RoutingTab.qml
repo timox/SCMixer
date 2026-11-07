@@ -15,7 +15,7 @@ Item {
     readonly property var sources: store ? store.sources : null
     function refresh() {
         if (vasio && engine.timoxVasio)
-            vasio.refresh(engine.timoxVasio.apiUrl, engine.scsynthPid || 0);
+            vasio.refresh(engine.timoxVasio.apiUrl);
     }
     function feedsOf(channel) {
         var list = vasio ? vasio.inputs : [];

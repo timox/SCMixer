@@ -4,17 +4,17 @@
   "engine": { "state": "running", "sampleRate": 48000, "bufferFrames": 512, "lastError": null, "physicalDriverId": "{C0E4A803-D72F-4B6E-89B1-903E90F1F71B}", "clockSource": { "kind": "asio" } },
   "physicalDrivers": [],
   "virtualDrivers": [],
-  "routes": [
-    { "id": "route-1", "sourceEndpointId": "virtual:TimoxVasio:9732:output:1", "destinationEndpointId": "virtual:TimoxVasio:4242:input:1", "gainDb": 0, "mute": false },
-    { "id": "route-2", "sourceEndpointId": "virtual:TimoxVasio:9732:output:2", "destinationEndpointId": "virtual:TimoxVasio:4242:input:2", "gainDb": 0, "mute": false },
-    { "id": "route-3", "sourceEndpointId": "virtual:TimoxVasio:9732:output:2", "destinationEndpointId": "virtual:TimoxVasio:4242:input:3", "gainDb": -6, "mute": false },
-    { "id": "route-4", "sourceEndpointId": "virtual:TimoxVasio:4242:output:1", "destinationEndpointId": "physical:{C0E4A803-D72F-4B6E-89B1-903E90F1F71B}:output:1", "gainDb": 0, "mute": false },
-    { "id": "route-5", "sourceEndpointId": "virtual:TimoxVasio:4242:output:2", "destinationEndpointId": "physical:{C0E4A803-D72F-4B6E-89B1-903E90F1F71B}:output:2", "gainDb": 0, "mute": false },
-    { "id": "route-6", "sourceEndpointId": "virtual:TimoxVasio:4242:output:3", "destinationEndpointId": "physical:{C0E4A803-D72F-4B6E-89B1-903E90F1F71B}:output:3", "gainDb": 0, "mute": true },
-    { "id": "route-7", "sourceEndpointId": "virtual:TimoxVasio:9732:output:1", "destinationEndpointId": "physical:{C0E4A803-D72F-4B6E-89B1-903E90F1F71B}:output:5", "gainDb": 0, "mute": false },
-    { "id": "route-8", "sourceEndpointId": "virtual:TimoxVasio:42:output:1", "destinationEndpointId": "virtual:TimoxVasio:42:input:1", "gainDb": 0, "mute": false }
+  "routes": [],
+  "configuredRoutes": [
+    { "id": "route-1", "sourceEndpointId": "virtual:TimoxVasio:app:mixxx.exe:output:1", "destinationEndpointId": "virtual:TimoxVasio:app:scsynth.exe:input:1", "gainDb": 0, "mute": false },
+    { "id": "route-2", "sourceEndpointId": "virtual:TimoxVasio:app:mixxx.exe:output:2", "destinationEndpointId": "virtual:TimoxVasio:app:scsynth.exe:input:2", "gainDb": 0, "mute": false },
+    { "id": "route-3", "sourceEndpointId": "virtual:TimoxVasio:app:renoise.exe:output:2", "destinationEndpointId": "virtual:TimoxVasio:app:scsynth.exe:input:3", "gainDb": -6, "mute": false },
+    { "id": "route-4", "sourceEndpointId": "virtual:TimoxVasio:app:scsynth.exe:output:1", "destinationEndpointId": "physical:{C0E4A803-D72F-4B6E-89B1-903E90F1F71B}:output:1", "gainDb": 0, "mute": false },
+    { "id": "route-5", "sourceEndpointId": "virtual:TimoxVasio:app:scsynth.exe:output:2", "destinationEndpointId": "physical:{C0E4A803-D72F-4B6E-89B1-903E90F1F71B}:output:2", "gainDb": 0, "mute": false },
+    { "id": "route-6", "sourceEndpointId": "virtual:TimoxVasio:app:scsynth.exe:output:3", "destinationEndpointId": "physical:{C0E4A803-D72F-4B6E-89B1-903E90F1F71B}:output:3", "gainDb": 0, "mute": true },
+    { "id": "route-7", "sourceEndpointId": "virtual:TimoxVasio:app:scsynth.exe:output:1", "destinationEndpointId": "physical:{C0E4A803-D72F-4B6E-89B1-903E90F1F71B}:output:5", "gainDb": 0, "mute": false },
+    { "id": "route-8", "sourceEndpointId": "virtual:TimoxVasio:app:scsynth.exe:output:1", "destinationEndpointId": "virtual:TimoxVasio:app:scsynth.exe:input:1", "gainDb": 0, "mute": false }
   ],
-  "configuredRoutes": [],
   "stereoPairs": [],
   "bufferHealth": [],
   "performanceMeasurements": []

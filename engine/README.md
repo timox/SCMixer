@@ -45,7 +45,7 @@ engine.cmd stop
 | `SCMIXER_ENGINE_PORT` | Port d'écoute de l'API (loopback) | `3100` |
 | `SCMIXER_ENGINE_DATA_DIR` | Dossier de données | `%LOCALAPPDATA%\SCMixer` |
 | `SCMIXER_TIMOXVASIO_URL` | API TimoxVasio | `http://127.0.0.1:52525` |
-| `SCMIXER_TIMOXVASIO_ENGINE_EXE` | Hôte TimoxVasio lancé s'il est absent | `C:\Program Files\TimoxVSSC\resources\backend\TimoxVirtualAsioEngine.exe` |
+| `SCMIXER_TIMOXVASIO_ENGINE_EXE` | Hôte TimoxVasio lancé s'il est absent | `C:\Program Files\TimoxVasio\resources\backend\TimoxVirtualAsioEngine.exe` |
 | `SCLANG_PATH` | sclang à utiliser à la place de celui de `--sc-dir` | — |
 | `SCMIXER_RECORDINGS_DIR` | Dossier des enregistrements WAV | `Documents\SCMixer\Enregistrements` (dossier Documents connu de Windows) |
 

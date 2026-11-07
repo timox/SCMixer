@@ -1,5 +1,6 @@
 #include <QFile>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QtTest>
 
 #include "TimoxVasioClient.h"
@@ -39,12 +40,12 @@ private slots:
     void keepsOnlyScsynthRoutes()
     {
         TimoxVasioClient client(nullptr);
-        client.applyState(fixture(), 4242);
+        client.applyState(fixture());
         QCOMPARE(client.error(), QString());
         const QVariantList inputs = client.inputs();
         QCOMPARE(inputs.size(), 3);
         QCOMPARE(inputs[0].toMap().value("channel").toInt(), 1);
-        QCOMPARE(endpoints(inputs, "sources"), QStringList{"virtual:TimoxVasio:9732:output:1"});
+        QCOMPARE(endpoints(inputs, "sources"), QStringList{"virtual:TimoxVasio:app:mixxx.exe:output:1"});
         QCOMPARE(inputs[2].toMap().value("sources").toList().first().toMap().value("gainDb").toDouble(), -6.0);
 
         const QVariantList outputs = client.outputs();
@@ -54,13 +55,17 @@ private slots:
         QVERIFY(outputs[3].toMap().value("destinations").toList().isEmpty());
     }
 
-    void stoppedEngineGivesEmptyLists()
+    void configuredRoutesRemainVisibleBeforeEngineStart()
     {
         TimoxVasioClient client(nullptr);
-        client.applyState(fixture(), 0);
-        QVERIFY(client.inputs().isEmpty());
-        QVERIFY(client.outputs().isEmpty());
-        QVERIFY(client.error().contains(QStringLiteral("moteur arrêté")));
+        QJsonObject state = fixture();
+        QJsonObject engine = state.value(QStringLiteral("engine")).toObject();
+        engine.insert(QStringLiteral("state"), QStringLiteral("stopped"));
+        state.insert(QStringLiteral("engine"), engine);
+        client.applyState(state);
+        QVERIFY(client.error().isEmpty());
+        QCOMPARE(client.inputs().size(), 3);
+        QCOMPARE(client.outputs().size(), TimoxVasioClient::OutputChannels);
     }
 
     void unreachableSetsError()
@@ -68,18 +73,18 @@ private slots:
         FakeTransport transport;
         TimoxVasioClient client(&transport);
         transport.next.networkError = QStringLiteral("Connection refused");
-        client.refresh(QStringLiteral("http://127.0.0.1:52525"), 4242);
+        client.refresh(QStringLiteral("http://127.0.0.1:52525"));
         QCOMPARE(transport.urls.first().toString(), QString("http://127.0.0.1:52525/api/v1/state"));
         QVERIFY(client.error().contains(QStringLiteral("Connection refused")));
         QVERIFY(client.inputs().isEmpty());
 
         transport.next = HttpReply{200, QJsonDocument(fixture()).toJson(), QString()};
-        client.refresh(QStringLiteral("http://127.0.0.1:52525"), 4242);
+        client.refresh(QStringLiteral("http://127.0.0.1:52525"));
         QCOMPARE(client.error(), QString());
         QCOMPARE(client.inputs().size(), 3);
 
         transport.next = HttpReply{200, QByteArrayLiteral("{\"apiVersion\":\"9.0\"}"), QString()};
-        client.refresh(QStringLiteral("http://127.0.0.1:52525"), 4242);
+        client.refresh(QStringLiteral("http://127.0.0.1:52525"));
         QVERIFY(client.error().contains(QStringLiteral("9.0")));
     }
 };

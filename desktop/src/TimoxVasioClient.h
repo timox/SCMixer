@@ -6,8 +6,8 @@
 
 #include "HttpTransport.h"
 
-// Lecture seule du routage TimoxVasio (GET <apiUrl>/api/v1/state, contrat api-v1.json). Seules les routes
-// qui touchent les extrémités de scsynth (virtual:TimoxVasio:<pid>:input:<n> et :output:<n>) sont
+// Lecture seule du routage configuré TimoxVasio (GET <apiUrl>/api/v1/state). Seules les routes
+// qui touchent les extrémités de scsynth (virtual:TimoxVasio:app:scsynth.exe:input/output:<n>) sont
 // retenues. Aucune route n'est créée ni modifiée ici. Exposé à QML sous le nom `Vasio`.
 class TimoxVasioClient : public QObject {
     Q_OBJECT
@@ -26,9 +26,9 @@ public:
     QVariantList outputs() const { return m_outputs; }
     QString error() const { return m_error; }
 
-    // apiUrl et scsynthPid viennent de GET /api/engine (timoxVasio.apiUrl, scsynthPid).
-    Q_INVOKABLE void refresh(const QString &apiUrl, int scsynthPid);
-    void applyState(const QJsonObject &state, int scsynthPid);
+    // apiUrl vient de GET /api/engine (timoxVasio.apiUrl) ; fonctionne aussi moteur SCMixer arrêté.
+    Q_INVOKABLE void refresh(const QString &apiUrl);
+    void applyState(const QJsonObject &state);
 
 signals:
     void changed();

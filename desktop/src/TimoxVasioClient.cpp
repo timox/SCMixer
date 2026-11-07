@@ -24,15 +24,11 @@ void TimoxVasioClient::fail(const QString &message)
     emit changed();
 }
 
-void TimoxVasioClient::refresh(const QString &apiUrl, int scsynthPid)
+void TimoxVasioClient::refresh(const QString &apiUrl)
 {
-    if (scsynthPid <= 0) {
-        fail(QStringLiteral("Routage indisponible : moteur arrêté."));
-        return;
-    }
     QUrl url(apiUrl);
     url.setPath(QStringLiteral("/api/v1/state"));
-    m_transport->send(QStringLiteral("GET"), url, QByteArray(), [this, scsynthPid, url](const HttpReply &reply) {
+    m_transport->send(QStringLiteral("GET"), url, QByteArray(), [this, url](const HttpReply &reply) {
         if (reply.status == 0) {
             fail(QStringLiteral("TimoxVasio injoignable (%1) : %2").arg(url.toString(), reply.networkError));
             return;
@@ -41,25 +37,26 @@ void TimoxVasioClient::refresh(const QString &apiUrl, int scsynthPid)
             fail(QStringLiteral("TimoxVasio a répondu %1.").arg(reply.status));
             return;
         }
-        applyState(QJsonDocument::fromJson(reply.body).object(), scsynthPid);
+        applyState(QJsonDocument::fromJson(reply.body).object());
     });
 }
 
-void TimoxVasioClient::applyState(const QJsonObject &state, int scsynthPid)
+void TimoxVasioClient::applyState(const QJsonObject &state)
 {
-    if (scsynthPid <= 0) {
-        fail(QStringLiteral("Routage indisponible : moteur arrêté."));
-        return;
-    }
     const QString version = state.value(QStringLiteral("apiVersion")).toString();
     if (!kApiVersions.contains(version)) {
         fail(QStringLiteral("Version d'API TimoxVasio non prise en charge : %1.").arg(version));
         return;
     }
-    const QRegularExpression endpoint(QStringLiteral("^virtual:TimoxVasio:%1:(input|output):(\\d+)$").arg(scsynthPid));
+    const QRegularExpression endpoint(QStringLiteral("^virtual:TimoxVasio:app:scsynth\\.exe:(input|output):(\\d+)$"),
+                                      QRegularExpression::CaseInsensitiveOption);
     QMap<int, QVariantList> feeds;
     QMap<int, QVariantList> destinations;
-    for (const QJsonValue &v : state.value(QStringLiteral("routes")).toArray()) {
+    const QJsonArray configuredRoutes = state.value(QStringLiteral("configuredRoutes")).toArray();
+    const QJsonArray routes = configuredRoutes.isEmpty() && !state.contains(QStringLiteral("configuredRoutes"))
+                                  ? state.value(QStringLiteral("routes")).toArray()
+                                  : configuredRoutes;
+    for (const QJsonValue &v : routes) {
         const QJsonObject route = v.toObject();
         const QString from = route.value(QStringLiteral("sourceEndpointId")).toString();
         const QString to = route.value(QStringLiteral("destinationEndpointId")).toString();
