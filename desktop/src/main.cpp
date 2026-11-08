@@ -52,7 +52,7 @@ void captureTabs(QQmlApplicationEngine *engine, ApiClient *api, StateStore *stor
         };
         QList<Step> steps;
         const QStringList tabNames{QStringLiteral("console"), QStringLiteral("traitements"), QStringLiteral("presets"),
-                                   QStringLiteral("routage"), QStringLiteral("moteur"), QStringLiteral("journal")};
+                                   QStringLiteral("routage"), QStringLiteral("moteur"), QStringLiteral("journal"), QStringLiteral("api")};
         for (int i = 0; i < tabNames.size(); ++i)
             steps.append({tabNames[i], [=]() { tabs->setProperty("currentIndex", i); }});
         if (workspace) {

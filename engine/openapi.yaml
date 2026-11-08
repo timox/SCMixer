@@ -54,6 +54,12 @@ paths:
       summary: État complet publié par stateChanged
       responses:
         '200': { description: État, content: { application/json: { schema: { $ref: '#/components/schemas/State' } } } }
+  /api/openapi.json:
+    get:
+      tags: [Documentation]
+      summary: Retourne la spécification OpenAPI 3.1 de l'API SCMixer
+      responses:
+        '200': { description: Contrat OpenAPI, content: { application/json: { schema: { type: object } } } }
   /api/parameters:
     get:
       tags: [Moteur]

@@ -159,6 +159,7 @@ export class EngineProcess extends EventEmitter {
     this.#askTimeoutMs = askTimeoutMs;
     this.#resolveAttempts = resolveAttempts;
     this.#timoxVasio = timoxVasio ?? new TimoxVasioClient({ apiUrl, registry: this.#registry, engineExe: timoxVasioEngineExe });
+    this.#timoxVasio.on?.('routingError', (message) => this.#journalAppend('timoxVasio', message));
     this.#scDir = scDir;
     this.#logFile = dataDir ? path.join(dataDir, 'logs', 'sclang.log') : null;
     this.#session = store.load();
@@ -182,6 +183,10 @@ export class EngineProcess extends EventEmitter {
   /** Session courante (copie profonde). */
   session() { return structuredClone(this.#session); }
 
+  publishRouting() {
+    if (this.#status === 'running') this.#timoxVasio.publishRouting?.(this.#session, this.#scsynthPid);
+  }
+
   /** Récepteur OSC de la session moteur en cours (null moteur arrêté) ; sert au relais de mesures. */
   get oscListener() { return this.#ctx?.listener ?? null; }
 
@@ -197,6 +202,8 @@ export class EngineProcess extends EventEmitter {
   #setStatus(status, error = null) {
     this.#status = status;
     this.#error = error;
+    if (status === 'running') this.publishRouting();
+    else if (status === 'stopped' || status === 'failed') this.#timoxVasio.clearRouting?.();
     this.#journalAppend('service', error ? `moteur ${status} : ${error}` : `moteur ${status}`);
     this.emit('state', this.state());
   }
@@ -211,6 +218,7 @@ export class EngineProcess extends EventEmitter {
     this.#session = session;
     this.#generation += 1;
     this.emit('session', { session: structuredClone(session), generation: this.#generation });
+    this.publishRouting();
   }
 
   /**

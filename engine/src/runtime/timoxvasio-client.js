@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import WebSocket from 'ws';
 import { ApiError } from '../contract/errors.js';
 import { listProcessesWindows } from './process-registry.js';
@@ -32,14 +33,16 @@ const normCommand = (c) => String(c ?? '').replaceAll('"', '').trim().toLowerCas
  * seule traçabilité. Le moteur ne l'arrête jamais et n'envoie jamais engine.stop : d'autres clients en dépendent.
  * Aucune route n'est créée ni modifiée ici : TimoxVasio ajoute lui-même scsynth à son graphe.
  */
-export class TimoxVasioClient {
+export class TimoxVasioClient extends EventEmitter {
   #url; #fetch; #WebSocket; #spawn; #listHost; #exe; #exists; #registry; #t;
+  #routingSocket = null; #routingReconnect = null; #routingPayload = null; #routingRevision = 0; #activeInputs = new Set();
 
   constructor({
     apiUrl = DEFAULT_TIMOXVASIO_URL, registry = null, fetchImpl = fetch, WebSocketImpl = WebSocket, spawnImpl = spawn,
     listHostProcesses, engineExe = DEFAULT_TIMOXVASIO_ENGINE_EXE, existsImpl = fs.existsSync,
     timeouts = {},
   } = {}) {
+    super();
     this.#url = String(apiUrl).replace(/\/+$/, '');
     this.#registry = registry;
     this.#fetch = fetchImpl;
@@ -53,6 +56,99 @@ export class TimoxVasioClient {
 
   /** URL effective de l'API TimoxVasio (celle configurée, ou celle annoncée par l'hôte lancé). */
   get apiUrl() { return this.#url; }
+
+  publishRouting(session, processId) {
+    if (!positiveInt(processId)) return;
+    if (session.sources.length === 0) { this.clearRouting(); return; }
+    this.#routingPayload = {
+      clientId: 'scmixer', processId, processName: 'scsynth.exe',
+      sources: session.sources.map((source) => ({
+        id: source.id, name: source.name,
+        inputChannels: Array.from({ length: source.width }, (_, i) => source.firstChannel + i),
+        gain: source.processing.mix.volume, mute: source.processing.mix.mute,
+      })),
+      outputs: ['master', 'cue'].map((id) => ({
+        id, name: id === 'master' ? 'Master' : 'Cue',
+        outputChannels: [session.outputChannels[id], session.outputChannels[id] + 1],
+        gain: session.outputs[id].mix.volume,
+      })),
+      routes: session.sources.flatMap((source) => [
+        { sourceId: source.id, outputId: 'master', gain: 1 },
+        { sourceId: source.id, outputId: 'cue', gain: source.processing.mix.cue },
+      ]),
+    };
+    this.#activeInputs.clear();
+    this.#connectRouting();
+    this.#sendRouting();
+  }
+
+  clearRouting() {
+    this.#routingPayload = null;
+    this.#activeInputs.clear();
+    clearTimeout(this.#routingReconnect);
+    this.#routingReconnect = null;
+    this.#routingSocket?.close();
+    this.#routingSocket = null;
+  }
+
+  #connectRouting() {
+    if (this.#routingSocket || !this.#routingPayload) return;
+    const url = `${this.#url.replace(/^http/, 'ws')}/api/v1/ws`;
+    let socket;
+    try { socket = new this.#WebSocket(url, 'vasio.api.v1'); } catch (error) {
+      this.emit('routingError', `Connexion WebSocket TimoxVasio impossible (${url}) : ${error.message}`);
+      this.#scheduleRoutingReconnect();
+      return;
+    }
+    this.#routingSocket = socket;
+    socket.on('open', () => this.#sendRouting());
+    socket.on('message', (data) => {
+      let message;
+      try { message = JSON.parse(String(data)); } catch { return; }
+      if (message.event === 'routes.changed') this.#sendRouting();
+      if (message.event === 'audio.meter') this.#inputActivity(message.payload);
+      if (message.id?.startsWith('scmixer-routing-') && message.success === false)
+        this.emit('routingError', `Publication TimoxVasio refusée : ${message.error?.code ?? 'erreur'} — ${message.error?.message ?? 'sans message'}`);
+    });
+    socket.on('error', (error) => this.emit('routingError', `WebSocket de routage TimoxVasio : ${error.message}`));
+    socket.on('close', () => {
+      if (this.#routingSocket === socket) this.#routingSocket = null;
+      this.#scheduleRoutingReconnect();
+    });
+  }
+
+  #scheduleRoutingReconnect() {
+    if (!this.#routingPayload || this.#routingReconnect) return;
+    this.#routingReconnect = setTimeout(() => {
+      this.#routingReconnect = null;
+      this.#connectRouting();
+    }, 1000);
+    this.#routingReconnect.unref?.();
+  }
+
+  #sendRouting() {
+    if (!this.#routingPayload || this.#routingSocket?.readyState !== this.#WebSocket.OPEN) return;
+    const revision = ++this.#routingRevision;
+    this.#routingSocket.send(JSON.stringify({
+      id: `scmixer-routing-${revision}`, command: 'client.routing.publish',
+      payload: { ...this.#routingPayload, revision },
+    }));
+  }
+
+  #inputActivity(payload) {
+    const match = /^virtual:TimoxVasio:(\d+):input:(\d+)$/i.exec(String(payload?.endpointId ?? ''));
+    if (!match || Number(match[1]) !== this.#routingPayload?.processId) return;
+    const channel = Number(match[2]);
+    if (!this.#routingPayload.sources.some((source) => source.inputChannels.includes(channel))) return;
+    const peak = Number(payload.peakDbfs);
+    const wasActive = this.#activeInputs.has(channel);
+    // Hystérésis: évite les publications répétées autour du plancher de bruit.
+    const active = wasActive ? peak > -86 : peak > -80;
+    if (active === wasActive) return;
+    if (active) this.#activeInputs.add(channel);
+    else this.#activeInputs.delete(channel);
+    this.#sendRouting();
+  }
 
   /** @returns {Promise<object>} corps de /api/v1/state, ou { unreachable } si aucune réponse. */
   async #readState() {

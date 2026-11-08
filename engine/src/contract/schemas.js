@@ -155,12 +155,14 @@ export const Output = z.strictObject({
   }),
 });
 
+export const OutputChannels = z.strictObject({ master: z.union([z.literal(1), z.literal(3), z.literal(5), z.literal(7)]), cue: z.union([z.literal(1), z.literal(3), z.literal(5), z.literal(7)]) });
+
 export const Session = z.strictObject({
   version: z.literal(3),
   nextSourceSeq: z.number().int().min(1),
   sources: z.array(Source),
   outputs: z.strictObject({ master: Output, cue: Output }),
-  outputChannels: z.strictObject({ master: z.union([z.literal(1), z.literal(3), z.literal(5), z.literal(7)]), cue: z.union([z.literal(1), z.literal(3), z.literal(5), z.literal(7)]) }).default({ master: 1, cue: 3 }),
+  outputChannels: OutputChannels.default({ master: 1, cue: 3 }),
 });
 
 export const PresetCreate = z.strictObject({ name: name() });

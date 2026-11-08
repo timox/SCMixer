@@ -1,6 +1,6 @@
 # Interface Qt du moteur de SCMixer
 
-Application native Qt 6.12 (QML et C++) qui pilote, à la souris, tous les réglages du moteur SC par sa seule API (HTTP et WebSocket), et affiche en lecture seule le routage TimoxVasio.
+Application native Qt 6.12 (QML et C++) qui pilote, à la souris, tous les réglages du moteur SC par son API HTTP/WebSocket, affiche le routage TimoxVasio et fournit un onglet API basé sur le contrat OpenAPI.
 
 ## Architecture
 

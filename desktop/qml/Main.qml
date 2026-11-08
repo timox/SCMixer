@@ -37,7 +37,7 @@ ApplicationWindow {
             id: tabs
             Layout.fillWidth: true
             Repeater {
-                model: ["Console", "Traitements", "Presets", "Routage", "Moteur", "Journal"]
+                model: ["Console", "Traitements", "Presets", "Routage", "Moteur", "Journal", "API"]
                 TabButton { required property string modelData; text: modelData }
             }
         }
@@ -58,5 +58,6 @@ ApplicationWindow {
         RoutingTab { store: Engine; vasio: Vasio }
         EngineTab { client: Api; store: Engine }
         LogTab { client: Api; connected: Api.connected }
+        ApiTab { client: Api }
     }
 }

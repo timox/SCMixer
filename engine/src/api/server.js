@@ -1,5 +1,8 @@
 import express from 'express';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
+import { parse as parseYaml } from 'yaml';
 import { ApiError } from '../contract/errors.js';
 import { registerEngineRoutes, statePayload } from './routes/engine.js';
 import { registerSourceRoutes } from './routes/sources.js';
@@ -8,6 +11,8 @@ import { registerParameterRoutes } from './routes/parameters.js';
 import { registerPresetRoutes } from './routes/presets.js';
 import { registerBenchRoutes } from './routes/benches.js';
 import { registerRecordingRoutes } from './routes/recording.js';
+
+const OPENAPI = parseYaml(fs.readFileSync(fileURLToPath(new URL('../../openapi.yaml', import.meta.url)), 'utf8'));
 
 const notFound = (req) => new ApiError('NOT_FOUND', 404, `Route inconnue : ${req.method} ${req.path}.`);
 
@@ -27,6 +32,7 @@ export function createServer({ engine, presets }) {
   registerPresetRoutes(api, engine, presets);
   registerBenchRoutes(api, engine);
   registerRecordingRoutes(api, engine);
+  api.get('/openapi.json', (req, res) => res.json(OPENAPI));
   app.use('/api', api);
 
   app.use((req, res, next) => next(notFound(req)));

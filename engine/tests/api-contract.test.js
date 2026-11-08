@@ -72,7 +72,7 @@ test('main.js : port occupé, sortie non nulle et message en français', async (
 test('ordre de la chaîne de sortie : openapi.yaml identique à la réponse de l\'API', async (t) => {
   const h = await startHarness({ running: false }); t.after(() => h.close());
   const served = (await h.call('GET', '/api/outputs/master/processing-graph')).body.map((s) => s.stage);
-  assert.deepEqual(served, ['infraHpf', 'sideHpf', 'eq', 'mix', 'clipper', 'limiter', 'compressor']);
+  assert.deepEqual(served, ['infraHpf', 'sideHpf', 'eq', 'mix', 'clipper', 'compressor', 'limiter']);
   assert.deepEqual(spec.components.schemas.GraphStage.properties.stage.enum, served);
   const description = spec.paths['/api/outputs/{output}/processing-graph'].get.description;
   assert.ok(description.includes(served.join(', ').replace('mix', 'mix (volume)')));

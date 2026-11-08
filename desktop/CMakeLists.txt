@@ -68,6 +68,7 @@ qt_add_qml_module(scmixer
         qml/panels/BenchPanel.qml
         qml/tabs/RoutingTab.qml
         qml/tabs/LogTab.qml
+        qml/tabs/ApiTab.qml
         qml/panels/EngineBar.qml
         qml/panels/RecordBar.qml
 )

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { Source, Output, PresetCreate, Session } from '../contract/schemas.js';
+import { Source, Output, OutputChannels, PresetCreate } from '../contract/schemas.js';
 import { ApiError, codes } from '../contract/errors.js';
 import { migrateLegacyOutputFields, validateChannels } from './session-model.js';
 import { writeJsonAtomic } from './atomic-file.js';
@@ -18,7 +18,7 @@ const PresetFile = z.strictObject({
   content: z.strictObject({
     sources: z.array(Source),
     outputs: z.strictObject({ master: Output, cue: Output }),
-    outputChannels: z.strictObject({ master: Session.shape.outputChannels.shape.master, cue: Session.shape.outputChannels.shape.cue }).default({ master: 1, cue: 3 }),
+    outputChannels: OutputChannels.default({ master: 1, cue: 3 }),
   }),
 });
 
