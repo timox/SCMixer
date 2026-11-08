@@ -29,6 +29,8 @@ ApiClient::ApiClient(const QUrl &baseUrl, HttpTransport *transport, EventChannel
         const QString type = event.value(QStringLiteral("type")).toString();
         if (!doc.isObject() || type.isEmpty())
             return;
+        if (type == QStringLiteral("engineStateChanged"))
+            get(QStringLiteral("/api/parameters"));
         emit eventReceived(type, event.value(QStringLiteral("data")).toObject());
     });
 }

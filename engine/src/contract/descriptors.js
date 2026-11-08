@@ -353,6 +353,15 @@ function buildCatalog() {
 const CATALOG = buildCatalog();
 
 /** Copie du catalogue : la route et les tests ne peuvent pas le modifier. */
-export function buildParameterCatalog() {
-  return structuredClone(CATALOG);
+export function buildParameterCatalog(models) {
+  const catalog = structuredClone(CATALOG);
+  if (models) {
+    const available = new Set(Object.entries(models).filter(([, loaded]) => loaded === true).map(([id]) => id));
+    const compressor = catalog.output.compressor;
+    const model = compressor.fields.find((field) => field.key === 'model');
+    model.options = model.options.filter((id) => available.has(id));
+    model.optionInfo = model.optionInfo.filter(({ value }) => available.has(value));
+    compressor.synthDefs = compressor.synthDefs.filter(({ id }) => available.has(id));
+  }
+  return catalog;
 }

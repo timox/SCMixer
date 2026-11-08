@@ -126,13 +126,18 @@ test('semitones est un entier de pas 1', () => {
   assert.equal(field.step, 1);
 });
 
-test('GET /api/parameters : 200 moteur arrêté, catalogue complet', async (t) => {
-  const h = await startHarness(); t.after(() => h.close());
-  const r = await h.call('GET', '/api/parameters');
+test('GET /api/parameters : options de compresseur limitées aux modèles chargés', async (t) => {
+  const h = await startHarness({ running: false }); t.after(() => h.close());
+  let r = await h.call('GET', '/api/parameters');
   assert.equal(r.status, 200);
   assert.equal(Object.keys(r.body.source).length, 8);
   assert.ok(r.body.source.bandCompressor.crossover.fields.length > 0);
-  assert.equal(r.body.output.compressor.fields.find((f) => f.key === 'model').options.length, 3);
+  assert.deepEqual(r.body.output.compressor.fields.find((f) => f.key === 'model').options, ['Compander']);
+  assert.deepEqual(r.body.output.compressor.synthDefs.map((model) => model.id), ['Compander']);
+  await h.call('POST', '/api/engine/start');
+  r = await h.call('GET', '/api/parameters');
+  assert.deepEqual(r.body.output.compressor.fields.find((f) => f.key === 'model').options, ['Compander', 'CompanderD']);
+  assert.deepEqual(r.body.output.compressor.synthDefs.map((model) => model.id), ['Compander', 'CompanderD']);
   assert.equal(flatten(r.body).size, SOURCE_PATHS.length + OUTPUT_PATHS.length + BENCH_PATHS.length);
 });
 
@@ -161,7 +166,7 @@ test('groupes : réglages principaux et avancés', () => {
     assert.equal(flat.get(key).group, 'main', key);
   }
   for (const key of ['source:hp.minHz', 'source:eq.lowMul', 'source:eq.controlLag', 'source:pitch.windowSize',
-    'source:pitch.mul', 'source:bandCompressor.crossover.lowLp1Mul', 'output:compressor.fadeSeconds', 'output:infraHpf.add']) {
+    'source:pitch.mul', 'source:bandCompressor.crossover.lowLp1Mul', 'output:compressor.controlLag', 'output:infraHpf.add']) {
     assert.equal(flat.get(key).group, 'advanced', key);
   }
 });

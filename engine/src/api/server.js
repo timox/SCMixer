@@ -28,7 +28,7 @@ export function createServer({ engine, presets }) {
   registerEngineRoutes(api, engine);
   registerSourceRoutes(api, engine);
   registerOutputRoutes(api, engine);
-  registerParameterRoutes(api);
+  registerParameterRoutes(api, engine);
   registerPresetRoutes(api, engine, presets);
   registerBenchRoutes(api, engine);
   registerRecordingRoutes(api, engine);

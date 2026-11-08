@@ -29,6 +29,13 @@ test('openapi.yaml : OpenAPI 3.1 avec événements WebSocket', () => {
   assert.equal(spec['x-websocket'].path, '/api/ws');
 });
 
+test('OpenAPI : les options de modèle suivent les modèles chargés au runtime', () => {
+  const model = spec.components.schemas.OutputCompressor.properties.model;
+  assert.equal(model.enum, undefined);
+  assert.match(model.description, /GET \/api\/parameters/);
+  assert.match(model.description, /409 MODEL_UNAVAILABLE/);
+});
+
 test('routes Express et openapi.yaml concordent dans les deux sens', async (t) => {
   const h = await startHarness({ running: false }); t.after(() => h.close());
   const express = h.api.routes().map((r) => `${r.method} ${r.path.replace(/:(\w+)/g, '{$1}')}`).sort();
