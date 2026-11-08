@@ -17,6 +17,7 @@ void StateStore::applyState(const QJsonObject &state)
     const QJsonObject outputs = state.value(QStringLiteral("outputs")).toObject();
     m_master = outputs.value(QStringLiteral("master")).toObject().toVariantMap();
     m_cue = outputs.value(QStringLiteral("cue")).toObject().toVariantMap();
+    m_outputChannels = state.value(QStringLiteral("outputChannels")).toObject().toVariantMap();
     emit outputsChanged();
     m_sources.setSources(state.value(QStringLiteral("sources")).toArray());
     m_recording = state.value(QStringLiteral("recording")).toObject().toVariantMap();
@@ -82,7 +83,7 @@ void StateStore::attach(ApiClient *api)
 void StateStore::applyResponse(const QString &method, const QString &path, const QVariant &body)
 {
     static const QRegularExpression sourcePath(QStringLiteral("^/api/sources/src-\\d+(/.*)?$"));
-    static const QRegularExpression outputPath(QStringLiteral("^/api/outputs/(master|cue)/[A-Za-z]+$"));
+    static const QRegularExpression outputPath(QStringLiteral("^/api/outputs/(master|cue)/([A-Za-z]+)$"));
     static const QRegularExpression outputResetPath(QStringLiteral("^/api/outputs/(master|cue)/([A-Za-z]+/)?reset$"));
     static const QRegularExpression recordingPath(QStringLiteral("^/api/recording(/(start|pause|resume|stop))?$"));
     static const QRegularExpression enginePath(QStringLiteral("^/api/engine(/(start|stop|restart))?$"));
@@ -103,6 +104,9 @@ void StateStore::applyResponse(const QString &method, const QString &path, const
         applySourceResponse(object);
     } else if (path == QStringLiteral("/api/outputs/cue/copy-master")) {
         applyOutputResponse(QStringLiteral("cue"), object);
+    } else if (const auto c = QRegularExpression(QStringLiteral("^/api/outputs/(master|cue)/channels$")).match(path); c.hasMatch() && method == QStringLiteral("PUT")) {
+        m_outputChannels.insert(c.captured(1), object.value(QStringLiteral("firstChannel")).toInt());
+        emit outputsChanged();
     } else if (const auto m = outputPath.match(path); m.hasMatch() && method == QStringLiteral("PUT")) {
         applyOutputResponse(m.captured(1), object);
     } else if (const auto r = outputResetPath.match(path); r.hasMatch() && method == QStringLiteral("POST")) {

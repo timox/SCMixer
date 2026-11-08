@@ -88,7 +88,7 @@ SystemClock.sched(50, { fail.("délai dépassé dans le test sclang"); nil });
 
 server.options.device = "MME : Mappeur de sons Microsoft - Output";
 server.options.numInputBusChannels = 0;
-server.options.numOutputBusChannels = 4;
+server.options.numOutputBusChannels = 8;
 server.options.ugenPluginsPath = [Platform.resourceDir +/+ "plugins", root +/+ "sc" +/+ "plugins"];
 
 // Jeton normalement posé par engine.scd (SYNTHDEF_TIMEOUT_SECONDS).

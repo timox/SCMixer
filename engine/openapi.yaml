@@ -324,6 +324,19 @@ paths:
         '200': { $ref: '#/components/responses/Output' }
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
+  /api/outputs/{output}/channels:
+    parameters: [ { $ref: '#/components/parameters/Output' } ]
+    put:
+      tags: [Sorties]
+      summary: Affecte le bus Master ou Cue à une paire de sorties scsynth (1/2, 3/4, 5/6 ou 7/8)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/OutputChannelAssignment' } } }
+      responses:
+        '200': { description: Paire affectée, content: { application/json: { schema: { $ref: '#/components/schemas/OutputChannelAssignment' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
   /api/outputs/{output}/{stage}/reset:
     parameters:
       - { $ref: '#/components/parameters/Output' }
@@ -826,7 +839,7 @@ components:
         error: { type: [string, 'null'], description: Message si stopReason vaut error. }
     State:
       type: object
-      required: [engine, sources, outputs, recording]
+      required: [engine, sources, outputs, outputChannels, recording]
       properties:
         engine: { $ref: '#/components/schemas/EngineState' }
         recording: { $ref: '#/components/schemas/Recording' }
@@ -837,6 +850,18 @@ components:
           properties:
             master: { $ref: '#/components/schemas/Output' }
             cue: { $ref: '#/components/schemas/Output' }
+        outputChannels:
+          type: object
+          required: [master, cue]
+          properties:
+            master: { type: integer, enum: [1, 3, 5, 7], description: Premier canal de la paire stéréo affectée à Master. }
+            cue: { type: integer, enum: [1, 3, 5, 7], description: Premier canal de la paire stéréo affectée à Cue. }
+    OutputChannelAssignment:
+      type: object
+      additionalProperties: false
+      required: [firstChannel]
+      properties:
+        firstChannel: { type: integer, enum: [1, 3, 5, 7], description: Premier canal de la paire stéréo affectée. }
     EngineState:
       type: object
       required: [status, error, scsynthPid, timoxVasio, audioClock, models]

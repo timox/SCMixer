@@ -9,9 +9,9 @@ import { ATTACK_MS_MAX, LIMITER_DUR_MAX_MS, MAX_CHANNELS, PITCH_WINDOW_MAX_SECON
  *
  * Besoins (audit d'architecture ; interconnexions mesurées par sclang sans serveur :
  * tests/sc/wirebufs.scd) :
- *  - bus audio : sorties matérielles 0..3, entrées 4..259, premier bus privé 260 ; bus privés =
+ *  - bus audio : sorties matérielles 0..7, entrées 8..263, premier bus privé 264 ; bus privés =
  *    somme Master/Cue 4 + un bus de traitement stéréo par sortie 4 = 8, plus les largeurs des
- *    sources. La somme des sources est au plus numInputBusChannels (256) : 260 + 8 + 256 = 524.
+ *    sources. La somme des sources est au plus numInputBusChannels (256) : 264 + 8 + 256 = 528.
  *  - interconnexions (numWireBufs) : maximum de sorties audio vivantes d'un SynthDef. Mesuré :
  *    mx_dyn_w = 5 w + 3 (w = 2 : 13, 3 : 18, 8 : 43, 64 : 323, 256 : 1283) ; hp/lp 4 w + 1,
  *    pitch/eq/hp4/lp4/lpmoog 2 w + 1, in/mix environ w + 26 ; SynthDefs de sortie : 5 ou 6.
@@ -25,7 +25,7 @@ import { ATTACK_MS_MAX, LIMITER_DUR_MAX_MS, MAX_CHANNELS, PITCH_WINDOW_MAX_SECON
 export const DEFAULT_SIZING = Object.freeze({ maxSourceWidth: MAX_CHANNELS, maxSources: MAX_CHANNELS });
 
 const NUM_INPUTS = MAX_CHANNELS;
-const NUM_OUTPUTS = 4;
+const NUM_OUTPUTS = 8;
 const BLOCK_SIZE = 64; // défaut de ServerOptions.blockSize, non modifié : 64 images par bloc de contrôle
 const FIRST_PRIVATE_BUS = NUM_INPUTS + NUM_OUTPUTS;
 const ENGINE_PRIVATE_BUSES = 8;

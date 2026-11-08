@@ -38,6 +38,7 @@ export function emptySession() {
     nextSourceSeq: 1,
     sources: [],
     outputs: { master: defaultOutput(), cue: defaultOutput() },
+    outputChannels: { master: 1, cue: 3 },
   };
 }
 
@@ -155,6 +156,14 @@ export function setOutputStage(session, output, stage, value) {
   return next;
 }
 
+export function setOutputChannels(session, output, firstChannel) {
+  if (output !== 'master' && output !== 'cue') throw fail('NOT_FOUND', `Sortie inconnue : ${output}.`);
+  if (![1, 3, 5, 7].includes(firstChannel)) throw fail('VALIDATION', 'La paire doit être 1/2, 3/4, 5/6 ou 7/8.');
+  const next = clone(session);
+  next.outputChannels[output] = firstChannel;
+  return next;
+}
+
 function checkOutput(output) {
   if (output !== 'master' && output !== 'cue') throw fail('NOT_FOUND', `Sortie inconnue : ${output}.`);
 }
@@ -203,6 +212,7 @@ export function replaceSessionContent(session, content) {
     nextSourceSeq: Math.max(session.nextSourceSeq, seq),
     sources: clone(sources),
     outputs: clone(outputs),
+    outputChannels: parse(shape.outputChannels, content?.outputChannels, 'Canaux de sortie'),
   };
 }
 

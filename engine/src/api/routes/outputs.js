@@ -3,9 +3,9 @@ import { ApiError } from '../../contract/errors.js';
 import { assertModelsAvailable } from '../../contract/models.js';
 import { OUTPUT_STAGES } from '../../contract/schemas.js';
 import {
-  setOutputStage, copyMasterToCue, resetOutputStage, resetOutput,
+  setOutputStage, copyMasterToCue, resetOutputStage, resetOutput, setOutputChannels,
 } from '../../session/session-model.js';
-import { setOutputStageCode, outputCode } from '../../sc/commands.js';
+import { setOutputStageCode, outputCode, outputChannelsCode } from '../../sc/commands.js';
 import { outputGraph } from '../../contract/chains.js';
 
 function checkOutput(name) {
@@ -18,6 +18,14 @@ function checkStage(list, stage, what) {
 }
 
 export function registerOutputRoutes(api, engine) {
+  api.put('/outputs/:output/channels', route(async (req, res) => {
+    const output = checkOutput(req.params.output);
+    const session = await engine.mutate((current) => {
+      const next = setOutputChannels(current, output, req.body?.firstChannel);
+      return { session: next, code: outputChannelsCode(output, next.outputChannels[output]) };
+    });
+    res.json({ firstChannel: session.outputChannels[output] });
+  }));
   // Route littérale avant la route à paramètres `:output/:stage`.
   api.post('/outputs/cue/copy-master', route(async (req, res) => {
     const session = await engine.mutate((current) => {

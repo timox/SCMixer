@@ -29,7 +29,7 @@ SystemClock.sched(50, { fail.("délai dépassé dans le test sclang"); nil });
 
 server.options.device = "MME : Mappeur de sons Microsoft - Output";
 server.options.numInputBusChannels = 0;
-server.options.numOutputBusChannels = 4;
+server.options.numOutputBusChannels = 8;
 
 ~mxSynthDefTimeout = 5;
 (root +/+ "sc" +/+ "graph.scd").load;

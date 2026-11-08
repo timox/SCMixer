@@ -97,7 +97,8 @@ Item {
                 text: ws.isSource
                       ? (ws.source ? ws.source.name + " — " + ws.source.id + " · " + (ws.source.width === 1 ? "canal " + ws.source.firstChannel
                          : "canaux " + ws.source.firstChannel + "–" + (ws.source.firstChannel + ws.source.width - 1)) : "")
-                      : (ws.target === "master" ? "Master — sorties 1/2" : "Cue — sorties 3/4")
+                      : (ws.target === "master" ? "Master — sorties " + ((ws.store && ws.store.outputChannels.master) || 1) + "/" + (((ws.store && ws.store.outputChannels.master) || 1) + 1)
+                         : "Cue — sorties " + ((ws.store && ws.store.outputChannels.cue) || 3) + "/" + (((ws.store && ws.store.outputChannels.cue) || 3) + 1))
                 color: Theme.text
                 font.pixelSize: 15
                 font.bold: true

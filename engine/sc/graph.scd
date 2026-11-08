@@ -290,10 +290,10 @@
 ~mxInit = { |server, inputChannels|
   var models, faustLoaded, outputDefs, missingOutputDefs;
   if(~mxInitDone == true) { Error("~mxInit déjà exécuté : groupes et bus déjà créés").throw };
-  // Contrat de bus : sorties matérielles 0..3 (master 0/1, cue 2/3), entrées 4..259, premier bus
+  // Contrat de bus : sorties matérielles 0..7 (paires choisies pour Master/Cue), entrées 8..263, premier bus
   // privé 260 (ServerOptions : les entrées suivent les sorties ; numAudioBusChannels les inclut).
   if(server.serverRunning.not) { Error("~mxInit : serveur non démarré").throw };
-  if(server.options.numOutputBusChannels != 4) { Error("~mxInit : 4 sorties matérielles attendues").throw };
+  if(server.options.numOutputBusChannels != 8) { Error("~mxInit : 8 sorties matérielles attendues").throw };
   if(server.options.firstPrivateBus != (server.options.numInputBusChannels + server.options.numOutputBusChannels)) {
     Error("~mxInit : premier bus privé incohérent : " ++ server.options.firstPrivateBus).throw;
   };
@@ -635,7 +635,7 @@
     kept.asArray
   } { all };
   args = ~mxForDef.(defName, pluginControls, true);
-  createArgs = if(stage == \limiter) { args ++ [\dur, (values[\durMs] / 1000).min(~mxLimiterDurMaxSeconds)] } { args };
+  createArgs = if(stage == \limiter) { args ++ [\dur, (values[\limiterDurMs] / 1000).min(~mxLimiterDurMaxSeconds)] } { args };
   if(inserted) {
     if(node.isNil) {
       predecessor = if(stage == \limiter) { state[\nodes][\compressor] ?? { state[\nodes][\base] } } {
@@ -648,7 +648,7 @@
       };
       state[\nodes][stage] = node;
     } {
-      durationChanged = stage == \limiter and: { state[\limiterDurMs] != values[\durMs] };
+      durationChanged = stage == \limiter and: { state[\limiterDurMs] != values[\limiterDurMs] };
       if(durationChanged) {
         node = Synth.replace(node, defName, [\bus, state[\bus].index] ++ createArgs);
         state[\nodes][stage] = node;
@@ -669,7 +669,16 @@
     if(node.notNil) { node.free; state[\nodes].removeAt(stage) };
   };
   if(stage == \compressor) { state[\model] = model };
-  if(stage == \limiter) { state[\limiterDurMs] = values[\durMs] };
+  if(stage == \limiter) { state[\limiterDurMs] = values[\limiterDurMs] };
+};
+
+~mxSetOutputChannels = { |output, firstChannel|
+  var state = ~mxOutputs[output];
+  if(state.isNil) { Error("Sortie inconnue : " ++ output).throw };
+  if([1, 3, 5, 7].includes(firstChannel).not) { Error("Paire de sortie invalide : " ++ firstChannel).throw };
+  state[\firstChannel] = firstChannel;
+  state[\writer].set(\out, firstChannel - 1);
+  firstChannel
 };
 
 ~mxSetOutputStage = { |output, stage, values|

@@ -13,12 +13,12 @@ class TimoxVasioClient : public QObject {
     Q_OBJECT
     // [{ channel, sources: [{ endpointId, gainDb, mute }] }] : ce qui alimente chaque entrée de scsynth.
     Q_PROPERTY(QVariantList inputs READ inputs NOTIFY changed)
-    // [{ channel, destinations: [{ endpointId, gainDb, mute }] }] : où vont les sorties 1 à 4 de scsynth.
+    // [{ channel, destinations: [{ endpointId, gainDb, mute, active }] }] : destinations des 8 sorties scsynth.
     Q_PROPERTY(QVariantList outputs READ outputs NOTIFY changed)
     Q_PROPERTY(QString error READ error NOTIFY changed)
 
 public:
-    static constexpr int OutputChannels = 4;
+    static constexpr int OutputChannels = 8;
 
     explicit TimoxVasioClient(HttpTransport *transport, QObject *parent = nullptr);
 

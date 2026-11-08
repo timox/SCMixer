@@ -1,6 +1,6 @@
 # Moteur de SCMixer
 
-Service local qui pilote un moteur SuperCollider à sources génériques : de 1 à 256 canaux d'entrée répartis entre des sources de largeur libre, une chaîne de traitement par source, et deux sorties stéréo fixes, Master (sorties 1/2) et Cue (sorties 3/4). Le service est le seul point d'accès au moteur : HTTP et WebSocket sur `127.0.0.1`, contrat décrit dans `openapi.yaml`.
+Service local qui pilote un moteur SuperCollider à sources génériques : de 1 à 256 canaux d'entrée répartis entre des sources de largeur libre, une chaîne de traitement par source, et deux bus stéréo Master/Cue affectables à une paire parmi les sorties 1/2, 3/4, 5/6 ou 7/8. SCMixer est conçu pour fonctionner avec TimoxVasio : celui-ci fournit le pilote ASIO virtuel, son API locale et le routage vers les sorties physiques. Le service SCMixer expose son état par HTTP et WebSocket sur `127.0.0.1`, contrat décrit dans `openapi.yaml`.
 
 ## Architecture
 

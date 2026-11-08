@@ -13,7 +13,7 @@ import { emptySession, addSource } from '../src/session/session-model.js';
 test('dimensionnement par défaut (256 sources, largeur 256, 48 kHz) : valeurs épinglées', () => {
   assert.deepEqual(computeServerOptions({}), {
     numInputBusChannels: 256,
-    numOutputBusChannels: 4,
+    numOutputBusChannels: 8,
     numAudioBusChannels: 1024, // besoin 528 (260 + 12 + 256), puissance de deux suivante
     numWireBufs: 2048, // besoin mesuré 1283 (mx_dyn_256), marge 25 % = 1604, puissance de deux suivante
     maxNodes: 4096, // besoin 8 x 256 + 12 = 2060, marge 50 % = 3090, puissance de deux suivante
@@ -27,7 +27,7 @@ test('les besoins sont ceux de l\'audit : bus 528, interconnexions 1283, nœuds 
   assert.equal(needs.audioBuses, 528);
   assert.equal(needs.wireBufs, 1283);
   assert.equal(needs.nodes, 2060);
-  assert.equal(needs.firstPrivateBus, 260);
+  assert.equal(needs.firstPrivateBus, 264);
 });
 
 test('wireBufsNeeded : borne mesurée par sclang (5 w + 3, au moins 6 pour les SynthDefs de sortie)', () => {

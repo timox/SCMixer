@@ -54,7 +54,7 @@ test('constantes', () => {
 });
 test('session, création, patch, preset', () => {
   const s = { version: 3, nextSourceSeq: 1, sources: [], outputs: { master: defaultOutput(), cue: defaultOutput() } };
-  assert.deepEqual(Session.parse(s), s);
+  assert.deepEqual(Session.parse(s), { ...s, outputChannels: { master: 1, cue: 3 } });
   assert.throws(() => Session.parse({ ...s, nextPresetSeq: 1 }));
   assert.throws(() => Session.parse({ ...s, audioProfile: { sampleRate: 48000, bufferFrames: 256 } }));
   assert.throws(() => Session.parse({ ...s, version: 1 }));

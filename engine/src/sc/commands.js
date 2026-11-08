@@ -112,6 +112,12 @@ export function outputCode(output, value) {
   return OUTPUT_STAGES.map((stage) => setOutputStageCode(output, stage, value[stage])).join('; ');
 }
 
+export function outputChannelsCode(output, firstChannel) {
+  if (!OUTPUTS.includes(output)) throw new Error(`Sortie invalide : ${output}`);
+  if (![1, 3, 5, 7].includes(firstChannel)) throw new Error(`Paire de sortie invalide : ${firstChannel}`);
+  return `~mxSetOutputChannels.(\\${output}, ${firstChannel})`;
+}
+
 export function resetMoogCode(id) {
   return `~mxResetMoog.(${sourceId(id)})`;
 }
@@ -122,6 +128,7 @@ export function applySessionCode(session, meterIds) {
     return addSourceCode(source, meterIds.get(source.id));
   });
   for (const output of OUTPUTS) {
+    statements.push(outputChannelsCode(output, session.outputChannels[output]));
     for (const stage of OUTPUT_STAGES) {
       statements.push(setOutputStageCode(output, stage, session.outputs[output][stage]));
     }
@@ -164,6 +171,7 @@ export function applyPresetCode(current, next, meterIdFor) {
     statements.push(existing.has(source.id) ? replaceSourceCode(source, meterId) : addSourceCode(source, meterId));
   }
   for (const output of OUTPUTS) {
+    statements.push(outputChannelsCode(output, next.outputChannels[output]));
     for (const stage of OUTPUT_STAGES) statements.push(setOutputStageCode(output, stage, next.outputs[output][stage]));
   }
   return statements.join('; ');

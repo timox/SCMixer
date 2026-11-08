@@ -123,7 +123,7 @@ Item {
                     objectName: "pick-master"
                     Layout.fillWidth: true
                     title: "Master"
-                    detail: "sorties 1/2"
+                    detail: "sorties " + ((tab.store && tab.store.outputChannels.master) || 1) + "/" + (((tab.store && tab.store.outputChannels.master) || 1) + 1)
                     current: tab.scope === "output" && tab.output === "master"
                     onPicked: tab.showOutput("master")
                 }
@@ -131,7 +131,7 @@ Item {
                     objectName: "pick-cue"
                     Layout.fillWidth: true
                     title: "Cue"
-                    detail: "sorties 3/4"
+                    detail: "sorties " + ((tab.store && tab.store.outputChannels.cue) || 3) + "/" + (((tab.store && tab.store.outputChannels.cue) || 3) + 1)
                     current: tab.scope === "output" && tab.output === "cue"
                     onPicked: tab.showOutput("cue")
                 }

@@ -1,6 +1,6 @@
 # SCMixer
 
-Console de mixage multi-source sur SuperCollider pour Windows : un service moteur qui pilote sclang et scsynth par une API documentée, et une interface native Qt qui pilote tous les réglages à la souris. L'audio passe par le pilote ASIO TimoxVasio.
+Console de mixage multi-source sur SuperCollider pour Windows, conçue pour fonctionner avec **TimoxVasio**. Le moteur s'appuie sur son pilote ASIO virtuel et son API locale pour l'audio et le routage ; TimoxVasio doit être installé et son moteur audio configuré. SCMixer affiche les routes TimoxVasio et gère ses sources ainsi que ses bus logiques Master/Cue.
 
 ```mermaid
 flowchart LR
@@ -20,6 +20,20 @@ flowchart LR
 | `docs/` | Spécification, plans de réalisation et maquettes. |
 
 L'API est le seul point de passage entre l'interface et le moteur : l'interface ne lit aucun fichier du moteur et n'affiche que l'état confirmé par l'API.
+
+## Captures d’écran
+
+La console réunit les sources, les niveaux Master/Cue et leurs contrôles :
+
+![Console SCMixer](docs/images/scmixer-console.png)
+
+Les chaînes de traitement affichent les graphes et réglages de la source sélectionnée :
+
+![Traitements SCMixer](docs/images/scmixer-processing.png)
+
+Le journal montre l’inventaire audio détecté par SuperCollider pendant le démarrage :
+
+![Journal SCMixer](docs/images/scmixer-log.png)
 
 ## Installation
 

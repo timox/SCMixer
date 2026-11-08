@@ -132,6 +132,7 @@ test('resetSourceBand, resetSource, resetOutputStage, resetOutput, resetAllProce
   assert.deepEqual(all.sources.map((x) => [x.id, x.name, x.firstChannel, x.width]), s.sources.map((x) => [x.id, x.name, x.firstChannel, x.width]));
   for (const x of all.sources) assert.deepEqual(x.processing, defaultSourceProcessing());
   assert.deepEqual(all.outputs, { master: defaultOutput(), cue: defaultOutput() });
+  assert.deepEqual(all.outputChannels, s.outputChannels);
   assert.equal(all.nextSourceSeq, s.nextSourceSeq);
 });
 

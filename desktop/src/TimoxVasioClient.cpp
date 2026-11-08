@@ -4,6 +4,7 @@
 #include <QJsonDocument>
 #include <QMap>
 #include <QRegularExpression>
+#include <QSet>
 
 namespace {
 // Versions du contrat api-v1.json acceptées (enum apiVersion de definitions.state).
@@ -48,10 +49,29 @@ void TimoxVasioClient::applyState(const QJsonObject &state)
         fail(QStringLiteral("Version d'API TimoxVasio non prise en charge : %1.").arg(version));
         return;
     }
-    const QRegularExpression endpoint(QStringLiteral("^virtual:TimoxVasio:app:scsynth\\.exe:(input|output):(\\d+)$"),
+    QString scsynthPid;
+    for (const QJsonValue &clientValue : state.value(QStringLiteral("virtualDrivers")).toObject().value(QStringLiteral("clients")).toArray()) {
+        const QJsonObject client = clientValue.toObject();
+        if (client.value(QStringLiteral("processName")).toString().compare(QStringLiteral("scsynth.exe"), Qt::CaseInsensitive) == 0) {
+            scsynthPid = QString::number(client.value(QStringLiteral("pid")).toInt());
+            break;
+        }
+    }
+    const QString owner = scsynthPid.isEmpty() ? QStringLiteral("(?:app:scsynth\\.exe|\\d+)")
+                                                : QStringLiteral("(?:app:scsynth\\.exe|%1)").arg(scsynthPid);
+    const QRegularExpression endpoint(QStringLiteral("^virtual:TimoxVasio:%1:(input|output):(\\d+)$").arg(owner),
                                       QRegularExpression::CaseInsensitiveOption);
     QMap<int, QVariantList> feeds;
     QMap<int, QVariantList> destinations;
+    QSet<int> activeInputs;
+    QSet<int> activeOutputs;
+    for (const QJsonValue &v : state.value(QStringLiteral("routes")).toArray()) {
+        const QJsonObject route = v.toObject();
+        const auto to = endpoint.match(route.value(QStringLiteral("destinationEndpointId")).toString());
+        const auto from = endpoint.match(route.value(QStringLiteral("sourceEndpointId")).toString());
+        if (to.hasMatch() && to.captured(1) == QStringLiteral("input")) activeInputs.insert(to.captured(2).toInt());
+        if (from.hasMatch() && from.captured(1) == QStringLiteral("output")) activeOutputs.insert(from.captured(2).toInt());
+    }
     const QJsonArray configuredRoutes = state.value(QStringLiteral("configuredRoutes")).toArray();
     const QJsonArray routes = configuredRoutes.isEmpty() && !state.contains(QStringLiteral("configuredRoutes"))
                                   ? state.value(QStringLiteral("routes")).toArray()
@@ -65,11 +85,13 @@ void TimoxVasioClient::applyState(const QJsonObject &state)
         if (const auto m = endpoint.match(to); m.hasMatch() && m.captured(1) == QStringLiteral("input")) {
             QVariantMap entry = info;
             entry.insert(QStringLiteral("endpointId"), from);
+            entry.insert(QStringLiteral("active"), activeInputs.contains(m.captured(2).toInt()));
             feeds[m.captured(2).toInt()].append(entry);
         }
         if (const auto m = endpoint.match(from); m.hasMatch() && m.captured(1) == QStringLiteral("output")) {
             QVariantMap entry = info;
             entry.insert(QStringLiteral("endpointId"), to);
+            entry.insert(QStringLiteral("active"), activeOutputs.contains(m.captured(2).toInt()));
             destinations[m.captured(2).toInt()].append(entry);
         }
     }

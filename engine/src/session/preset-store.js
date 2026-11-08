@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { Source, Output, PresetCreate } from '../contract/schemas.js';
+import { Source, Output, PresetCreate, Session } from '../contract/schemas.js';
 import { ApiError, codes } from '../contract/errors.js';
 import { migrateLegacyOutputFields, validateChannels } from './session-model.js';
 import { writeJsonAtomic } from './atomic-file.js';
@@ -18,6 +18,7 @@ const PresetFile = z.strictObject({
   content: z.strictObject({
     sources: z.array(Source),
     outputs: z.strictObject({ master: Output, cue: Output }),
+    outputChannels: z.strictObject({ master: Session.shape.outputChannels.shape.master, cue: Session.shape.outputChannels.shape.cue }).default({ master: 1, cue: 3 }),
   }),
 });
 
@@ -95,7 +96,7 @@ export class PresetStore {
     const fmt = (r) => r.error.issues.map((i) => `${i.path.join('.') || '(racine)'} : ${i.message}`).join(' ; ');
     const parsed = PresetCreate.safeParse({ name });
     if (!parsed.success) throw fail('VALIDATION', `Preset invalide (${fmt(parsed)})`);
-    const content = PresetFile.shape.content.safeParse({ sources: session?.sources, outputs: session?.outputs });
+    const content = PresetFile.shape.content.safeParse({ sources: session?.sources, outputs: session?.outputs, outputChannels: session?.outputChannels });
     if (!content.success) throw fail('VALIDATION', `Contenu de preset invalide (${fmt(content)})`);
     if (new Set(content.data.sources.map((s) => s.id)).size !== content.data.sources.length) {
       throw fail('VALIDATION', 'Contenu de preset invalide (identifiants de source en double)');

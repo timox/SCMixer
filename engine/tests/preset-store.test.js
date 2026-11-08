@@ -21,7 +21,7 @@ test('create/list/get/remove', withDir((dir) => {
   assert.equal(p.version, 1);
   assert.equal(p.name, 'Live');
   assert.ok(!Number.isNaN(Date.parse(p.createdAt)));
-  assert.deepEqual(p.content, { sources: s.sources, outputs: s.outputs });
+  assert.deepEqual(p.content, { sources: s.sources, outputs: s.outputs, outputChannels: s.outputChannels });
   assert.deepEqual(store.get('preset-1'), p);
   assert.deepEqual(store.list(), [{ id: 'preset-1', name: 'Live', createdAt: p.createdAt }]);
   store.remove('preset-1');

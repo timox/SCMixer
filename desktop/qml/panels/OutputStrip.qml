@@ -28,7 +28,16 @@ Rectangle {
         anchors.margins: 8
         spacing: 6
         Text { text: strip.output === "master" ? "Master" : "Cue"; color: Theme.text; font.pixelSize: Theme.fontTitle; font.bold: true }
-        Text { text: strip.output === "master" ? "sorties 1/2" : "sorties 3/4"; color: Theme.dim; font.pixelSize: Theme.fontSmall }
+        ComboBox {
+            objectName: "output-channel-pair-" + strip.output
+            Layout.fillWidth: true
+            model: ["1/2", "3/4", "5/6", "7/8"]
+            currentIndex: Math.max(0, (((strip.store && strip.store.outputChannels[strip.output]) || (strip.output === "master" ? 1 : 3)) - 1) / 2)
+            onActivated: function(index) {
+                if (strip.client)
+                    strip.client.put("/api/outputs/" + strip.output + "/channels", { firstChannel: index * 2 + 1 });
+            }
+        }
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true

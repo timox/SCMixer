@@ -15,6 +15,7 @@ class StateStore : public QObject {
     Q_PROPERTY(QVariantMap engine READ engine NOTIFY engineChanged)
     Q_PROPERTY(QVariantMap master READ master NOTIFY outputsChanged)
     Q_PROPERTY(QVariantMap cue READ cue NOTIFY outputsChanged)
+    Q_PROPERTY(QVariantMap outputChannels READ outputChannels NOTIFY outputsChanged)
     Q_PROPERTY(SourceListModel *sources READ sources CONSTANT)
     Q_PROPERTY(QVariantMap outputMeters READ outputMeters NOTIFY outputMetersChanged)
     Q_PROPERTY(QVariantMap runtime READ runtime NOTIFY runtimeChanged)
@@ -27,6 +28,7 @@ public:
     QVariantMap engine() const { return m_engine; }
     QVariantMap master() const { return m_master; }
     QVariantMap cue() const { return m_cue; }
+    QVariantMap outputChannels() const { return m_outputChannels; }
     SourceListModel *sources() { return &m_sources; }
     QVariantMap outputMeters() const { return m_outputMeters; }
     QVariantMap runtime() const { return m_runtime; }
@@ -56,6 +58,7 @@ private:
     QVariantMap m_engine;
     QVariantMap m_master;
     QVariantMap m_cue;
+    QVariantMap m_outputChannels;
     SourceListModel m_sources;
     QVariantMap m_outputMeters;
     QVariantMap m_runtime;

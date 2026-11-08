@@ -136,7 +136,7 @@ test('start fixe les options de scsynth calculées : bus, interconnexions, nœud
   await engine.start();
   const src = langs[0].bootSource;
   assert.match(src, /numInputBusChannels = 256;/);
-  assert.match(src, /numOutputBusChannels = 4;/);
+  assert.match(src, /numOutputBusChannels = 8;/);
   assert.match(src, /numAudioBusChannels = 1024;/);
   assert.match(src, /numWireBufs = 2048;/);
   assert.match(src, /maxNodes = 4096;/);

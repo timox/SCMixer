@@ -80,7 +80,7 @@ test('applySessionCode : sources puis 14 sorties, sans noms', () => {
   const session = {
     version: 3, nextSourceSeq: 3,
     sources: [source('src-1', 'Alpha'), source('src-2', 'Beta')],
-    outputs: { master: defaultOutput(), cue: defaultOutput() },
+    outputs: { master: defaultOutput(), cue: defaultOutput() }, outputChannels: { master: 1, cue: 3 },
   };
   const code = applySessionCode(session, new Map([['src-1', 0], ['src-2', 1]]));
   assert.equal(code.match(/~mxAddSource\./g).length, 2);

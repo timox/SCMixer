@@ -166,7 +166,7 @@ fork {
   // Journal des options relues depuis ServerOptions.
   const logged = /MX-ENGINE-OPTIONS (.*)/.exec(output)?.[1] ?? '';
   for (const [key, value] of Object.entries({
-    numInputBusChannels: 0, numOutputBusChannels: 4, numAudioBusChannels: options.numAudioBusChannels, firstPrivateBus: 4,
+    numInputBusChannels: 0, numOutputBusChannels: 8, numAudioBusChannels: options.numAudioBusChannels, firstPrivateBus: 8,
     numWireBufs: options.numWireBufs, maxNodes: options.maxNodes, memSize: options.memSize, blockSize: 64,
   })) assert.match(logged, new RegExp(`${key}=${value}(\\s|$)`), `${key} : ${logged}`);
   // Ligne de commande effectivement passée à scsynth (-a bus audio, -w interconnexions, -n nœuds, -m mémoire, -Z tampon matériel ; -z absent = bloc de 64 par défaut).

@@ -34,7 +34,7 @@ Item {
     function describe(list) {
         if (list.length === 0)
             return "aucune route";
-        return list.map(function (r) { return r.endpointId + (r.mute ? " (muette)" : "") + (r.gainDb ? " " + r.gainDb + " dB" : ""); }).join(", ");
+        return list.map(function (r) { return r.endpointId + (r.active ? "" : " (inactive)") + (r.mute ? " (muette)" : "") + (r.gainDb ? " " + r.gainDb + " dB" : ""); }).join(", ");
     }
 
     onVisibleChanged: if (visible) refresh()
@@ -60,10 +60,13 @@ Item {
 
         Text { text: "SORTIES"; color: Theme.dim; font.pixelSize: 11; font.letterSpacing: 1 }
         Repeater {
-            model: [["Master gauche", 1], ["Master droite", 2], ["Cue gauche", 3], ["Cue droite", 4]]
+            model: [1, 2, 3, 4, 5, 6, 7, 8]
             delegate: Text {
-                required property var modelData
-                text: modelData[0] + " (sortie " + modelData[1] + " de scsynth) → " + tab.describe(tab.destinationsOf(modelData[1]))
+                required property int modelData
+                readonly property int masterFirst: tab.store && tab.store.outputChannels.master ? tab.store.outputChannels.master : 1
+                readonly property int cueFirst: tab.store && tab.store.outputChannels.cue ? tab.store.outputChannels.cue : 3
+                readonly property string bus: modelData === masterFirst ? "Master G" : modelData === masterFirst + 1 ? "Master D" : modelData === cueFirst ? "Cue G" : modelData === cueFirst + 1 ? "Cue D" : "Libre"
+                text: "Sortie " + modelData + " (" + bus + ") → " + tab.describe(tab.destinationsOf(modelData))
                 color: Theme.text
                 font.pixelSize: Theme.fontSmall
             }
